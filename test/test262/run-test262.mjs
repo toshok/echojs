@@ -125,11 +125,23 @@ function assembleSource(suiteDir, testPath, meta) {
     // global — shim it so async completions are observable
     if (meta.flags.includes("async"))
         out += 'var print = typeof print === "function" ? print : function (m) { console.log(m); };\n';
+    // partial $262 host object: the hooks echojs can honor (backed by
+    // the __ejs runtime namespace); createRealm/evalScript/agent need a
+    // second realm or eval and stay absent
+    out += "var $262 = { global: globalThis, " +
+        "gc: function () { __ejs.GC.collect(); }, " +
+        "detachArrayBuffer: function (buffer) { __ejs.detachArrayBuffer(buffer); }, " +
+        "destroy: function () {} };\n";
     for (const h of harness) {
         if (seen.has(h)) continue;
         seen.add(h);
         out += fs.readFileSync(path.join(suiteDir, "harness", h), "utf8") + "\n";
     }
+    // echojs compiles the concatenation as one module, so the harness's
+    // `function $DONE` is a module binding, not a global-object property —
+    // asyncHelpers.asyncTest checks hasOwnProperty(globalThis, "$DONE")
+    if (meta.flags.includes("async"))
+        out += 'if (typeof $DONE === "function") globalThis.$DONE = $DONE;\n';
     return { source: out + src, strict };
 }
 

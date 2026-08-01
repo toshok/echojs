@@ -367,14 +367,25 @@ export class DesugarClasses extends TransformPass {
     }
 
     override visitClassDeclaration(n: e.ClassDeclaration): VisitResult {
-        if (!n.id) n.id = freshClassId();
+        if (!n.id) {
+            // only `export default class {}` lacks an id — NamedEvaluation
+            // gives it the name "default"
+            (n as unknown as Record<string, unknown>)["ejs_ctor_display_name"] = "default";
+            n.id = freshClassId();
+        }
         n.superClass = this.visitNullable(n.superClass);
         const iife = this.generateClassIIFE(n);
         return b.letDeclaration(n.id, b.callExpression(iife, n.superClass ? [n.superClass] : []));
     }
 
     override visitClassExpression(n: e.ClassExpression): VisitResult {
-        if (!n.id) n.id = freshClassId();
+        if (!n.id) {
+            // NamedEvaluation: the parser stamps ejs_display_name when the
+            // class sits in a naming position; otherwise .name is ""
+            const rec = n as unknown as Record<string, unknown>;
+            rec["ejs_ctor_display_name"] = rec["ejs_display_name"] ?? "";
+            n.id = freshClassId();
+        }
         n.superClass = this.visitNullable(n.superClass);
         const iife = this.generateClassIIFE(n as NamedClass);
         return b.callExpression(iife, n.superClass ? [n.superClass] : []);
@@ -823,12 +834,18 @@ export class DesugarClasses extends TransformPass {
         ast_class: NamedClass
     ): e.FunctionDeclaration {
         // fresh id: ast_class.id is the outer let declarator's node
-        return b.functionDeclaration(
+        const fd = b.functionDeclaration(
             b.identifier(ast_class.id.name),
             ast_method.value.params,
             ast_method.value.body,
             ast_method.value.defaults
         );
+        // an originally-anonymous class carries its NamedEvaluation name
+        // (possibly "") — without this the synthesized %anonClass_N id
+        // leaks into .name
+        const dn = (ast_class as unknown as Record<string, unknown>)["ejs_ctor_display_name"];
+        if (dn !== undefined) (fd as unknown as Record<string, unknown>)["ejs_display_name"] = dn;
+        return fd;
     }
 
     private create_default_constructor(ast_class: NamedClass): e.MethodDefinition {

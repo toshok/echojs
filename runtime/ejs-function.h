@@ -10,8 +10,14 @@
 #include "ejs-closureenv.h"
 
 typedef enum {
+    // no [[Construct]]: builtin methods/accessors (19.2: only class
+    // constructors and function declarations/expressions construct)
+    CONSTRUCTOR_KIND_NONE = 0,
     CONSTRUCTOR_KIND_BASE = 1,
-    CONSTRUCTOR_KIND_DERIVED
+    CONSTRUCTOR_KIND_DERIVED,
+    // a native constructor that allocates its own exotic `this` and
+    // asserts the Construct specop did not preallocate one (Array)
+    CONSTRUCTOR_KIND_SELF_ALLOCATING
 } EJSConstructorKind;
 
 typedef enum { 
@@ -49,12 +55,12 @@ EJS_BEGIN_DECLS
 
 #define EJS_INSTALL_ATOM_FUNCTION(o,n,f) EJS_MACRO_START                \
     ejsval tmpfunc = _ejs_function_new_native (_ejs_null, _ejs_atom_##n, f); \
-    _ejs_object_setprop (o, _ejs_atom_##n, tmpfunc);                    \
+    _ejs_object_define_value_property (o, _ejs_atom_##n, tmpfunc, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE); \
     EJS_MACRO_END
 
 #define EJS_INSTALL_ATOM_FUNCTION_VAL(o,n,f) ({                         \
     ejsval tmpfunc = _ejs_function_new_native (_ejs_null, _ejs_atom_##n, f); \
-    _ejs_object_setprop (o, _ejs_atom_##n, tmpfunc);            \
+    _ejs_object_define_value_property (o, _ejs_atom_##n, tmpfunc, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE); \
     tmpfunc; })
 
 #define EJS_INSTALL_ATOM_FUNCTION_FLAGS(o,n,f,flags) EJS_MACRO_START         \
@@ -63,20 +69,20 @@ EJS_BEGIN_DECLS
 
 #define EJS_INSTALL_ATOM_FUNCTION_LEN_FLAGS(o,n,f,l,flags) EJS_MACRO_START  \
     ejsval __f = _ejs_function_new_native (_ejs_null, _ejs_atom_##n, f); \
-    _ejs_object_define_value_property (__f, _ejs_atom_length, NUMBER_TO_EJSVAL(l), EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE); \
+    _ejs_object_define_value_property (__f, _ejs_atom_length, NUMBER_TO_EJSVAL(l), EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_NOT_WRITABLE); \
     _ejs_object_define_value_property (o, _ejs_atom_##n, __f, flags); \
     EJS_MACRO_END
 
 #define EJS_INSTALL_FUNCTION(o,n,f) EJS_MACRO_START                    \
     ejsval funcname = _ejs_string_new_utf8(n);                          \
     ejsval tmpfunc = _ejs_function_new_native (_ejs_null, funcname, f); \
-    _ejs_object_setprop (o, funcname, tmpfunc);                         \
+    _ejs_object_define_value_property (o, funcname, tmpfunc, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE); \
     EJS_MACRO_END
 
 #define EJS_INSTALL_FUNCTION_ENV(o,n,f,env) EJS_MACRO_START                \
     ejsval funcname = _ejs_string_new_utf8(n);                          \
     ejsval tmpfunc = _ejs_function_new_native (env, funcname, f); \
-    _ejs_object_setprop (o, funcname, tmpfunc);                         \
+    _ejs_object_define_value_property (o, funcname, tmpfunc, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE); \
     EJS_MACRO_END
 
 #define EJS_INSTALL_FUNCTION_FLAGS(o,n,f,flags) EJS_MACRO_START         \

@@ -60,6 +60,7 @@ filegroup(
 shared_sources = [
     "ejs-arguments.c",
     "ejs-array.c",
+    "ejs-atomics.c",
     "ejs-boolean.c",
     "ejs-closureenv.c",
     "ejs-console.c",
@@ -75,6 +76,7 @@ shared_sources = [
     "ejs-gc-minor.c",
     "ejs-generator.c",
     "ejs-init.c",
+    "ejs-iterator.c",
     "ejs-json.c",
     "ejs-map.c",
     "ejs-math.c",
@@ -89,6 +91,7 @@ shared_sources = [
     "ejs-reflect.c",
     "ejs-regexp.c",
     "ejs-require.c",
+    "ejs-resources.c",
     "ejs-set.c",
     "ejs-shapes.c",
     "ejs-stream.c",

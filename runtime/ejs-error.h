@@ -31,6 +31,8 @@ extern ejsval _ejs_ReferenceError_prototype;
 extern ejsval _ejs_SyntaxError_prototype;
 extern ejsval _ejs_TypeError_prototype;
 extern ejsval _ejs_URIError_prototype;
+extern ejsval _ejs_AggregateError;
+extern ejsval _ejs_AggregateError_prototype;
 
 extern ejsval _ejs_nativeerror_new (EJSNativeErrorType error_type, ejsval message);
 extern ejsval _ejs_nativeerror_new_utf8 (EJSNativeErrorType error_type, const char* message);

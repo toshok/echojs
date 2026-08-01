@@ -9,6 +9,7 @@
 #include "ejs-error.h"
 #include "ejs-generator.h"
 #include "ejs-function.h"
+#include "ejs-string.h"
 #include "ejs-symbol.h"
 
 // a simple type that allows us to both iterate and return next value
@@ -23,23 +24,30 @@ static EJS_NATIVE_FUNC(_ejs_IteratorWrapper_prototype_getNextValue) {
     if (iter->done)
         return _ejs_undefined;
 
-    ejsval iter_result;
-    EJSBool success = IteratorNext_internal(&iter_result, iter->iterator, _ejs_undefined);
-    if (!success) {
-        iter->done = EJS_TRUE;
-        return _ejs_undefined;
-    }
-    iter->done = IteratorComplete_internal (iter_result);
+    // 13.3.3.8 IteratorBindingInitialization: an abrupt completion from
+    // next()/done/value propagates to the caller (marking the record
+    // done so no close is attempted) — it must not fold to undefined
+    iter->done = EJS_TRUE;
+    ejsval iter_result = IteratorNext (iter->iterator, _ejs_undefined);
+    iter->done = EJSVAL_TO_BOOLEAN (IteratorComplete (iter_result));
     if (iter->done)
         return _ejs_undefined;
 
-    ejsval iter_value;
-    success = IteratorValue_internal(&iter_value, iter_result);
-    if (!success) {
-        iter->done = EJS_TRUE;
-        return _ejs_undefined;
-    }
+    iter->done = EJS_TRUE;
+    ejsval iter_value = IteratorValue (iter_result);
+    iter->done = EJS_FALSE;
     return iter_value;
+}
+
+// normal-completion close: if the pattern finished before the iterator
+// did, IteratorClose it (spec step 4 of the array-pattern bindings)
+static EJS_NATIVE_FUNC(_ejs_IteratorWrapper_prototype_close) {
+    EJSIteratorWrapper* iter = (EJSIteratorWrapper*)EJSVAL_TO_OBJECT(*_this);
+    if (iter->done)
+        return _ejs_undefined;
+    iter->done = EJS_TRUE;
+    IteratorClose (iter->iterator, _ejs_undefined, EJS_FALSE);
+    return _ejs_undefined;
 }
 
 static EJS_NATIVE_FUNC(_ejs_IteratorWrapper_prototype_getRest) {
@@ -101,6 +109,7 @@ _ejs_iterator_wrapper_init (ejsval global)
 
     PROTO_METHOD(getNextValue);
     PROTO_METHOD(getRest);
+    PROTO_METHOD(close);
 
 #undef PROTO_METHOD
 }
@@ -361,6 +370,67 @@ _ejs_iterator_init_proto()
 
 ejsval _ejs_Generator_prototype EJSVAL_ALIGNMENT;
 
+// ---- async generator surface -----------------------------------------
+//
+// async generators desugar to sync coroutines behind a driver object, so
+// there is no dedicated instance class; these objects provide the spec's
+// %AsyncIteratorPrototype% / %AsyncGeneratorPrototype% /
+// %AsyncGeneratorFunction.prototype% chain, and %markAsyncGen (emitted by
+// the async desugar at each async-generator definition) hangs a compiled
+// wrapper function onto it.
+
+ejsval _ejs_AsyncIteratorPrototype EJSVAL_ALIGNMENT;
+ejsval _ejs_AsyncGeneratorPrototype EJSVAL_ALIGNMENT;
+ejsval _ejs_AsyncGeneratorFunction_prototype EJSVAL_ALIGNMENT;
+
+static EJS_NATIVE_FUNC(_ejs_AsyncIteratorPrototype_asyncIterator) {
+    return *_this;
+}
+
+// AsyncGenerator.prototype's next/return/throw: the driver object carries
+// own next/return/throw closures (which shadow these); the prototype
+// methods dispatch to those so explicit .call() on the prototype works
+static ejsval
+agp_dispatch (ejsval atom, ejsval* _this, uint32_t argc, ejsval* args)
+{
+    if (!EJSVAL_IS_OBJECT(*_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "receiver is not an async generator");
+    EJSPropertyDesc* own = OP(EJSVAL_TO_OBJECT(*_this),GetOwnProperty)(*_this, atom, NULL);
+    if (!own || !_ejs_property_desc_has_value(own) || !IsCallable(_ejs_property_desc_get_value(own)))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "receiver is not an async generator");
+    return _ejs_invoke_closure (_ejs_property_desc_get_value(own), _this, argc, args, _ejs_undefined);
+}
+
+static EJS_NATIVE_FUNC(_ejs_AsyncGeneratorPrototype_next) {
+    return agp_dispatch (_ejs_atom_next, _this, argc, args);
+}
+static EJS_NATIVE_FUNC(_ejs_AsyncGeneratorPrototype_return) {
+    return agp_dispatch (_ejs_atom_return, _this, argc, args);
+}
+static EJS_NATIVE_FUNC(_ejs_AsyncGeneratorPrototype_throw) {
+    return agp_dispatch (_ejs_atom_throw, _this, argc, args);
+}
+
+static EJS_NATIVE_FUNC(_ejs_AsyncGeneratorFunction_impl) {
+    _ejs_throw_nativeerror_utf8 (EJS_ERROR, "ejs doesn't support dynamic creation of functions");
+}
+
+// %markAsyncGen(fn): reparent the compiled async-generator wrapper into
+// the AsyncGeneratorFunction chain and give it the spec .prototype
+ejsval
+_ejs_mark_async_generator (ejsval fn)
+{
+    if (!EJSVAL_IS_FUNCTION(fn))
+        return fn;
+    EJSObject* fn_ = EJSVAL_TO_OBJECT(fn);
+    fn_->proto = _ejs_AsyncGeneratorFunction_prototype;
+    _ejs_gc_remember (fn_, _ejs_AsyncGeneratorFunction_prototype);
+    ejsval proto = _ejs_object_new (_ejs_AsyncGeneratorPrototype, &_ejs_Object_specops);
+    _ejs_object_define_value_property (fn, _ejs_atom_prototype, proto,
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_WRITABLE);
+    return fn;
+}
+
 void
 _ejs_generator_init(ejsval global)
 {
@@ -377,6 +447,47 @@ _ejs_generator_init(ejsval global)
     PROTO_METHOD(throw);
 
 #undef PROTO_METHOD
+
+    // %AsyncIteratorPrototype% (25.1.3)
+    _ejs_gc_add_root (&_ejs_AsyncIteratorPrototype);
+    _ejs_AsyncIteratorPrototype = _ejs_object_new (_ejs_Object_prototype, &_ejs_Object_specops);
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_AsyncIteratorPrototype, asyncIterator, _ejs_AsyncIteratorPrototype_asyncIterator,
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
+
+    // %AsyncGeneratorPrototype% (27.6.1)
+    _ejs_gc_add_root (&_ejs_AsyncGeneratorPrototype);
+    _ejs_AsyncGeneratorPrototype = _ejs_object_new (_ejs_AsyncIteratorPrototype, &_ejs_Object_specops);
+    // spec arity 1 for all three (the global arity table can't reach
+    // this prototype by a dot-path)
+#define AGP_METHOD(x) EJS_MACRO_START \
+    ejsval __agp_fn = _ejs_function_new_native (_ejs_null, _ejs_atom_##x, _ejs_AsyncGeneratorPrototype_##x); \
+    _ejs_object_define_value_property (__agp_fn, _ejs_atom_length, NUMBER_TO_EJSVAL(1), \
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_NOT_WRITABLE); \
+    _ejs_object_define_value_property (_ejs_AsyncGeneratorPrototype, _ejs_atom_##x, __agp_fn, \
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE); \
+    EJS_MACRO_END
+    AGP_METHOD(next);
+    AGP_METHOD(return);
+    AGP_METHOD(throw);
+#undef AGP_METHOD
+    _ejs_object_define_value_property (_ejs_AsyncGeneratorPrototype, _ejs_Symbol_toStringTag, _ejs_string_new_utf8 ("AsyncGenerator"),
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
+
+    // %AsyncGeneratorFunction.prototype% (27.4.3) and its constructor
+    _ejs_gc_add_root (&_ejs_AsyncGeneratorFunction_prototype);
+    _ejs_AsyncGeneratorFunction_prototype = _ejs_object_new (_ejs_Function_prototype, &_ejs_Object_specops);
+    _ejs_object_define_value_property (_ejs_AsyncGeneratorFunction_prototype, _ejs_atom_prototype, _ejs_AsyncGeneratorPrototype,
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
+    _ejs_object_define_value_property (_ejs_AsyncGeneratorFunction_prototype, _ejs_Symbol_toStringTag, _ejs_string_new_utf8 ("AsyncGeneratorFunction"),
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
+    _ejs_object_define_value_property (_ejs_AsyncGeneratorPrototype, _ejs_atom_constructor, _ejs_AsyncGeneratorFunction_prototype,
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
+
+    ejsval agf_ctor = _ejs_function_new_without_proto (_ejs_null, _ejs_string_new_utf8 ("AsyncGeneratorFunction"), _ejs_AsyncGeneratorFunction_impl);
+    _ejs_object_define_value_property (agf_ctor, _ejs_atom_prototype, _ejs_AsyncGeneratorFunction_prototype,
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (_ejs_AsyncGeneratorFunction_prototype, _ejs_atom_constructor, agf_ctor,
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 }
 
 static EJSObject*

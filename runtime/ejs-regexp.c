@@ -1179,7 +1179,7 @@ _ejs_regexp_init(ejsval global)
     re_proto->pattern = _ejs_string_new_utf8("(?:)");
     re_proto->flags = _ejs_atom_empty;
 
-    _ejs_object_setprop (_ejs_RegExp,       _ejs_atom_prototype,  _ejs_RegExp_prototype);
+    _ejs_object_define_value_property (_ejs_RegExp, _ejs_atom_prototype, _ejs_RegExp_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_RegExp, x, _ejs_RegExp_##x)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_RegExp_prototype, x, _ejs_RegExp_prototype_##x)

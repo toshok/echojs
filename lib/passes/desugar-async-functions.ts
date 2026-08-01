@@ -331,13 +331,39 @@ export class DesugarAsyncFunctions extends TransformPass {
     }
 
     override visitFunctionDeclaration(n: e.FunctionDeclaration): VisitResult {
+        const wasAsyncGen = n.async === true && n.generator === true;
         this.visitFn(n, () => super.visitFunctionDeclaration(n));
+        // async-generator definitions join the %AsyncGeneratorFunction%
+        // chain; the mark statement follows the (hoisted) declaration
+        if (wasAsyncGen && n.id)
+            return [
+                n,
+                b.expressionStatement(
+                    b.callExpression(b.identifier("%markAsyncGen"), [b.identifier(n.id.name)])
+                ),
+            ];
         return n;
     }
 
     override visitFunctionExpression(n: e.FunctionExpression): VisitResult {
+        const wasAsyncGen = n.async === true && n.generator === true;
         this.visitFn(n, () => super.visitFunctionExpression(n));
+        if (wasAsyncGen) return b.callExpression(b.identifier("%markAsyncGen"), [n]);
         return n;
+    }
+
+    // class-method values must stay FunctionExpressions for the class
+    // desugar; unwrap any %markAsyncGen the expression visit added
+    override visitMethodDefinition(n: e.MethodDefinition): VisitResult {
+        const r = super.visitMethodDefinition(n) as e.MethodDefinition;
+        const v = r.value as unknown as e.CallExpression;
+        if (
+            v &&
+            v.type === "CallExpression" &&
+            (v.callee as e.Identifier).name === "%markAsyncGen"
+        )
+            r.value = v.arguments[0] as e.FunctionExpression;
+        return r;
     }
 
     override visitArrowFunctionExpression(n: e.ArrowFunctionExpression): VisitResult {

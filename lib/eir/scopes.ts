@@ -84,12 +84,32 @@ export class FnInfo {
     usesArguments = false;
     thisBinding: Binding | null = null;
     isToplevel = false;
+    // strict-mode code: inherited from the enclosing function or declared
+    // by a "use strict" directive prologue in this body
+    strict = false;
 
     constructor(node: e.Function, name: string, parent: FnInfo | null) {
         this.node = node;
         this.name = name;
         this.parent = parent;
         if (parent) parent.children.push(this);
+        this.strict = (parent ? parent.strict : false) || FnInfo.hasUseStrict(node);
+    }
+
+    private static hasUseStrict(node: e.Function): boolean {
+        const body = (node as unknown as Record<string, unknown>)["body"] as e.Node | undefined;
+        if (!body || body.type !== "BlockStatement") return false;
+        for (const stmt of (body as e.BlockStatement).body) {
+            // scope analysis runs post-desugar: HoistFuncDecls moves
+            // function declarations ABOVE the directive prologue — skip
+            // them
+            if (stmt.type === "FunctionDeclaration") continue;
+            if (stmt.type !== "ExpressionStatement") break;
+            const expr = (stmt as e.ExpressionStatement).expression;
+            if (expr.type !== "Literal" || typeof (expr as e.Literal).value !== "string") break;
+            if ((expr as e.Literal).value === "use strict") return true;
+        }
+        return false;
     }
 }
 

@@ -239,7 +239,7 @@ _ejs_weakset_init(ejsval global)
 
     _ejs_gc_add_root (&_ejs_WeakSet_prototype);
     _ejs_WeakSet_prototype = _ejs_object_new (_ejs_Object_prototype, &_ejs_Object_specops);
-    _ejs_object_setprop (_ejs_WeakSet,       _ejs_atom_prototype,  _ejs_WeakSet_prototype);
+    _ejs_object_define_value_property (_ejs_WeakSet, _ejs_atom_prototype, _ejs_WeakSet_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_WeakSet, x, _ejs_WeakSet_##x)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_WeakSet_prototype, x, _ejs_WeakSet_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)

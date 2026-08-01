@@ -36,6 +36,9 @@ static EJS_NATIVE_FUNC(_ejs_Map_prototype_clear) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Map.prototype.clear called with non-object this.");
 
     // 3. If M does not have a [[MapData]] internal slot throw a TypeError exception.
+    if (!EJSVAL_IS_MAP(M))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Map.prototype.clear called with non-Map this.");
+
     // 4. If M’s [[MapData]] internal slot is undefined, then throw a TypeError exception.
 
     // 5. Let entries be the List that is the value of M’s [[MapData]] internal slot.
@@ -236,6 +239,72 @@ _ejs_map_has (ejsval map, ejsval key)
     return _ejs_false;
 }
 
+// upsert proposal
+// Map.prototype.getOrInsert ( key, value )
+static EJS_NATIVE_FUNC(_ejs_Map_prototype_getOrInsert) {
+    ejsval key = _ejs_undefined;
+    ejsval value = _ejs_undefined;
+    if (argc > 0) key = args[0];
+    if (argc > 1) value = args[1];
+
+    // 1. Let M be the this value.
+    ejsval M = *_this;
+
+    // 2. Perform ? RequireInternalSlot(M, [[MapData]]).
+    if (!EJSVAL_IS_OBJECT(M))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Map.prototype.getOrInsert called with non-object this.");
+    if (!EJSVAL_IS_MAP(M))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Map.prototype.getOrInsert called with non-Map this.");
+
+    // 3-4. If an entry with SameValueZero key exists, return its value.
+    if (EJSVAL_TO_BOOLEAN(_ejs_map_has (M, key)))
+        return _ejs_map_get (M, key);
+
+    // 5-6. Append { key, value } (set canonicalizes -0 keys) and return value.
+    _ejs_map_set (M, key, value);
+    return value;
+}
+
+// upsert proposal
+// Map.prototype.getOrInsertComputed ( key, callbackfn )
+static EJS_NATIVE_FUNC(_ejs_Map_prototype_getOrInsertComputed) {
+    ejsval key = _ejs_undefined;
+    ejsval callbackfn = _ejs_undefined;
+    if (argc > 0) key = args[0];
+    if (argc > 1) callbackfn = args[1];
+
+    // 1. Let M be the this value.
+    ejsval M = *_this;
+
+    // 2. Perform ? RequireInternalSlot(M, [[MapData]]).
+    if (!EJSVAL_IS_OBJECT(M))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Map.prototype.getOrInsertComputed called with non-object this.");
+    if (!EJSVAL_IS_MAP(M))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Map.prototype.getOrInsertComputed called with non-Map this.");
+
+    // 3. If IsCallable(callbackfn) is false, throw a TypeError exception.
+    if (!IsCallable(callbackfn))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Map.prototype.getOrInsertComputed callbackfn isn't a function.");
+
+    // 4. Set key to CanonicalizeKeyedCollectionKey(key) — the callback
+    //    must observe the canonical key.
+    if (EJSVAL_IS_NUMBER(key) && EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(key)))
+        key = NUMBER_TO_EJSVAL(0);
+
+    // 5. If an entry with SameValue key exists, return its value.
+    if (EJSVAL_TO_BOOLEAN(_ejs_map_has (M, key)))
+        return _ejs_map_get (M, key);
+
+    // 6. Let value be ? Call(callbackfn, undefined, « key »).
+    ejsval undef_this = _ejs_undefined;
+    ejsval cb_args[1] = { key };
+    ejsval value = _ejs_invoke_closure (callbackfn, &undef_this, 1, cb_args, _ejs_undefined);
+
+    // 7-8. Insert (or overwrite an entry the callback added) and return value.
+    _ejs_map_set (M, key, value);
+    return value;
+}
+
 // ES6: 23.1.3.7
 // Map.prototype.has ( key )
 static EJS_NATIVE_FUNC(_ejs_Map_prototype_has) {
@@ -339,9 +408,68 @@ static EJS_NATIVE_FUNC(_ejs_Map_prototype_set) {
     return _ejs_map_set (M, key, value);
 }
 
+// ES2024 24.1.2.1 Map.groupBy ( items, callbackfn )
+static EJS_NATIVE_FUNC(_ejs_Map_groupBy) {
+    ejsval items = _ejs_undefined;
+    ejsval callbackfn = _ejs_undefined;
+    if (argc > 0) items = args[0];
+    if (argc > 1) callbackfn = args[1];
+
+    // GroupBy step 2: If IsCallable(callbackfn) is false, throw a TypeError exception.
+    if (!IsCallable(callbackfn))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Map.groupBy callbackfn isn't a function.");
+
+    // 2. Let map be a new Map.
+    EJSMap* map_obj = _ejs_gc_new (EJSMap);
+    _ejs_init_object ((EJSObject*)map_obj, _ejs_Map_prototype, &_ejs_Map_specops);
+    ejsval map = OBJECT_TO_EJSVAL(map_obj);
+
+    // GroupBy steps 4-6: iterate items, calling callbackfn(value, k) for the key.
+    ejsval iterator = GetIterator (items, _ejs_undefined);
+    int64_t k = 0;
+    for (;;) {
+        ejsval next = IteratorStep (iterator);
+        if (!EJSVAL_TO_BOOLEAN(next))
+            break;
+
+        ejsval value = IteratorValue (next);
+
+        ejsval undef_this = _ejs_undefined;
+        ejsval cb_args[2] = { value, NUMBER_TO_EJSVAL(k) };
+        ejsval key;
+        EJSBool status = _ejs_invoke_closure_catch (&key, callbackfn, &undef_this, 2, cb_args, _ejs_undefined);
+        // f. IfAbruptCloseIterator(key, iteratorRecord).
+        if (!status)
+            return IteratorClose (iterator, key, EJS_TRUE);
+
+        // g. CanonicalizeKeyedCollectionKey(key)
+        if (EJSVAL_IS_NUMBER(key) && EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(key)))
+            key = NUMBER_TO_EJSVAL(0);
+
+        // h. Perform AddValueToKeyedGroup(groups, key, value).
+        ejsval group = _ejs_map_get (map, key);
+        if (!EJSVAL_TO_BOOLEAN(_ejs_map_has (map, key))) {
+            group = _ejs_array_new (0, EJS_FALSE);
+            _ejs_map_set (map, key, group);
+        }
+        _ejs_array_push_dense (group, 1, &value);
+
+        k++;
+    }
+
+    // 3-4. Map entries were built in place; return map.
+    return map;
+}
+
 // ES6: 23.1.3.10
 // get Map.prototype.size
 static EJS_NATIVE_FUNC(_ejs_Map_prototype_get_size) {
+    // If M is not an Object with a [[MapData]] internal slot, throw a TypeError exception.
+    if (!EJSVAL_IS_OBJECT(*_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "get Map.prototype.size called with non-object this.");
+    if (!EJSVAL_IS_MAP(*_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "get Map.prototype.size called with non-Map this.");
+
     EJSMap* _map = EJSVAL_TO_MAP(*_this);
     uint32_t size = 0;
 
@@ -449,7 +577,8 @@ static EJS_NATIVE_FUNC(_ejs_Map_impl) {
 }
 
 static EJS_NATIVE_FUNC(_ejs_Map_get_species) {
-    return _ejs_Map;
+    // ES6 23.1.2.2: get Map [ @@species ] returns the this value
+    return *_this;
 }
 
 ejsval _ejs_Map EJSVAL_ALIGNMENT;
@@ -591,17 +720,23 @@ _ejs_map_init(ejsval global)
 
     _ejs_gc_add_root (&_ejs_Map_prototype);
     _ejs_Map_prototype = _ejs_map_new ();
-    _ejs_object_setprop (_ejs_Map,       _ejs_atom_prototype,  _ejs_Map_prototype);
+    _ejs_object_define_value_property (_ejs_Map, _ejs_atom_prototype, _ejs_Map_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Map, x, _ejs_Map_##x)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Map_prototype, x, _ejs_Map_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 #define PROTO_GETTER(x) EJS_INSTALL_ATOM_GETTER(_ejs_Map_prototype, x, _ejs_Map_prototype_get_##x)
 
+    _ejs_object_define_value_property (_ejs_Map_prototype, _ejs_atom_constructor, _ejs_Map,
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+
+    OBJ_METHOD(groupBy);
+
     PROTO_METHOD(clear);
-    // XXX (ES6 23.1.3.2) Map.prototype.constructor
     PROTO_METHOD(delete);
     PROTO_METHOD(forEach);
     PROTO_METHOD(get);
+    PROTO_METHOD(getOrInsert);
+    PROTO_METHOD(getOrInsertComputed);
     PROTO_METHOD(has);
     PROTO_METHOD(keys);
     PROTO_METHOD(values);
@@ -612,9 +747,9 @@ _ejs_map_init(ejsval global)
 
     // expand PROTO_METHOD(entries) here so we can install the function for @@iterator below
     ejsval _entries = _ejs_function_new_native (_ejs_null, _ejs_atom_entries,  _ejs_Map_prototype_entries);
-    _ejs_object_define_value_property (_ejs_Map_prototype, _ejs_atom_entries, _entries, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_FLAGS_WRITABLE | EJS_PROP_FLAGS_CONFIGURABLE);
+    _ejs_object_define_value_property (_ejs_Map_prototype, _ejs_atom_entries, _entries, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
 
-    _ejs_object_define_value_property (_ejs_Map_prototype, _ejs_Symbol_iterator, _entries, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_FLAGS_WRITABLE | EJS_PROP_FLAGS_CONFIGURABLE);
+    _ejs_object_define_value_property (_ejs_Map_prototype, _ejs_Symbol_iterator, _entries, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
     _ejs_object_define_value_property (_ejs_Map_prototype, _ejs_Symbol_toStringTag, _ejs_atom_Map, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 
     EJS_INSTALL_SYMBOL_GETTER(_ejs_Map, species, _ejs_Map_get_species);

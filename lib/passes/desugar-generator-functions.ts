@@ -92,7 +92,22 @@ export class DesugarGeneratorFunctions extends TransformPass {
                     null
                 ),
             ]);
+            // parameter-destructuring prologue (tagged by
+            // DesugarDestructuring) stays in the wrapper: 9.2.10 binds
+            // parameters at call time, so a poisoned iterator throws
+            // before the generator object exists.  the body closure
+            // captures the hoisted bindings.
+            const wrapper_prologue: e.Statement[] = [];
+            const try_block = old_body.body[old_body.body.length - 1] as e.TryStatement;
+            const gen_body = try_block.block as e.BlockStatement;
+            while (
+                gen_body.body.length &&
+                (gen_body.body[0] as unknown as Record<string, unknown>)["ejs_param_prologue"]
+            ) {
+                wrapper_prologue.push(gen_body.body.shift()!);
+            }
             n.body = b.blockStatement([
+                ...wrapper_prologue,
                 b.letDeclaration(
                     gen_id,
                     intrinsic(makeGenerator_id, [b.arrowFunctionExpression([], old_body)])

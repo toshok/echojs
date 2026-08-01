@@ -874,9 +874,10 @@ export class EIREmitter {
                 );
             }
             case "set_prop": {
+                const fn = inst.imms["strict"] ? rt.object_setprop_strict : rt.object_setprop;
                 return this.emitCallLike(
                     inst,
-                    rt.object_setprop,
+                    fn,
                     [
                         this.val(inst.operands[0]),
                         this.val(inst.operands[1]),
@@ -887,18 +888,20 @@ export class EIREmitter {
             }
             case "set_prop_atom": {
                 let key = this.v.getAtom(String(inst.imms["atom"]));
+                const fn = inst.imms["strict"] ? rt.object_setprop_strict : rt.object_setprop;
                 return this.emitCallLike(
                     inst,
-                    rt.object_setprop,
+                    fn,
                     [this.val(inst.operands[0]), key, this.val(inst.operands[1])],
                     "setprop"
                 );
             }
 
             case "delete_prop": {
+                const fn = inst.imms["strict"] ? rt.unopdelete_strict : rt.unopdelete;
                 return this.emitCallLike(
                     inst,
-                    rt.unopdelete,
+                    fn,
                     [this.val(inst.operands[0]), this.val(inst.operands[1])],
                     "delres"
                 );
@@ -936,13 +939,15 @@ export class EIREmitter {
 
             case "get_global": {
                 let key = this.v.getAtom(String(inst.imms["atom"]));
-                return this.emitCallLike(inst, rt.global_getprop, [key], "getglobal");
+                const fn = inst.imms["for_typeof"] ? rt.global_getprop : rt.global_getprop_checked;
+                return this.emitCallLike(inst, fn, [key], "getglobal");
             }
             case "set_global": {
                 let key = this.v.getAtom(String(inst.imms["atom"]));
+                const fn = inst.imms["strict"] ? rt.global_setprop_strict : rt.global_setprop;
                 return this.emitCallLike(
                     inst,
-                    rt.global_setprop,
+                    fn,
                     [key, this.val(inst.operands[0])],
                     "setglobal"
                 );

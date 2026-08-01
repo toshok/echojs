@@ -1,5 +1,3 @@
-// xfail: Date.prototype is an ordinary object in ES2015+ (node throws TypeError on Date.prototype.toString()); ejs still gives it a [[DateValue]]
-
 console.log("date");
 console.log(Date.prototype.toString());
 console.log("object date.proto.tostring");

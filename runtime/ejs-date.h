@@ -13,10 +13,8 @@ typedef struct {
     /* object header */
     EJSObject obj;
 
-    /* date specific data */
-    EJSBool valid;
-    struct timeval tv;
-    struct timezone tz;
+    /* [[DateValue]]: milliseconds since the epoch, or NaN for an invalid date */
+    double date_value;
 } EJSDate;
 
 

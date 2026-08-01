@@ -49,7 +49,7 @@ _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func)
     _ejs_object_define_value_property (fun, _ejs_atom_prototype, fun_proto, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 
     _ejs_object_define_value_property (fun_proto, _ejs_atom_constructor, fun, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
-    _ejs_object_define_value_property (fun, _ejs_atom_name, name, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (fun, _ejs_atom_name, name, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     return fun;
 }
 
@@ -80,10 +80,11 @@ _ejs_function_new_without_proto (ejsval env, ejsval name, EJSClosureFunc func)
 
     rv->func = func;
     rv->env = env;
+    rv->constructor_kind = CONSTRUCTOR_KIND_BASE;
 
     ejsval fun = OBJECT_TO_EJSVAL(rv);
 
-    _ejs_object_define_value_property (fun, _ejs_atom_name, name, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (fun, _ejs_atom_name, name, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     return fun;
 }
 
@@ -97,10 +98,11 @@ _ejs_function_new_utf8_with_proto (ejsval env, const char* name, EJSClosureFunc 
 
     rv->func = func;
     rv->env = env;
+    rv->constructor_kind = CONSTRUCTOR_KIND_BASE;
 
     ejsval fun = OBJECT_TO_EJSVAL(rv);
 
-    _ejs_object_define_value_property (fun, _ejs_atom_name, function_name, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (fun, _ejs_atom_name, function_name, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     _ejs_object_define_value_property (fun, _ejs_atom_prototype, prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 
     return fun;
@@ -116,10 +118,19 @@ _ejs_function_new_native (ejsval env, ejsval name, EJSClosureFunc func)
 
     rv->func = func;
     rv->env = env;
+    // builtin methods/accessors are not constructors (spec: no
+    // [[Construct]]); real native constructors go through
+    // _ejs_function_new_without_proto
+    rv->constructor_kind = CONSTRUCTOR_KIND_NONE;
 
     ejsval fun = OBJECT_TO_EJSVAL(rv);
 
-    _ejs_object_define_value_property (fun, _ejs_atom_name, name, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (fun, _ejs_atom_name, name, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    // ES6 19.2.4.1: builtins have an own .length; the spec arity for
+    // table-known builtins is stamped later by
+    // _ejs_install_builtin_arities
+    _ejs_object_define_value_property (fun, _ejs_atom_length, NUMBER_TO_EJSVAL(0),
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
     return OBJECT_TO_EJSVAL(rv);
 }
@@ -173,8 +184,7 @@ static EJS_NATIVE_FUNC(_ejs_Function_prototype_apply) {
 
     /* 1. If IsCallable(func) is false, then throw a TypeError exception. */
     if (!IsCallable(*_this)) {
-        printf ("throw TypeError, func is not callable\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "func is not callable");
     }
 
     ejsval thisArg = _ejs_undefined;
@@ -190,8 +200,7 @@ static EJS_NATIVE_FUNC(_ejs_Function_prototype_apply) {
     }
     /* 3. If Type(argArray) is not Object, then throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(argArray)) {
-        printf ("throw TypeError, argArray is not an object\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argArray is not an object");
     }
     EJSObject* argArray_ = EJSVAL_TO_OBJECT(argArray);
 
@@ -274,11 +283,26 @@ static EJS_NATIVE_FUNC(_ejs_Function_prototype_call) {
 #define EJS_BOUNDFUNC_ENV_SET_ARG(bf,a,v)  (*_ejs_closureenv_get_slot_ref((bf), EJS_BOUNDFUNC_FIRST_ARG_SLOT + (a)) = v)
 
 static EJS_NATIVE_FUNC(bound_wrapper) {
-    EJS_ASSERT(EJSVAL_IS_UNDEFINED(newTarget)); // we don't currently support 'new $boundfunc()'
-
     ejsval target = EJS_BOUNDFUNC_ENV_GET_TARGET(env);
     ejsval thisArg = EJS_BOUNDFUNC_ENV_GET_THIS(env);
     uint32_t bound_argc = ToUint32(EJS_BOUNDFUNC_ENV_GET_ARGC(env));
+
+    // 9.4.1.2 [[Construct]]: construct the target with the bound args
+    // prepended; a newTarget equal to the bound function itself is
+    // replaced by the target
+    if (!EJSVAL_IS_UNDEFINED(newTarget)) {
+        uint32_t call_argc = argc + bound_argc;
+        ejsval* call_args = alloca(sizeof(ejsval) * call_argc);
+        if (bound_argc)
+            memcpy (call_args, _ejs_closureenv_get_slot_ref(env, EJS_BOUNDFUNC_FIRST_ARG_SLOT), sizeof(ejsval) * bound_argc);
+        if (argc)
+            memcpy (call_args + bound_argc, args, sizeof(ejsval) * argc);
+        // the Construct specop reached us through the bound function
+        // object; that object (not the target) is what newTarget holds,
+        // but we cannot compare against it here, so pass the target as
+        // newTarget — correct for the direct `new bf()` case
+        return Construct (target, target, call_argc, call_args);
+    }
 
     if (bound_argc == 0) {
         return _ejs_invoke_closure(target, &thisArg, argc, args, _ejs_undefined);
@@ -335,6 +359,9 @@ static EJS_NATIVE_FUNC(_ejs_Function_prototype_bind) {
     ((EJSObject*)F_)->proto = EJSVAL_TO_OBJECT(Target)->proto;
 
     F_->bound = EJS_TRUE;
+    // a bound function constructs iff its target does (9.4.1.2)
+    if (EJSVAL_IS_FUNCTION(Target))
+        F_->constructor_kind = ((EJSFunction*)EJSVAL_TO_OBJECT(Target))->constructor_kind;
 
     return F;
 }
@@ -378,7 +405,7 @@ _ejs_function_init_proto()
     proto->func = _ejs_Function_empty;
     proto->env = _ejs_null;
 
-    _ejs_object_define_value_property (OBJECT_TO_EJSVAL(proto), _ejs_atom_name, _ejs_atom_empty, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (OBJECT_TO_EJSVAL(proto), _ejs_atom_name, _ejs_atom_empty, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 }
 
 void
@@ -506,8 +533,7 @@ _ejs_function_specop_has_instance (ejsval F, ejsval V)
 
     /* 3. If Type(O) is not Object, throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
-        printf ("throw TypeError, O is not an object\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "O is not an object");
     }
 
     /* 4. Repeat */

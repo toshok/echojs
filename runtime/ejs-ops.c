@@ -434,10 +434,10 @@ ejsval ToObject(ejsval exp)
         return _ejs_bigint_new_object(exp);
     }
     else if (EJSVAL_IS_UNDEFINED(exp)) {
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1"); // XXX
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Cannot convert undefined to object");
     }
     else if (EJSVAL_IS_NULL(exp)) {
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "2"); // XXX
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Cannot convert null to object");
     }
     else if (EJSVAL_IS_OBJECT(exp))
         return exp;
@@ -606,7 +606,7 @@ SameValue(ejsval x, ejsval y)
     // 9. If Type(x) is Symbol, then
     if (EJSVAL_IS_SYMBOL(x)) {
         // a. If x and y are both the same Symbol value, then return true; otherwise, return false.
-        EJS_NOT_IMPLEMENTED();
+        return EJSVAL_EQ(x, y);
     }
     // BigInt: value comparison
     if (EJSVAL_IS_BIGINT(x)) return _ejs_bigint_cmp(x, y) == 0 ? EJS_TRUE : EJS_FALSE;
@@ -663,7 +663,7 @@ SameValueZero(ejsval x, ejsval y)
     // 9. If Type(x) is Symbol, then
     if (EJSVAL_IS_SYMBOL(x)) {
         //    a. If x and y are both the same Symbol value, then return true; otherwise, return false.
-        EJS_NOT_IMPLEMENTED();
+        return EJSVAL_EQ(x, y);
     }
     // BigInt: value comparison
     if (EJSVAL_IS_BIGINT(x)) return _ejs_bigint_cmp(x, y) == 0 ? EJS_TRUE : EJS_FALSE;
@@ -805,9 +805,28 @@ _ejs_op_typeof (ejsval exp)
 ejsval
 _ejs_op_delete (ejsval obj, ejsval prop)
 {
+    // deleting off a primitive base: ToObject would wrap a fresh object,
+    // so the delete trivially succeeds
+    if (!EJSVAL_IS_OBJECT(obj))
+        return _ejs_true;
+
     EJSObject *obj_ = EJSVAL_TO_OBJECT(obj);
 
-    EJSBool delete_rv = OP(obj_,Delete)(obj, prop, EJS_FALSE); // we need this for the mozilla tests... strict mode problem?
+    EJSBool delete_rv = OP(obj_,Delete)(obj, prop, EJS_FALSE);
+
+    return BOOLEAN_TO_EJSVAL(delete_rv);
+}
+
+// strict-mode delete: 13.5.1.2 step 5.c, an unsuccessful delete throws
+ejsval
+_ejs_op_delete_strict (ejsval obj, ejsval prop)
+{
+    if (!EJSVAL_IS_OBJECT(obj))
+        return _ejs_true;
+
+    EJSObject *obj_ = EJSVAL_TO_OBJECT(obj);
+
+    EJSBool delete_rv = OP(obj_,Delete)(obj, prop, EJS_TRUE);
 
     return BOOLEAN_TO_EJSVAL(delete_rv);
 }
@@ -1320,8 +1339,9 @@ _ejs_op_in (ejsval lhs, ejsval rhs)
 
     EJSObject *obj = EJSVAL_TO_OBJECT(rhs);
 
-    /* 6. Return the result of calling the [[HasProperty]] internal method of rval with argument ToString(lval). */
-    return OP(obj,HasProperty) (rhs, ToString(lhs)) ? _ejs_true : _ejs_false;
+    /* 6. Return HasProperty(rval, ToPropertyKey(lval)) — symbol keys
+       pass through unchanged (ES2015 12.10.3). */
+    return OP(obj,HasProperty) (rhs, ToPropertyKey(lhs)) ? _ejs_true : _ejs_false;
 }
 
 EJSBool
@@ -1781,6 +1801,10 @@ IsConstructor(ejsval argument) {
 
     // 3. If argument has a [[Construct]] internal method, return true.
     EJSObject* obj = EJSVAL_TO_OBJECT(argument);
+    // builtin methods/accessors carry no [[Construct]]
+    if (EJSVAL_IS_FUNCTION(argument) &&
+        ((EJSFunction*)obj)->constructor_kind == CONSTRUCTOR_KIND_NONE)
+        return EJS_FALSE;
     if (OP(obj, Construct) != NULL) return EJS_TRUE;
 
     // 4. Return false.
@@ -1825,11 +1849,22 @@ Construct (ejsval F, ejsval newTarget, uint32_t argc, ejsval* args)
 
     // 2. If argumentsList was not passed, let argumentsList be a new empty List.
 
-    // 3. Assert: IsConstructor (F) is true.
-    EJS_ASSERT(IsConstructor(F));
-
-    // 4. Assert: IsConstructor (newTarget) is true.
-    EJS_ASSERT(IsConstructor(newTarget));
+    // 3./4. The spec asserts IsConstructor for F and newTarget; the
+    // callers that can reach here with a non-constructor (`new expr`)
+    // rely on this check for the spec's EvaluateNew TypeError.
+    if (!IsConstructor(F)) {
+        if (EJSVAL_IS_FUNCTION(F)) {
+            ejsval name = _ejs_object_getprop (F, _ejs_atom_name);
+            char* name_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(name)));
+            char msg[256];
+            snprintf (msg, sizeof(msg), "%s is not a constructor", name_utf8);
+            free (name_utf8);
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, msg);
+        }
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "value is not a constructor");
+    }
+    if (!IsConstructor(newTarget))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "newTarget is not a constructor");
 
     // 5. Return the result of calling the [[Construct]] internal method of F passing argumentsList and newTarget as the arguments.
     return OP(EJSVAL_TO_OBJECT(F),Construct) (F, newTarget, argc, args);

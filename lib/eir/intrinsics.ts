@@ -65,8 +65,15 @@ export const eir_intrinsics: Record<string, IntrinsicEntry> = {
     // DesugarDestructuring (array patterns iterate via a runtime wrapper)
     "%createIteratorWrapper": { runtime: "iterator_wrapper_new" },
 
+    // DesugarAsyncFunctions: async-generator definitions join the
+    // %AsyncGeneratorFunction% prototype chain
+    "%markAsyncGen": { runtime: "mark_async_generator" },
+
     // DesugarSpread / DesugarDestructuring: object spread + object rest
     "%copyDataProps": { runtime: "copy_data_properties" },
+    // DesugarDestructuring: object patterns TypeError on null/undefined
+    // RHS even when the pattern reads no properties ({} = undefined)
+    "%requireObjectCoercible": { runtime: "require_object_coercible" },
     "%bigintFromLiteral": { runtime: "bigint_from_literal" },
     "%objectSpreadMerge": { runtime: "object_spread_merge" },
 

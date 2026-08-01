@@ -415,7 +415,7 @@ _ejs_number_init(ejsval global)
     prototype->number = 0;
     _ejs_Number_prototype = OBJECT_TO_EJSVAL(prototype);
 
-    _ejs_object_setprop (_ejs_Number,       _ejs_atom_prototype,  _ejs_Number_prototype);
+    _ejs_object_define_value_property (_ejs_Number, _ejs_atom_prototype, _ejs_Number_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Number_prototype, x, _ejs_Number_prototype_##x)
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Number, x, _ejs_Number_##x)
@@ -431,14 +431,16 @@ _ejs_number_init(ejsval global)
     OBJ_METHOD(isNaN);
     OBJ_METHOD(toInteger);
 
-    _ejs_object_setprop (_ejs_Number, _ejs_atom_EPSILON, NUMBER_TO_EJSVAL(nextafter(1, INFINITY)-1));
-    _ejs_object_setprop (_ejs_Number, _ejs_atom_MAX_SAFE_INTEGER, NUMBER_TO_EJSVAL(EJS_MAX_SAFE_INTEGER));
-    _ejs_object_setprop (_ejs_Number, _ejs_atom_MIN_SAFE_INTEGER, NUMBER_TO_EJSVAL(EJS_MIN_SAFE_INTEGER));
-    _ejs_object_setprop (_ejs_Number, _ejs_atom_MAX_VALUE, NUMBER_TO_EJSVAL(DBL_MAX));
-    _ejs_object_setprop (_ejs_Number, _ejs_atom_MIN_VALUE, NUMBER_TO_EJSVAL(DBL_MIN));
-    _ejs_object_setprop (_ejs_Number, _ejs_atom_NaN, NUMBER_TO_EJSVAL(nan("7734")));
-    _ejs_object_setprop (_ejs_Number, _ejs_atom_NEGATIVE_INFINITY, NUMBER_TO_EJSVAL(-INFINITY));
-    _ejs_object_setprop (_ejs_Number, _ejs_atom_POSITIVE_INFINITY, NUMBER_TO_EJSVAL(INFINITY));
+#define OBJ_CONST(n,v) _ejs_object_define_value_property (_ejs_Number, _ejs_atom_##n, NUMBER_TO_EJSVAL(v), EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE)
+    OBJ_CONST(EPSILON, nextafter(1, INFINITY)-1);
+    OBJ_CONST(MAX_SAFE_INTEGER, EJS_MAX_SAFE_INTEGER);
+    OBJ_CONST(MIN_SAFE_INTEGER, EJS_MIN_SAFE_INTEGER);
+    OBJ_CONST(MAX_VALUE, DBL_MAX);
+    OBJ_CONST(MIN_VALUE, DBL_MIN);
+    OBJ_CONST(NaN, nan("7734"));
+    OBJ_CONST(NEGATIVE_INFINITY, -INFINITY);
+    OBJ_CONST(POSITIVE_INFINITY, INFINITY);
+#undef OBJ_CONST
 
 #undef PROTO_METHOD
 }

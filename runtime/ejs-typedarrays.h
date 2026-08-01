@@ -13,6 +13,7 @@ typedef struct _EJSArrayBuffer {
 
     /* buffer data */
     EJSBool dependent;
+    EJSBool detached;
     int size;
 
     union {
@@ -35,6 +36,8 @@ typedef enum {
     EJS_TYPEDARRAY_UINT32,
     EJS_TYPEDARRAY_FLOAT32,
     EJS_TYPEDARRAY_FLOAT64,
+    EJS_TYPEDARRAY_BIGINT64,
+    EJS_TYPEDARRAY_BIGUINT64,
 
     EJS_TYPEDARRAY_TYPE_COUNT
 } EJSTypedArrayType;
@@ -78,7 +81,9 @@ typedef struct _EJSDataView {
                                   EJSVAL_TO_OBJECT(v)->ops == &_ejs_Uint16Array_specops || \
                                   EJSVAL_TO_OBJECT(v)->ops == &_ejs_Uint32Array_specops || \
                                   EJSVAL_TO_OBJECT(v)->ops == &_ejs_Float32Array_specops || \
-                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_Float64Array_specops \
+                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_Float64Array_specops || \
+                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_BigInt64Array_specops || \
+                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_BigUint64Array_specops \
                                   ))
 
 #define EJSVAL_TO_TYPEDARRAY(v) ((EJSTypedArray*)EJSVAL_TO_OBJECT(v))
@@ -95,7 +100,9 @@ typedef struct _EJSDataView {
                                     (v)->ops == &_ejs_Uint16Array_specops || \
                                     (v)->ops == &_ejs_Uint32Array_specops || \
                                     (v)->ops == &_ejs_Float32Array_specops || \
-                                    (v)->ops == &_ejs_Float64Array_specops \
+                                    (v)->ops == &_ejs_Float64Array_specops || \
+                                    (v)->ops == &_ejs_BigInt64Array_specops || \
+                                    (v)->ops == &_ejs_BigUint64Array_specops \
                                   )
 
 #define EJSOBJECT_IS_ARRAYBUFFER(v) (v->ops == &_ejs_ArrayBuffer_specops)
@@ -157,6 +164,14 @@ extern ejsval _ejs_Float64Array;
 extern ejsval _ejs_Float64Array_prototype;
 extern EJSSpecOps _ejs_Float64Array_specops;
 
+extern ejsval _ejs_BigInt64Array;
+extern ejsval _ejs_BigInt64Array_prototype;
+extern EJSSpecOps _ejs_BigInt64Array_specops;
+
+extern ejsval _ejs_BigUint64Array;
+extern ejsval _ejs_BigUint64Array_prototype;
+extern EJSSpecOps _ejs_BigUint64Array_specops;
+
 extern ejsval _ejs_DataView;
 extern ejsval _ejs_DataView_prototype;
 extern EJSSpecOps _ejs_DataView_specops;
@@ -164,6 +179,8 @@ extern EJSSpecOps _ejs_DataView_specops;
 void _ejs_typedarrays_init(ejsval global);
 
 void* _ejs_arraybuffer_get_data(EJSObject* arr);
+void _ejs_arraybuffer_detach(ejsval bufferval);
+EJS_NATIVE_FUNC(_ejs_detachArrayBuffer_impl);
 void* _ejs_typedarray_get_data(EJSObject* arr);
 void* _ejs_dataview_get_data(EJSObject* view);
 

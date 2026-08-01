@@ -57,6 +57,20 @@ const ASSIGN_OPS = new Set([
 const LOGICAL_OPS = new Set(["||", "&&", "??"]);
 
 // in-place fixups on one node, applied before recursing into it
+// a non-computed BigInt-literal property key ({ 1n: v }, class { 1n() {} })
+// names the property by the numeric value's decimal string — rewrite the
+// key in place before the generic Literal transmute turns it into a
+// %bigintFromLiteral call (keys are names, not values)
+function bigintKeyToString(n: Node): void {
+    const key = n["key"] as Node | undefined | null;
+    if (n["computed"] || !key || key.type !== "Literal" || key["bigint"] == null) return;
+    const digits = String(key["bigint"]).replace(/_/g, "");
+    const str = BigInt(digits).toString();
+    key["value"] = str;
+    key["raw"] = JSON.stringify(str);
+    delete key["bigint"];
+}
+
 function adaptNode(n: Node): void {
     switch (n.type) {
         case "FunctionDeclaration":
@@ -109,6 +123,7 @@ function adaptNode(n: Node): void {
                 n["param"] = { type: "Identifier", name: `%unused_catch_${catch_gen++}` };
             break;
         case "Property": {
+            bigintKeyToString(n);
             // NamedEvaluation: an anonymous function/arrow property value
             // is named after its (non-computed) key — { om() {} }, { a: () => {} }
             const key = n["key"] as Node;
@@ -123,7 +138,11 @@ function adaptNode(n: Node): void {
             }
             break;
         }
+        case "MethodDefinition":
+            bigintKeyToString(n);
+            break;
         case "PropertyDefinition": {
+            bigintKeyToString(n);
             // class field initialized with an anonymous function
             const key = n["key"] as Node;
             const value = n["value"] as Node | null;
@@ -216,7 +235,8 @@ function isNode(v: unknown): v is Node {
 function isAnonFn(n: Node): boolean {
     return (
         (n.type === "FunctionExpression" && n["id"] == null) ||
-        n.type === "ArrowFunctionExpression"
+        n.type === "ArrowFunctionExpression" ||
+        (n.type === "ClassExpression" && n["id"] == null)
     );
 }
 

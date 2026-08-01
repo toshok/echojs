@@ -10,6 +10,7 @@
 #include "ejs-math.h"
 #include "ejs-string.h"
 #include "ejs-symbol.h"
+#include "ejs-error.h"
 
 ejsval _ejs_Math EJSVAL_ALIGNMENT;
 
@@ -340,17 +341,8 @@ static EJS_NATIVE_FUNC(_ejs_Math_log10) {
     if (isnan(x_))
         return _ejs_nan;
 
-    // 2. If x is less than 0, the result is NaN.
-    if (x_ < 0)
-        return _ejs_nan;
-
-    // 3. If x is +0, the result is +0.
-    // 4. If x is −0, the result is −0.
-    if (x_ == 0)
-        return x;
-
-    // 5. If x is 1, the result is +0.
-    // 6. If x is +∞, the result is +∞.
+    // libm log10 matches the spec for the remaining cases: x < 0 is
+    // NaN, +-0 is -Infinity, 1 is +0, +Infinity is +Infinity.
     return NUMBER_TO_EJSVAL(log10(x_));
 }
 
@@ -458,6 +450,84 @@ static EJS_NATIVE_FUNC(_ejs_Math_cbrt) {
     return NUMBER_TO_EJSVAL(cbrt(ToDouble(x)));
 }
 
+// ES2025 21.3.2.17 Math.f16round ( x )
+static EJS_NATIVE_FUNC(_ejs_Math_f16round) {
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+
+    double x_ = ToDouble(x);
+    if (isnan(x_))
+        return _ejs_nan;
+
+    // a single double->binary16 conversion rounds ties-to-even, which
+    // is exactly the spec's roundTiesToEven to float16 precision
+    return NUMBER_TO_EJSVAL((double)(_Float16)x_);
+}
+
+// Math.sumPrecise ( items ) — Neumaier-compensated summation over an
+// iterable.  Not the spec's maximally-precise expansion, but exact for
+// everything without intermediate overflow.
+static EJS_NATIVE_FUNC(_ejs_Math_sumPrecise) {
+    ejsval items = _ejs_undefined;
+    if (argc > 0) items = args[0];
+
+    ejsval iterator = GetIterator(items, _ejs_undefined);
+
+    double sum = 0.0;
+    double comp = 0.0;
+    EJSBool any_nan = EJS_FALSE;
+    EJSBool has_pos_inf = EJS_FALSE;
+    EJSBool has_neg_inf = EJS_FALSE;
+    // the sum of an empty list, or of nothing but -0, is -0
+    EJSBool all_neg_zero = EJS_TRUE;
+
+    for (;;) {
+        ejsval next = IteratorStep (iterator);
+        if (!EJSVAL_TO_BOOLEAN(next))
+            break;
+
+        ejsval v = IteratorValue (next);
+        // elements must already be Numbers — no coercion
+        if (!EJSVAL_IS_NUMBER(v)) {
+            ejsval error = _ejs_nativeerror_new_utf8 (EJS_TYPE_ERROR, "Math.sumPrecise requires all elements to be numbers");
+            return IteratorClose (iterator, error, EJS_TRUE);
+        }
+
+        double d = EJSVAL_TO_NUMBER(v);
+        if (isnan(d)) {
+            any_nan = EJS_TRUE;
+            all_neg_zero = EJS_FALSE;
+            continue;
+        }
+        if (isinf(d)) {
+            if (d > 0) has_pos_inf = EJS_TRUE;
+            else       has_neg_inf = EJS_TRUE;
+            all_neg_zero = EJS_FALSE;
+            continue;
+        }
+        if (!(d == 0.0 && signbit(d)))
+            all_neg_zero = EJS_FALSE;
+
+        double t = sum + d;
+        if (fabs(sum) >= fabs(d))
+            comp += (sum - t) + d;
+        else
+            comp += (d - t) + sum;
+        sum = t;
+    }
+
+    if (any_nan || (has_pos_inf && has_neg_inf))
+        return _ejs_nan;
+    if (has_pos_inf)
+        return NUMBER_TO_EJSVAL(INFINITY);
+    if (has_neg_inf)
+        return NUMBER_TO_EJSVAL(-INFINITY);
+    if (all_neg_zero)
+        return NUMBER_TO_EJSVAL(-0.0);
+
+    return NUMBER_TO_EJSVAL(sum + comp);
+}
+
 void
 _ejs_math_init(ejsval global)
 {
@@ -504,11 +574,21 @@ _ejs_math_init(ejsval global)
     OBJ_METHOD(trunc);
     OBJ_METHOD(fround);
     OBJ_METHOD(cbrt);
+    OBJ_METHOD(f16round);
+    OBJ_METHOD(sumPrecise);
 
 #undef OBJ_METHOD
 
-    _ejs_object_setprop (_ejs_Math, _ejs_atom_PI, NUMBER_TO_EJSVAL(M_PI));
-    _ejs_object_setprop (_ejs_Math, _ejs_atom_E, NUMBER_TO_EJSVAL(M_E));
+#define OBJ_CONST(n,v) _ejs_object_define_value_property (_ejs_Math, _ejs_atom_##n, NUMBER_TO_EJSVAL(v), EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE)
+    OBJ_CONST(PI, M_PI);
+    OBJ_CONST(E, M_E);
+    OBJ_CONST(LN10, M_LN10);
+    OBJ_CONST(LN2, M_LN2);
+    OBJ_CONST(LOG10E, M_LOG10E);
+    OBJ_CONST(LOG2E, M_LOG2E);
+    OBJ_CONST(SQRT1_2, M_SQRT1_2);
+    OBJ_CONST(SQRT2, M_SQRT2);
+#undef OBJ_CONST
 
     _ejs_object_define_value_property (_ejs_Math, _ejs_Symbol_toStringTag, _ejs_atom_Math, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 }

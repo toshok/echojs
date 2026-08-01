@@ -19,6 +19,10 @@
 // num > SPARSE_ARRAY_CUTOFF in "Array($num)" or "new Array($num)" triggers a sparse array
 #define SPARSE_ARRAY_CUTOFF 50000
 
+// the maximum array length, 2^32-1.  ArrayCreate throws a RangeError
+// past this.
+#define EJS_ARRAY_LENGTH_LIMIT 4294967295LL
+
 #define _EJS_ARRAY_LEN(arrobj)      (((EJSArray*)arrobj)->array_length)
 #define _EJS_ARRAY_ELEMENTS(arrobj) (((EJSArray*)arrobj)->elements)
 
@@ -383,7 +387,11 @@ static EJS_NATIVE_FUNC(_ejs_Array_impl) {
             }
             else {
                 arr->dense.array_alloc = alloc;
-                arr->dense.elements = (ejsval*)calloc(arr->dense.array_alloc, sizeof (ejsval));
+                arr->dense.elements = (ejsval*)malloc(arr->dense.array_alloc * sizeof (ejsval));
+                // all-zero bits are the number 0, not a hole — fill
+                // explicitly so the elements read back as absent
+                for (int i = 0; i < alloc; i ++)
+                    arr->dense.elements[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
             }
             arr->array_length = alloc;
         }
@@ -966,9 +974,61 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_findLast) {
     return _ejs_undefined;
 }
 
+// ES2023
+// 23.1.3.12
+// Array.prototype.findLastIndex ( predicate [, thisArg] )
+static EJS_NATIVE_FUNC(_ejs_Array_prototype_findLastIndex) {
+    ejsval predicate = _ejs_undefined;
+    ejsval thisArg = _ejs_undefined;
+
+    if (argc > 0) predicate = args[0];
+    if (argc > 1) thisArg = args[1];
+
+    // 1. Let O be ? ToObject(this value).
+    ejsval O = ToObject(*_this);
+
+    // 2. Let len be ? LengthOfArrayLike(O).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
+
+    // 3. If IsCallable(predicate) is false, throw a TypeError exception.
+    if (!IsCallable(predicate))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "callback function is not a function");
+
+    ejsval T = thisArg;
+
+    // 4. Let k be len - 1.
+    int64_t k = len - 1;
+
+    // 5. Repeat, while k >= 0
+    while (k >= 0) {
+        // a. Let Pk be ! ToString(F(k)).
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+        // b. Let kValue be ? Get(O, Pk).
+        ejsval kValue = Get(O, Pk);
+
+        // c. Let testResult be ToBoolean(? Call(predicate, thisArg, «kValue, F(k), O»)).
+        ejsval predicateargs[3] = {
+            kValue,
+            NUMBER_TO_EJSVAL(k),
+            O
+        };
+
+        ejsval testResult = ToBoolean(_ejs_invoke_closure (predicate, &T, 3, predicateargs, _ejs_undefined));
+
+        // d. If testResult is true, return F(k).
+        if (EJSVAL_TO_BOOLEAN(testResult))
+            return NUMBER_TO_EJSVAL(k);
+
+        // e. Set k to k - 1.
+        k--;
+    }
+    // 6. Return -1.
+    return NUMBER_TO_EJSVAL(-1);
+}
+
 // ES6 Draft January 15, 2015
 // 22.1.3.10
-// Array.prototype.forEach ( callbackfn [ , thisArg ] ) 
+// Array.prototype.forEach ( callbackfn [ , thisArg ] )
 static EJS_NATIVE_FUNC(_ejs_Array_prototype_forEach) {
     ejsval callbackfn = _ejs_undefined;
     ejsval thisArg = _ejs_undefined;
@@ -2796,6 +2856,228 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_sort) {
     EJS_NOT_IMPLEMENTED();
 }
 
+// creates the dense result array for the change-array-by-copy methods,
+// throwing the RangeError ArrayCreate mandates past the array length
+// limit
+static ejsval
+copy_method_array_create (int64_t length)
+{
+    if (length > EJS_ARRAY_LENGTH_LIMIT)
+        _ejs_throw_nativeerror_utf8 (EJS_RANGE_ERROR, "invalid array length");
+    return _ejs_array_new (length, EJS_TRUE);
+}
+
+// ES2023
+// 23.1.3.33
+// Array.prototype.toReversed ( )
+static EJS_NATIVE_FUNC(_ejs_Array_prototype_toReversed) {
+    // 1. Let O be ? ToObject(this value).
+    ejsval O = ToObject(*_this);
+
+    // 2. Let len be ? LengthOfArrayLike(O).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
+
+    // 3. Let A be ? ArrayCreate(len).
+    ejsval A = copy_method_array_create (len);
+
+    // 4. Let k be 0.
+    // 5. Repeat, while k < len,
+    for (int64_t k = 0; k < len; k++) {
+        // a. Let from be ! ToString(F(len - k - 1)).
+        ejsval from = ToString(NUMBER_TO_EJSVAL(len - k - 1));
+        // b. Let Pk be ! ToString(F(k)).
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+        // c. Let fromValue be ? Get(O, from).
+        ejsval fromValue = Get(O, from);
+        // d. Perform ! CreateDataPropertyOrThrow(A, Pk, fromValue).
+        _ejs_object_setprop (A, Pk, fromValue);
+    }
+    // 6. Return A.
+    return A;
+}
+
+// ES2023
+// 23.1.3.34
+// Array.prototype.toSorted ( comparefn )
+static EJS_NATIVE_FUNC(_ejs_Array_prototype_toSorted) {
+    ejsval comparefn = _ejs_undefined;
+    if (argc > 0) comparefn = args[0];
+
+    // 1. If comparefn is not undefined and IsCallable(comparefn) is false, throw a TypeError exception.
+    if (!EJSVAL_IS_UNDEFINED(comparefn) && !IsCallable(comparefn))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "invalid comparefn argument");
+
+    // 2. Let O be ? ToObject(this value).
+    ejsval O = ToObject(*_this);
+
+    // 3. Let len be ? LengthOfArrayLike(O).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
+
+    // 4. Let A be ? ArrayCreate(len).
+    ejsval A = copy_method_array_create (len);
+
+    // 5. Let SortCompare be a new Abstract Closure ... (SortCompare below)
+    // 6. Let sortedList be ? SortIndexedProperties(O, len, SortCompare, read-through-holes).
+    // reading through holes here: Get turns missing indices into
+    // undefined, and SortCompare sorts undefined last
+    for (int64_t k = 0; k < len; k++) {
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+        _ejs_object_setprop (A, Pk, Get(O, Pk));
+    }
+
+    // 7-8. sort the copy in place: A is not observable until we return it
+    if (EJSVAL_IS_DENSE_ARRAY(A))
+        _ejs_array_quicksort_dense (A, comparefn, 0, len - 1);
+    else
+        EJS_NOT_IMPLEMENTED();
+
+    // 9. Return A.
+    return A;
+}
+
+// ES2023
+// 23.1.3.35
+// Array.prototype.toSpliced ( start, skipCount, ...items )
+static EJS_NATIVE_FUNC(_ejs_Array_prototype_toSpliced) {
+    ejsval start = _ejs_undefined;
+    ejsval skipCount = _ejs_undefined;
+
+    if (argc > 0) start = args[0];
+    if (argc > 1) skipCount = args[1];
+
+    // 1. Let O be ? ToObject(this value).
+    ejsval O = ToObject(*_this);
+
+    // 2. Let len be ? LengthOfArrayLike(O).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
+
+    // 3. Let relativeStart be ? ToIntegerOrInfinity(start).
+    double relativeStart = ToDouble(start);
+    relativeStart = isnan(relativeStart) ? 0 : trunc(relativeStart);
+
+    // 4. If relativeStart is -∞, let actualStart be 0.
+    // 5. Else if relativeStart < 0, let actualStart be max(len + relativeStart, 0).
+    // 6. Else, let actualStart be min(relativeStart, len).
+    int64_t actualStart;
+    if (relativeStart < 0)
+        actualStart = (int64_t)fmax((double)len + relativeStart, 0);
+    else
+        actualStart = (int64_t)fmin(relativeStart, (double)len);
+
+    // 7. Let insertCount be the number of elements in items.
+    int64_t insertCount = argc > 2 ? argc - 2 : 0;
+
+    int64_t actualSkipCount;
+    // 8. If start is not present, let actualSkipCount be 0.
+    if (argc == 0)
+        actualSkipCount = 0;
+    // 9. Else if skipCount is not present, let actualSkipCount be len - actualStart.
+    else if (argc == 1)
+        actualSkipCount = len - actualStart;
+    // 10. Else,
+    else {
+        // a. Let sc be ? ToIntegerOrInfinity(skipCount).
+        double sc = ToDouble(skipCount);
+        sc = isnan(sc) ? 0 : trunc(sc);
+        // b. Let actualSkipCount be the result of clamping sc between 0 and len - actualStart.
+        actualSkipCount = (int64_t)fmin(fmax(sc, 0), (double)(len - actualStart));
+    }
+
+    // 11. Let newLen be len + insertCount - actualSkipCount.
+    int64_t newLen = len + insertCount - actualSkipCount;
+
+    // 12. If newLen > 2^53 - 1, throw a TypeError exception.
+    if (newLen > EJS_MAX_SAFE_INTEGER)
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "result too large");
+
+    // 13. Let A be ? ArrayCreate(newLen).
+    ejsval A = copy_method_array_create (newLen);
+
+    // 14. Let i be 0.
+    int64_t i = 0;
+    // 15. Let r be actualStart + actualSkipCount.
+    int64_t r = actualStart + actualSkipCount;
+
+    // 16. Repeat, while i < actualStart,
+    while (i < actualStart) {
+        // a-d. copy Get(O, Pi) into A[i]
+        ejsval Pi = ToString(NUMBER_TO_EJSVAL(i));
+        _ejs_object_setprop (A, Pi, Get(O, Pi));
+        // e. Set i to i + 1.
+        i++;
+    }
+
+    // 17. For each element E of items, do
+    for (int64_t item_i = 0; item_i < insertCount; item_i++) {
+        // a-b. CreateDataPropertyOrThrow(A, Pi, E)
+        _ejs_object_setprop (A, ToString(NUMBER_TO_EJSVAL(i)), args[2 + item_i]);
+        // c. Set i to i + 1.
+        i++;
+    }
+
+    // 18. Repeat, while i < newLen,
+    while (i < newLen) {
+        // a-c. fromValue = Get(O, from)
+        ejsval fromValue = Get(O, ToString(NUMBER_TO_EJSVAL(r)));
+        // d. Perform ! CreateDataPropertyOrThrow(A, Pi, fromValue).
+        _ejs_object_setprop (A, ToString(NUMBER_TO_EJSVAL(i)), fromValue);
+        // e. Set i to i + 1.
+        i++;
+        // f. Set r to r + 1.
+        r++;
+    }
+
+    // 19. Return A.
+    return A;
+}
+
+// ES2023
+// 23.1.3.39
+// Array.prototype.with ( index, value )
+static EJS_NATIVE_FUNC(_ejs_Array_prototype_with) {
+    ejsval index = _ejs_undefined;
+    ejsval value = _ejs_undefined;
+
+    if (argc > 0) index = args[0];
+    if (argc > 1) value = args[1];
+
+    // 1. Let O be ? ToObject(this value).
+    ejsval O = ToObject(*_this);
+
+    // 2. Let len be ? LengthOfArrayLike(O).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
+
+    // 3. Let relativeIndex be ? ToIntegerOrInfinity(index).
+    double relativeIndex = ToDouble(index);
+    relativeIndex = isnan(relativeIndex) ? 0 : trunc(relativeIndex);
+
+    // 4. If relativeIndex >= 0, let actualIndex be relativeIndex.
+    // 5. Else, let actualIndex be len + relativeIndex.
+    double actualIndex = relativeIndex >= 0 ? relativeIndex : (double)len + relativeIndex;
+
+    // 6. If actualIndex >= len or actualIndex < 0, throw a RangeError exception.
+    if (actualIndex >= (double)len || actualIndex < 0)
+        _ejs_throw_nativeerror_utf8 (EJS_RANGE_ERROR, "invalid index");
+
+    // 7. Let A be ? ArrayCreate(len).
+    ejsval A = copy_method_array_create (len);
+
+    // 8. Let k be 0.
+    // 9. Repeat, while k < len,
+    int64_t actualIndex_i = (int64_t)actualIndex;
+    for (int64_t k = 0; k < len; k++) {
+        // a. Let Pk be ! ToString(F(k)).
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+        // b. If k = actualIndex, let fromValue be value.
+        // c. Else, let fromValue be ? Get(O, Pk).
+        ejsval fromValue = (k == actualIndex_i) ? value : Get(O, Pk);
+        // d. Perform ! CreateDataPropertyOrThrow(A, Pk, fromValue).
+        _ejs_object_setprop (A, Pk, fromValue);
+    }
+    // 10. Return A.
+    return A;
+}
+
 ejsval
 _ejs_array_iterator_new(ejsval array, EJSArrayIteratorKind kind)
 {
@@ -2914,7 +3196,9 @@ _ejs_array_init(ejsval global)
     _ejs_sparsearray_specops =  _ejs_Array_specops;
 
     _ejs_Array = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Array, _ejs_Array_impl);
-    ((EJSFunction*)EJSVAL_TO_OBJECT(_ejs_Array))->constructor_kind = 0;
+    // Array_impl allocates its own exotic `this` and asserts the
+    // Construct specop passed none in
+    ((EJSFunction*)EJSVAL_TO_OBJECT(_ejs_Array))->constructor_kind = CONSTRUCTOR_KIND_SELF_ALLOCATING;
 
     _ejs_object_setprop (global,           _ejs_atom_Array,      _ejs_Array);
 
@@ -2933,7 +3217,15 @@ _ejs_array_init(ejsval global)
     _ejs_object_define_value_property (blockList, _ejs_atom_fill, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     _ejs_object_define_value_property (blockList, _ejs_atom_find, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     _ejs_object_define_value_property (blockList, _ejs_atom_findIndex, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (blockList, _ejs_atom_findLast, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (blockList, _ejs_atom_findLastIndex, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (blockList, _ejs_atom_flat, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (blockList, _ejs_atom_flatMap, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (blockList, _ejs_atom_includes, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     _ejs_object_define_value_property (blockList, _ejs_atom_keys, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (blockList, _ejs_atom_toReversed, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (blockList, _ejs_atom_toSorted, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (blockList, _ejs_atom_toSpliced, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     _ejs_object_define_value_property (blockList, _ejs_atom_values, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
     _ejs_object_define_value_property (_ejs_Array_prototype, _ejs_Symbol_unscopables, blockList, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
@@ -2976,6 +3268,7 @@ _ejs_array_init(ejsval global)
     PROTO_METHOD_LEN(find, 1);
     PROTO_METHOD(findIndex);
     PROTO_METHOD_LEN(findLast, 1);
+    PROTO_METHOD(findLastIndex);
     PROTO_METHOD_LEN(includes, 1);
     PROTO_METHOD_LEN(at, 1);
     PROTO_METHOD_LEN(flat, 0);
@@ -2987,6 +3280,12 @@ _ejs_array_init(ejsval global)
     _ejs_object_define_value_property (_ejs_Array_prototype, _ejs_atom_values, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
 
     PROTO_METHOD(entries);
+
+    // ES2023 change-array-by-copy
+    PROTO_METHOD(toReversed);
+    PROTO_METHOD(toSorted);
+    PROTO_METHOD(toSpliced);
+    PROTO_METHOD(with);
 
     PROTO_METHOD(toString);
 
@@ -3130,24 +3429,20 @@ _ejs_array_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
         }
     }
 
-    if (is_index) {
-        if (idx < 0 || idx >= EJS_ARRAY_LEN(obj)) {
-            //printf ("getprop(%d) on an array, returning undefined\n", idx);
-            return _ejs_undefined;
-        }
-        ejsval rv;
+    if (is_index && idx >= 0 && idx < EJS_ARRAY_LEN(obj)) {
+        ejsval rv = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
         if (EJSVAL_IS_SPARSE_ARRAY(obj)) {
             ejsval* slot = sparse_element_addr ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx, EJS_FALSE);
-            if (!slot)
-                return _ejs_undefined;
-            rv = *slot;
+            if (slot)
+                rv = *slot;
         }
         else {
             rv = EJS_DENSE_ARRAY_ELEMENTS(obj)[idx];
         }
-        if (EJSVAL_IS_ARRAY_HOLE_MAGIC(rv))
-            return _ejs_undefined;
-        return rv;
+        // a hole is not an own property: fall through to the ordinary
+        // lookup so inherited index properties are found
+        if (!EJSVAL_IS_ARRAY_HOLE_MAGIC(rv))
+            return rv;
     }
 
     // we also handle the length getter here
@@ -3188,16 +3483,17 @@ _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval *exc
             else {
                 el = EJS_DENSE_ARRAY_ELEMENTS(obj)[idx];
             }
-            // a hole is not an own property
-            if (EJSVAL_IS_ARRAY_HOLE_MAGIC(el))
-                return NULL;
-            // XXX we leak this.  need to change get_own_property to use an out param instead of a return value
-            EJSPropertyDesc* desc = (EJSPropertyDesc*)calloc(sizeof(EJSPropertyDesc), 1);
-            _ejs_property_desc_set_writable (desc, EJS_TRUE);
-            _ejs_property_desc_set_enumerable (desc, EJS_TRUE);
-            _ejs_property_desc_set_configurable (desc, EJS_TRUE);
-            _ejs_property_desc_set_value (desc, el);
-            return desc;
+            // a hole is not an own element: fall through to the
+            // ordinary lookup so accessor index properties are found
+            if (!EJSVAL_IS_ARRAY_HOLE_MAGIC(el)) {
+                // XXX we leak this.  need to change get_own_property to use an out param instead of a return value
+                EJSPropertyDesc* desc = (EJSPropertyDesc*)calloc(sizeof(EJSPropertyDesc), 1);
+                _ejs_property_desc_set_writable (desc, EJS_TRUE);
+                _ejs_property_desc_set_enumerable (desc, EJS_TRUE);
+                _ejs_property_desc_set_configurable (desc, EJS_TRUE);
+                _ejs_property_desc_set_value (desc, el);
+                return desc;
+            }
         }
     }
 
@@ -3302,19 +3598,20 @@ _ejs_array_specop_has_property (ejsval obj, ejsval propertyName)
             if (floor(n) == n) {
                 idx = (int)n;
                 if (idx >= 0 && idx < EJS_ARRAY_LEN(obj)) {
-                    ejsval element;
+                    ejsval element = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
                     if (EJSVAL_IS_SPARSE_ARRAY(obj)) {
                         ejsval* slot = sparse_element_addr ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx, EJS_FALSE);
-                        if (!slot)
-                            return EJS_FALSE;
-                        element = *slot;
+                        if (slot)
+                            element = *slot;
                     }
                     else {
                         element = EJS_DENSE_ARRAY_ELEMENTS(obj)[idx];
                     }
-                    if (EJSVAL_IS_ARRAY_HOLE_MAGIC(element))
-                        return EJS_FALSE;
-                    return EJS_TRUE;
+                    // a hole is not an own property: fall through to
+                    // the ordinary lookup so inherited index
+                    // properties are found
+                    if (!EJSVAL_IS_ARRAY_HOLE_MAGIC(element))
+                        return EJS_TRUE;
                 }
             }
         }
@@ -3380,6 +3677,27 @@ _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPrope
     }
 
     if (is_index) {
+        // accessor descriptors don't fit array element storage: hole
+        // out the element and store the accessor as an ordinary named
+        // property, which the hole fall-through paths in Get /
+        // HasProperty / GetOwnProperty consult
+        if ((propertyDescriptor->flags & (EJS_PROP_FLAGS_GETTER_SET | EJS_PROP_FLAGS_SETTER_SET)) != 0) {
+            if (EJSVAL_IS_DENSE_ARRAY(obj)) {
+                if (idx >= EJS_DENSE_ARRAY_ALLOC(obj))
+                    maybe_realloc_dense ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx);
+                for (int i = EJS_ARRAY_LEN(obj); i < idx; i ++)
+                    EJS_DENSE_ARRAY_ELEMENTS(obj)[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
+                EJS_DENSE_ARRAY_ELEMENTS(obj)[idx] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
+            }
+            else {
+                ejsval* slot = sparse_element_addr ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx, EJS_FALSE);
+                if (slot)
+                    *slot = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
+            }
+            EJS_ARRAY_LEN(obj) = MAX(EJS_ARRAY_LEN(obj), idx + 1);
+            return _ejs_Object_specops.DefineOwnProperty (obj, ToString(NUMBER_TO_EJSVAL(idx)), propertyDescriptor, flag);
+        }
+
         // an attribute-only redefine (Object.freeze/seal walking
         // OwnPropertyKeys) must not clobber the element with the
         // descriptor's absent (zeroed) value.  per-element attributes

@@ -47,6 +47,9 @@ extern ejsval _ejs_Symbol_toPrimitive;
 extern ejsval _ejs_Symbol_toStringTag;
 extern ejsval _ejs_Symbol_unscopables;
 
+extern ejsval _ejs_Symbol_dispose;
+extern ejsval _ejs_Symbol_asyncDispose;
+
 extern ejsval _ejs_Symbol_match;
 extern ejsval _ejs_Symbol_replace;
 extern ejsval _ejs_Symbol_split;

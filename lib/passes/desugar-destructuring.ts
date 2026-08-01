@@ -12,7 +12,9 @@ import {
     createIteratorWrapper_id,
     getNextValue_id,
     getRest_id,
+    close_id,
     copyDataProps_id,
+    requireObjectCoercible_id,
 } from "../common-ids";
 import type * as e from "../estree";
 
@@ -79,6 +81,14 @@ function createObjectPatternBindings(
     pattern: e.ObjectPattern,
     bindings: Binding[]
 ): void {
+    // 8.5.2 BindingInitialization: RequireObjectCoercible(value) runs
+    // before any property access — even an empty pattern must TypeError
+    // on a null/undefined RHS
+    bindings.push({
+        key: fresh() /*unused*/,
+        value: intrinsic(requireObjectCoercible_id, [b.identifier(id.name)]),
+        need_decl: true,
+    });
     // { a, [k]: v, ...rest }: rest gets a CopyDataProperties copy of the
     // source minus the keys destructured before it.  computed keys hoist
     // into temps so the member read and the exclusion list share one
@@ -194,6 +204,18 @@ function createArrayPatternBindingsUsingIterator(
             bindTarget(target, nextValue(), dflt, bindings);
         }
     }
+
+    // normal completion with the iterator not exhausted -> IteratorClose
+    // (the wrapper's done flag makes this a no-op otherwise; rest
+    // elements exhaust the iterator so it degenerates safely there too)
+    bindings.push({
+        key: fresh() /*unused*/,
+        value: b.callExpression(
+            b.memberExpression(b.identifier(wrapper_id.name), close_id),
+            []
+        ),
+        need_decl: true,
+    });
 }
 
 export class DesugarDestructuring extends TransformPass {
@@ -283,6 +305,10 @@ export class DesugarDestructuring extends TransformPass {
                     "let",
                     bindings.map((binding) => b.variableDeclarator(binding.key, binding.value))
                 );
+                // 9.2.10 FunctionDeclarationInstantiation runs at CALL
+                // time: generator desugar hoists tagged statements out of
+                // the deferred body so pattern errors throw synchronously
+                (new_decl as unknown as Record<string, unknown>)["ejs_param_prologue"] = true;
                 new_decls.push(new_decl);
             } else if (p.type === "Identifier") {
                 // we just pass this along
@@ -297,12 +323,12 @@ export class DesugarDestructuring extends TransformPass {
                 new_params.push(b.restElement(r_id));
                 const bindings: Binding[] = [];
                 bindTarget(p.argument as e.Pattern, b.identifier(r_id.name), null, bindings);
-                new_decls.push(
-                    b.variableDeclaration(
-                        "let",
-                        bindings.map((binding) => b.variableDeclarator(binding.key, binding.value))
-                    )
+                const rest_decl = b.variableDeclaration(
+                    "let",
+                    bindings.map((binding) => b.variableDeclarator(binding.key, binding.value))
                 );
+                (rest_decl as unknown as Record<string, unknown>)["ejs_param_prologue"] = true;
+                new_decls.push(rest_decl);
             } else {
                 throw new Error(
                     `unhandled type of formal parameter in DesugarDestructuring ${p.type}`

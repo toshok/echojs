@@ -73,7 +73,7 @@ _ejs_boolean_init(ejsval global)
     prototype->boolean_data = BOOLEAN_TO_EJSVAL(EJS_FALSE);
     _ejs_Boolean_prototype = OBJECT_TO_EJSVAL(prototype);
 
-    _ejs_object_setprop (_ejs_Boolean, _ejs_atom_prototype, _ejs_Boolean_prototype);
+    _ejs_object_define_value_property (_ejs_Boolean, _ejs_atom_prototype, _ejs_Boolean_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Boolean_prototype, x, _ejs_Boolean_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
 

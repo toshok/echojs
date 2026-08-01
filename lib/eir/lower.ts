@@ -328,9 +328,14 @@ class LowerFunction {
         }
 
         // an arrow below captures our `this`: store it in the env (kept
-        // in sync by intrinsicCall when super() rebinds this)
-        if (info.thisBinding && info.thisBinding.captured)
-            this.writeBinding(info.thisBinding, this.thisParam);
+        // in sync by intrinsicCall when super() rebinds this).  the
+        // toplevel's `this` is the global object (script semantics).
+        if (info.thisBinding && info.thisBinding.captured) {
+            const this_val = this.isToplevel
+                ? this.b.emit("get_global", [], { atom: "globalThis", for_typeof: 1 })
+                : this.thisParam;
+            this.writeBinding(info.thisBinding, this_val);
+        }
 
         // the rest parameter materializes from the trailing arguments
         if (info.restBinding) {
@@ -536,6 +541,11 @@ class LowerFunction {
                 // owner's captured this, read through the env chain)
                 let binding = this.analysis.resolve(n);
                 if (binding) return this.readBinding(binding);
+                // toplevel `this` is the global object (script
+                // semantics — echojs programs run as scripts, sloppy
+                // outside "use strict")
+                if (this.isToplevel)
+                    return this.b.emit("get_global", [], { atom: "globalThis", for_typeof: 1 });
                 return this.b.readVariable("%this", this.b.cur);
             }
             case "BinaryExpression":
@@ -1107,9 +1117,11 @@ class LowerFunction {
     // field repr — f64 fields take numbers fast, boxed fields take
     // non-numbers fast, everything else goes generic.
     propSet(objNode: e.Expression | null, obj: Inst, atom: string, v: Inst): void {
+        // 6.2.4.2 PutValue: strict-mode member stores throw on failure
+        const imms = this.info.strict ? { atom: atom, strict: 1 } : { atom: atom };
         const facts = this.shapeFactFor(objNode, atom);
         if (!facts) {
-            this.b.emit("set_prop_atom", [obj, v], { atom: atom });
+            this.b.emit("set_prop_atom", [obj, v], imms);
             return;
         }
 
@@ -1158,7 +1170,7 @@ class LowerFunction {
         }
 
         this.b.setInsertPoint(slow_bb);
-        this.b.emit("set_prop_atom", [obj, v], { atom: atom });
+        this.b.emit("set_prop_atom", [obj, v], imms);
         this.b.br(join_bb, []);
         this.b.sealBlock(join_bb);
 
@@ -1326,9 +1338,24 @@ class LowerFunction {
             case "~":
                 arg = this.expr(n.argument);
                 return this.b.emit("bitnot", [arg], {});
-            case "typeof":
+            case "typeof": {
+                // typeof of an unresolvable name is "undefined", never a
+                // ReferenceError — mark the global load so it skips the
+                // checked (throwing) read
+                if (n.argument.type === "Identifier") {
+                    const idn = n.argument as e.Identifier;
+                    if (
+                        idn.name !== "undefined" &&
+                        !this.analysis.resolve(idn) &&
+                        !this.mod_ctx.refs.get(idn.name)
+                    ) {
+                        arg = this.b.emit("get_global", [], { atom: idn.name, for_typeof: 1 });
+                        return this.b.emit("typeof", [arg], {});
+                    }
+                }
                 arg = this.expr(n.argument);
                 return this.b.emit("typeof", [arg], {});
+            }
             case "void":
                 // evaluate for side effects, produce undefined (the
                 // desugar passes' undefinedLit() emits `void 0`)
@@ -1342,7 +1369,11 @@ class LowerFunction {
                     !m.computed && m.property.type === "Identifier"
                         ? this.b.constAtom(m.property.name)
                         : this.expr(m.property as e.Expression);
-                return this.b.emit("delete_prop", [obj, key], {});
+                return this.b.emit(
+                    "delete_prop",
+                    [obj, key],
+                    this.info.strict ? { strict: 1 } : {}
+                );
             }
             default:
                 throw LowerNotSupported(`unary operator ${n.operator}`, n.loc);
@@ -1392,7 +1423,11 @@ class LowerFunction {
                 });
                 return;
             }
-            this.b.emit("set_global", [value], { atom: idNode.name });
+            this.b.emit(
+                "set_global",
+                [value],
+                this.info.strict ? { atom: idNode.name, strict: 1 } : { atom: idNode.name }
+            );
             return;
         }
         this.writeBinding(binding, value);
@@ -1436,7 +1471,12 @@ class LowerFunction {
                 v = this.expr(n.right);
             }
             if (atom !== null) this.propSet(objNode, obj, atom, v);
-            else this.b.emit("set_prop", [obj, key!, v], {});
+            else
+                this.b.emit(
+                    "set_prop",
+                    [obj, key!, v],
+                    this.info.strict ? { strict: 1 } : {}
+                );
             return v;
         }
         throw LowerNotSupported(`assignment target ${n.left.type}`, n.loc);
@@ -1469,7 +1509,12 @@ class LowerFunction {
             const old = this.b.emit("to_numeric", [cur], {});
             const nv = this.b.emit(op, [old, one], { update: 1 });
             if (atom !== null) this.propSet(objNode, obj, atom, nv);
-            else this.b.emit("set_prop", [obj, key!, nv], {});
+            else
+                this.b.emit(
+                    "set_prop",
+                    [obj, key!, nv],
+                    this.info.strict ? { strict: 1 } : {}
+                );
             return n.prefix ? nv : old;
         }
         throw LowerNotSupported(`update of ${n.argument.type}`, n.loc);

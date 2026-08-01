@@ -1369,6 +1369,8 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_padStart) {
 
     // 1. Let O be ? RequireObjectCoercible(this value).
     ejsval O = *_this;
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(O))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "String.prototype.padStart called on null or undefined");
 
     // 2. Return ? StringPad(O, maxLength, fillString, start).
     return StringPad(O, maxLength, fillString, EJS_TRUE);
@@ -1384,9 +1386,86 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_padEnd) {
 
     // 1. Let O be ? RequireObjectCoercible(this value).
     ejsval O = *_this;
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(O))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "String.prototype.padEnd called on null or undefined");
 
     // 2. Return ? StringPad(O, maxLength, fillString, end).
     return StringPad(O, maxLength, fillString, EJS_FALSE);
+}
+
+// ES2024 22.1.3.10 String.prototype.isWellFormed ( )
+static EJS_NATIVE_FUNC(_ejs_String_prototype_isWellFormed) {
+    // 1. Let O be ? RequireObjectCoercible(this value).
+    ejsval O = *_this;
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(O))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "String.prototype.isWellFormed called on null or undefined");
+
+    // 2. Let S be ? ToString(O).
+    ejsval S = ToString(O);
+
+    // 3. Return IsStringWellFormedUnicode(S): no lone surrogates.
+    EJSPrimString* flat = _ejs_string_flatten(S);
+    jschar* chars = flat->data.flat;
+    int len = flat->length;
+
+    for (int i = 0; i < len; i ++) {
+        jschar c = chars[i];
+        if (c >= 0xD800 && c <= 0xDBFF) {
+            if (i + 1 == len || chars[i+1] < 0xDC00 || chars[i+1] > 0xDFFF)
+                return _ejs_false;
+            i ++; // skip the low half of the pair
+        }
+        else if (c >= 0xDC00 && c <= 0xDFFF) {
+            return _ejs_false;
+        }
+    }
+    return _ejs_true;
+}
+
+// ES2024 22.1.3.29 String.prototype.toWellFormed ( )
+static EJS_NATIVE_FUNC(_ejs_String_prototype_toWellFormed) {
+    // 1. Let O be ? RequireObjectCoercible(this value).
+    ejsval O = *_this;
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(O))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "String.prototype.toWellFormed called on null or undefined");
+
+    // 2. Let S be ? ToString(O).
+    ejsval S = ToString(O);
+
+    // 3-4. Replace every lone surrogate with U+FFFD.
+    EJSPrimString* flat = _ejs_string_flatten(S);
+    jschar* chars = flat->data.flat;
+    int len = flat->length;
+
+    jschar* result = NULL;
+    for (int i = 0; i < len; i ++) {
+        jschar c = chars[i];
+        EJSBool lone = EJS_FALSE;
+        if (c >= 0xD800 && c <= 0xDBFF) {
+            if (i + 1 < len && chars[i+1] >= 0xDC00 && chars[i+1] <= 0xDFFF)
+                i ++; // well-formed pair
+            else
+                lone = EJS_TRUE;
+        }
+        else if (c >= 0xDC00 && c <= 0xDFFF) {
+            lone = EJS_TRUE;
+        }
+        if (lone) {
+            if (!result) {
+                result = malloc (len * sizeof(jschar));
+                memcpy (result, chars, len * sizeof(jschar));
+            }
+            result[i] = 0xFFFD;
+        }
+    }
+
+    // 5. Return the result (S itself when already well-formed).
+    if (!result)
+        return S;
+
+    ejsval rv = _ejs_string_new_ucs2_len (result, len);
+    free (result);
+    return rv;
 }
 
 static EJS_NATIVE_FUNC(_ejs_String_prototype_valueOf) {
@@ -2204,7 +2283,7 @@ _ejs_string_init(ejsval global)
     _ejs_String = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_String, _ejs_String_impl);
     _ejs_object_setprop (global, _ejs_atom_String, _ejs_String);
 
-    _ejs_object_setprop (_ejs_String,       _ejs_atom_prototype,  _ejs_String_prototype);
+    _ejs_object_define_value_property (_ejs_String, _ejs_atom_prototype, _ejs_String_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_String, x, _ejs_String_##x)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_String_prototype, x, _ejs_String_prototype_##x)
@@ -2230,6 +2309,8 @@ _ejs_string_init(ejsval global)
     PROTO_METHOD(startsWith);
     PROTO_METHOD(substr);
     PROTO_METHOD(substring);
+    PROTO_METHOD(isWellFormed);
+    PROTO_METHOD(toWellFormed);
     PROTO_METHOD(toLocaleLowerCase);
     PROTO_METHOD(toLocaleUpperCase);
     PROTO_METHOD(toLowerCase);

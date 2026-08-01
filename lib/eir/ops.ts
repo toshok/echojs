@@ -92,14 +92,14 @@ export const OPS = {
 
     // --- properties --------------------------------------------------------
     get_prop: { arity: 2, effects: GENERIC_OP },
-    set_prop: { arity: 3, effects: GENERIC_OP },
+    set_prop: { arity: 3, effects: GENERIC_OP, imms: ["strict"] },
     get_prop_atom: { arity: 1, effects: GENERIC_OP, imms: ["atom"] },
-    set_prop_atom: { arity: 2, effects: GENERIC_OP, imms: ["atom"] },
-    delete_prop: { arity: 2, effects: GENERIC_OP },
+    set_prop_atom: { arity: 2, effects: GENERIC_OP, imms: ["atom", "strict"] },
+    delete_prop: { arity: 2, effects: GENERIC_OP, imms: ["strict"] },
 
     // --- globals ------------------------------------------------------------
-    get_global: { arity: 0, effects: E.READ | E.THROW | E.GC, imms: ["atom"] },
-    set_global: { arity: 1, effects: E.WRITE | E.THROW | E.GC, imms: ["atom"] },
+    get_global: { arity: 0, effects: E.READ | E.THROW | E.GC, imms: ["atom", "for_typeof"] },
+    set_global: { arity: 1, effects: E.WRITE | E.THROW | E.GC, imms: ["atom", "strict"] },
 
     // --- closures / environments -------------------------------------------
     // make_env: operand 0 (optional, variadic 0..1) is the parent env

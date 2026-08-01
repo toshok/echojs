@@ -15,6 +15,17 @@
 #define EJS_ARGUMENTS_HAS_OOL_BUFFER(s) ((((EJSPrimString*)(s))->gc_header & EJS_ARGUMENTS_HAS_OOL_BUFFER_MASK_SHIFTED) >> EJS_GC_USER_FLAGS_SHIFT) != 0
 #define EJS_ARGUMENTS_SET_HAS_OOL_BUFFER(s) ((((EJSPrimString*)(s))->gc_header |= EJS_ARGUMENTS_HAS_OOL_BUFFER_MASK_SHIFTED))
 
+// set once [[DefineOwnProperty]] or [[Delete]] touches the object: the
+// property map is always authoritative, but while this flag is clear
+// the index properties are known to be plain writable data properties
+// kept in sync with the side buffer, so [[Get]]/[[HasProperty]] may
+// answer from the buffer without a map lookup
+#define EJS_ARGUMENTS_OVERRIDDEN_MASK 0x20
+#define EJS_ARGUMENTS_OVERRIDDEN_MASK_SHIFTED (EJS_ARGUMENTS_OVERRIDDEN_MASK << EJS_GC_USER_FLAGS_SHIFT)
+#define EJS_ARGUMENTS_IS_OVERRIDDEN(s) (((((EJSPrimString*)(s))->gc_header & EJS_ARGUMENTS_OVERRIDDEN_MASK_SHIFTED) >> EJS_GC_USER_FLAGS_SHIFT) != 0)
+#define EJS_ARGUMENTS_SET_OVERRIDDEN(s) ((((EJSPrimString*)(s))->gc_header |= EJS_ARGUMENTS_OVERRIDDEN_MASK_SHIFTED))
+#define EJS_ARGUMENTS_CLEAR_OVERRIDDEN(s) ((((EJSPrimString*)(s))->gc_header &= ~EJS_ARGUMENTS_OVERRIDDEN_MASK_SHIFTED))
+
 typedef struct {
     /* object header */
     EJSObject obj;

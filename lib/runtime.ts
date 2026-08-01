@@ -293,6 +293,14 @@ const runtime_interface = {
             [ty.EjsValue, ty.EjsValue, ty.EjsValue]
         );
     },
+    require_object_coercible: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(
+            this.module,
+            "_ejs_require_object_coercible",
+            ty.EjsValue,
+            [ty.EjsValue]
+        );
+    },
     object_spread_merge: function (this: RuntimeContext) {
         return this.abi.createExternalFunction(
             this.module,
@@ -413,12 +421,39 @@ const runtime_interface = {
             ty.EjsValue,
         ]);
     },
+    mark_async_generator: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_mark_async_generator", ty.EjsValue, [
+            ty.EjsValue,
+        ]);
+    },
+    // strict-mode member store: throws TypeError on a failed [[Set]]
+    object_setprop_strict: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_object_setprop_strict", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+            ty.EjsValue,
+        ]);
+    },
+    // strict-mode assignment to an unresolvable name throws ReferenceError
+    global_setprop_strict: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_global_setprop_strict", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+        ]);
+    },
     global_getprop: function (this: RuntimeContext) {
         return only_reads_memory(
             this.abi.createExternalFunction(this.module, "_ejs_global_getprop", ty.EjsValue, [
                 ty.EjsValue,
             ])
         );
+    },
+    // plain reads: throws ReferenceError on an unresolvable name, so no
+    // only_reads_memory attribute
+    global_getprop_checked: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_global_getprop_checked", ty.EjsValue, [
+            ty.EjsValue,
+        ]);
     },
 
     object_define_accessor_prop: function (this: RuntimeContext) {
@@ -717,6 +752,12 @@ const runtime_interface = {
             ty.EjsValue,
         ]);
     }, // this is a unop, but ours only works for memberexpressions
+    unopdelete_strict: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_op_delete_strict", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+        ]);
+    },
     unopvoid: function (this: RuntimeContext) {
         return this.abi.createExternalFunction(this.module, "_ejs_op_void", ty.EjsValue, [
             ty.EjsValue,

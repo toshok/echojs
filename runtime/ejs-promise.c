@@ -929,7 +929,7 @@ _ejs_promise_init(ejsval global)
 
     _ejs_gc_add_root (&_ejs_Promise_prototype);
     _ejs_Promise_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
-    _ejs_object_setprop (_ejs_Promise,       _ejs_atom_prototype,  _ejs_Promise_prototype);
+    _ejs_object_define_value_property (_ejs_Promise, _ejs_atom_prototype, _ejs_Promise_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     _ejs_object_define_value_property (_ejs_Promise_prototype, _ejs_atom_constructor, _ejs_Promise,
                                        EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 

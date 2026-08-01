@@ -273,7 +273,7 @@ FromPropertyDescriptor(EJSPropertyDesc* Desc)
     }
 
     // 8. If Desc has a [[Set]] field, then
-    if (_ejs_property_desc_has_getter(Desc)) {
+    if (_ejs_property_desc_has_setter(Desc)) {
         //    a. Call OrdinaryDefineOwnProperty with arguments obj, "set", and PropertyDescriptor{[[Value]]: Desc.[[Set]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}. 
         EJSPropertyDesc set_desc = { .value= _ejs_property_desc_get_setter(Desc), .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
         OP(obj_, DefineOwnProperty)(obj, _ejs_atom_set, &set_desc, EJS_FALSE);
@@ -1150,12 +1150,33 @@ _ejs_number_new (double value)
 ejsval
 _ejs_object_setprop (ejsval val, ejsval key, ejsval value)
 {
+    if (EJSVAL_IS_NULL(val) || EJSVAL_IS_UNDEFINED(val))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Cannot set property of null or undefined");
     if (EJSVAL_IS_PRIMITIVE(val)) {
-        _ejs_log ("setprop on primitive.  ignoring\n");
-        EJS_NOT_IMPLEMENTED();
+        // 9.1.9: assignment to a property of a primitive base is a
+        // sloppy-mode no-op (the strict variant below throws)
+        return value;
     }
 
     OP(EJSVAL_TO_OBJECT(val),Set)(val, key, value, val);
+
+    return value;
+}
+
+// 6.2.4.2 PutValue in strict code: a failed [[Set]] (non-writable
+// property, primitive base, accessor without setter) throws TypeError
+ejsval
+_ejs_object_setprop_strict (ejsval val, ejsval key, ejsval value)
+{
+    if (EJSVAL_IS_NULL(val) || EJSVAL_IS_UNDEFINED(val))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Cannot set property of null or undefined");
+    if (EJSVAL_IS_PRIMITIVE(val))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Cannot create property on a primitive value in strict mode");
+
+    if (!OP(EJSVAL_TO_OBJECT(val),Set)(val, key, value, val)) {
+        ejsval msg = _ejs_string_concat (_ejs_string_new_utf8 ("Cannot assign to read only property "), ToString(key));
+        _ejs_throw_nativeerror (EJS_TYPE_ERROR, msg);
+    }
 
     return value;
 }
@@ -1205,9 +1226,40 @@ _ejs_global_setprop (ejsval key, ejsval value)
     return _ejs_object_setprop(_ejs_global, key, value);
 }
 
+// strict-mode variant: 6.2.4.2 PutValue on an unresolvable reference in
+// strict code throws ReferenceError instead of creating the global, and
+// a failed [[Set]] (non-writable property) throws TypeError
+ejsval
+_ejs_global_setprop_strict (ejsval key, ejsval value)
+{
+    if (!OP(EJSVAL_TO_OBJECT(_ejs_global),HasProperty)(_ejs_global, key)) {
+        ejsval msg = _ejs_string_concat (ToString(key), _ejs_string_new_utf8 (" is not defined"));
+        _ejs_throw_nativeerror (EJS_REFERENCE_ERROR, msg);
+    }
+    if (!OP(EJSVAL_TO_OBJECT(_ejs_global),Set)(_ejs_global, key, value, _ejs_global)) {
+        ejsval msg = _ejs_string_concat (_ejs_string_new_utf8 ("Cannot assign to read only property "), ToString(key));
+        _ejs_throw_nativeerror (EJS_TYPE_ERROR, msg);
+    }
+    return value;
+}
+
 ejsval
 _ejs_global_getprop (ejsval key)
 {
+    return _ejs_object_getprop(_ejs_global, key);
+}
+
+// the plain-read variant of the above: per 6.2.4.1 GetValue, reading an
+// unresolvable reference throws ReferenceError.  `typeof x` compiles to
+// _ejs_global_getprop instead (typeof of an unresolvable name is
+// "undefined", never a throw).
+ejsval
+_ejs_global_getprop_checked (ejsval key)
+{
+    if (!OP(EJSVAL_TO_OBJECT(_ejs_global),HasProperty)(_ejs_global, key)) {
+        ejsval msg = _ejs_string_concat (ToString(key), _ejs_string_new_utf8 (" is not defined"));
+        _ejs_throw_nativeerror (EJS_REFERENCE_ERROR, msg);
+    }
     return _ejs_object_getprop(_ejs_global, key);
 }
 
@@ -1243,13 +1295,11 @@ _ejs_object_define_accessor_property_desc (ejsval obj, ejsval key, ejsval get, e
 ejsval
 _ejs_object_setprop_utf8 (ejsval val, const char *key, ejsval value)
 {
-    if (EJSVAL_IS_NULL(val) || EJSVAL_IS_UNDEFINED(val)) {
-        _ejs_log ("throw ReferenceError\n");
-        abort();
-    }
+    if (EJSVAL_IS_NULL(val) || EJSVAL_IS_UNDEFINED(val))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Cannot set property of null or undefined");
 
     if (EJSVAL_IS_PRIMITIVE(val)) {
-        _ejs_log ("setprop on primitive.  ignoring\n");
+        // sloppy-mode no-op (see _ejs_object_setprop)
         return value;
     }
 
@@ -1260,8 +1310,9 @@ ejsval
 _ejs_object_getprop_utf8 (ejsval obj, const char *key)
 {
     if (EJSVAL_IS_NULL(obj) || EJSVAL_IS_UNDEFINED(obj)) {
-        _ejs_log ("throw TypeError, key is %s\n", key);
-        EJS_NOT_IMPLEMENTED();
+        char msg[256];
+        snprintf (msg, sizeof(msg), "Cannot read property '%s' of null or undefined", key);
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, msg);
     }
 
     if (EJSVAL_IS_PRIMITIVE(obj)) {
@@ -1356,13 +1407,11 @@ static EJS_NATIVE_FUNC(_ejs_Object_setPrototypeOf) {
     // 1. Let O be CheckObjectCoercible(O).
     // 2. ReturnIfAbrupt(O).
     if (!EJSVAL_IS_OBJECT(O) && !EJSVAL_IS_NULL(O)) {
-        _ejs_log ("throw TypeError\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypeError");
     }
     // 3. If Type(proto) is neither Object nor Null, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(proto) && !EJSVAL_IS_NULL(proto)) {
-        _ejs_log ("throw TypeError\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypeError");
     }
 
     // 4. If Type(O) is not Object, then return O.
@@ -1373,8 +1422,7 @@ static EJS_NATIVE_FUNC(_ejs_Object_setPrototypeOf) {
     EJSBool status = OP(EJSVAL_TO_OBJECT(O),SetPrototypeOf)(O,proto);
     // 7. If status is false, then throw a TypeError exception.
     if (!status) {
-        _ejs_log ("throw TypeError\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypeError");
     }
     // 8. Return O.
     return O;
@@ -1496,8 +1544,7 @@ static EJS_NATIVE_FUNC(_ejs_Object_getOwnPropertySymbols) {
 
     /* 1. If Type(O) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
-        _ejs_log ("throw TypeError, _this isn't an Object\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypeError: _this isn't an Object");
     }
     EJSObject* O_ = EJSVAL_TO_OBJECT(O);
 
@@ -1622,6 +1669,16 @@ static EJS_NATIVE_FUNC(_ejs_Object_assign) {
     return to;
 }
 
+// ECMA262 7.2.1 RequireObjectCoercible — object destructuring's guard:
+// even an empty pattern ({} = rhs) must TypeError on null/undefined
+ejsval
+_ejs_require_object_coercible (ejsval value)
+{
+    if (EJSVAL_IS_NULL(value) || EJSVAL_IS_UNDEFINED(value))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Cannot destructure null or undefined");
+    return value;
+}
+
 // ECMA262 7.3.25 CopyDataProperties (target, source, excludedItems) — the
 // runtime half of object spread ({...source}) and object rest
 // ({a, ...rest} = o).  target is a fresh ordinary object from the desugar;
@@ -1720,8 +1777,7 @@ static EJS_NATIVE_FUNC(_ejs_Object_create) {
 
     /* 1. If Type(O) is not Object or Null throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT_OR_NULL(O)) {
-        _ejs_log ("throw TypeError, O isn't an Object or null\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypeError: O isn't an Object or null");
     }
 
     /* 2. Let obj be the result of creating a new object as if by the expression new Object() where Object is the  */
@@ -1807,8 +1863,7 @@ static EJS_NATIVE_FUNC(_ejs_Object_defineProperties) {
 
     /* 1. If Type(O) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
-        _ejs_log ("throw TypeError, _this isn't an Object\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypeError: _this isn't an Object");
     }
     EJSObject *obj = EJSVAL_TO_OBJECT(O);
 
@@ -2590,8 +2645,7 @@ _ejs_object_specop_set_prototype_of (ejsval O, ejsval V)
 
     // 1. Assert: Either Type(V) is Object or Type(V) is Null.
     if (!EJSVAL_IS_OBJECT(V) && !EJSVAL_IS_NULL(V)) {
-        _ejs_log ("throw TypeError\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypeError");
     }
         
     // 2. Let extensible be the value of the [[Extensible]] internal slot of O.
@@ -3006,31 +3060,21 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
             /*       i. Create an own data property named P of object O whose [[Value]], [[Writable]],  */
             /*          [[Enumerable]] and [[Configurable]] attribute values are described by Desc. If the value of */
             /*          an attribute field of Desc is absent, the attribute of the newly created property is set to its  */
-            /*          default value. */
-            if (_ejs_property_desc_has_value (Desc))
-                _ejs_property_desc_set_value (dest, _ejs_property_desc_get_value (Desc));
-            if (_ejs_property_desc_has_configurable (Desc))
-                _ejs_property_desc_set_configurable (dest, _ejs_property_desc_is_configurable (Desc));
-            if (_ejs_property_desc_has_enumerable (Desc))
-                _ejs_property_desc_set_enumerable (dest, _ejs_property_desc_is_enumerable (Desc));
-            if (_ejs_property_desc_has_writable (Desc))
-                _ejs_property_desc_set_writable (dest, _ejs_property_desc_is_writable (Desc));
+            /*          default value (undefined/false) — the stored property is always complete. */
+            _ejs_property_desc_set_value (dest, _ejs_property_desc_get_value (Desc));
+            _ejs_property_desc_set_writable (dest, _ejs_property_desc_has_writable (Desc) && _ejs_property_desc_is_writable (Desc));
         }
         /*    b. Else, Desc must be an accessor Property Descriptor so, */
         else {
             /*       i. Create an own accessor property named P of object O whose [[Get]], [[Set]],  */
             /*          [[Enumerable]] and [[Configurable]] attribute values are described by Desc. If the value of  */
             /*          an attribute field of Desc is absent, the attribute of the newly created property is set to its  */
-            /*          default value. */
-            if (_ejs_property_desc_has_getter (Desc))
-                _ejs_property_desc_set_getter (dest, _ejs_property_desc_get_getter (Desc));
-            if (_ejs_property_desc_has_setter (Desc))
-                _ejs_property_desc_set_setter (dest, _ejs_property_desc_get_setter (Desc));
-            if (_ejs_property_desc_has_configurable (Desc))
-                _ejs_property_desc_set_configurable (dest, _ejs_property_desc_is_configurable (Desc));
-            if (_ejs_property_desc_has_enumerable (Desc))
-                _ejs_property_desc_set_enumerable (dest, _ejs_property_desc_is_enumerable (Desc));
+            /*          default value (undefined) — the stored property is always complete. */
+            _ejs_property_desc_set_getter (dest, _ejs_property_desc_get_getter (Desc));
+            _ejs_property_desc_set_setter (dest, _ejs_property_desc_get_setter (Desc));
         }
+        _ejs_property_desc_set_configurable (dest, _ejs_property_desc_has_configurable (Desc) && _ejs_property_desc_is_configurable (Desc));
+        _ejs_property_desc_set_enumerable (dest, _ejs_property_desc_has_enumerable (Desc) && _ejs_property_desc_is_enumerable (Desc));
         _ejs_propertymap_insert (obj->map, P, dest);
 
         /*    c. Return true. */
