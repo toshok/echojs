@@ -168,7 +168,10 @@ Catch up with the language; adopt test262.  Detail: language-plan.md.
       docs/language-p4.1-results.md): async generators landed, `yield*`
       value-position/forwarding fixed, function `.length`/`.name`,
       for-in symbol-key crash, globalThis; class/elements and
-      for-await-of both 71%/31% → 90%.
+      for-await-of both 71%/31% → 90%.  Second turn (language-P4.2,
+      docs/bigint-plan.md): BIGINT — bought V8's standalone bigint
+      library (vendored external-deps/v8-bigint), new BIGINT ejsval
+      tag, literals through ops through BigInt()/asIntN/asUintN.
 - [ ] **P8.5** un-fork the JS external-deps (language-P5).
 
 ## P9 — Distribution

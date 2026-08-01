@@ -1,0 +1,19 @@
+BigInt {} BigInt {} BigInt {} BigInt {} BigInt {}
+BigInt {} BigInt {} BigInt {}
+negexp: RangeError
+div0: RangeError
+mod0: RangeError
+BigInt {}
+byw97um9s91dlz68tsi 97
+BigInt {} BigInt {} BigInt {} BigInt {}
+frac-str: SyntaxError
+frac-num: RangeError
+inf: RangeError
+false false
+true true true true
+true true true true
+1,2,3
+one
+42 42 42!
+BigInt {} BigInt {} BigInt {}
+123 -18446744073709552000

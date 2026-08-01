@@ -64,8 +64,9 @@ safer with types underneath it.
       BigInt (value-representation decision pending, likely heap-boxed),
       dynamic `import()`/`import.meta` (AOT module-story design).
       (Async generators subsequently landed in the language-P4.1
-      conformance pass — docs/language-p4.1-results.md; BigInt and
-      dynamic import remain gated.)
+      conformance pass — docs/language-p4.1-results.md — and BigInt in
+      the P4.2 pass — docs/bigint-plan.md, buy-vs-build + landing
+      record; dynamic import remains gated.)
 - [x] **language-P4 — test262 lane.**  DONE 2026-07-31 —
       docs/language-p4-results.md.  `test/test262/lane.sh` runs the
       curated selection (every 6th language test, 2 per built-ins leaf
