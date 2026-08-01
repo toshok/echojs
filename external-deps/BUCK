@@ -84,6 +84,35 @@ cxx_library(
 )
 
 # ---------------------------------------------------------------------------
+# v8-bigint: V8's standalone BigInt core (see docs/bigint-plan.md and
+# v8-bigint/regen.sh).  Sources include their own headers as
+# "src/bigint/...", so the exported headers keep that namespace.  The
+# archive is merged into libecho.a by //:srcdir-tree (the echo-dtoa
+# pattern) via //runtime:echo-bigint.
+# ---------------------------------------------------------------------------
+
+cxx_library(
+    name = "v8-bigint",
+    srcs = glob(["v8-bigint/src/bigint/*.cc"]),
+    header_namespace = "",
+    exported_headers = {
+        h.removeprefix("v8-bigint/"): h
+        for h in glob(["v8-bigint/src/bigint/*.h"])
+    },
+    compiler_flags = [
+        "-g",
+        "-O2",
+        "-std=c++20",
+        "-Wall",
+        # Toom-Cook/FFT multiplication and Barrett division are gated
+        # behind this in the V8 tree (on for chromium builds)
+        "-DV8_ADVANCED_BIGINT_ALGORITHMS=1",
+    ],
+    preferred_linkage = "static",
+    visibility = ["PUBLIC"],
+)
+
+# ---------------------------------------------------------------------------
 # JS sources for the compiler itself (esprima & friends), staged into the
 # --srcdir tree and fed through babel for the stage0 (node-hosted) compiler.
 # ---------------------------------------------------------------------------
