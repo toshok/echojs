@@ -1,0 +1,9 @@
+[ [ 'a', 1 ], [ 'b', 'two' ], [ 'c', true ] ]
+[]
+[ [ '5', 'five' ], [ 'a', 1 ] ]
+[ [ '0', 'a' ], [ '1', 'b' ] ]
+[ [ '0', 10 ], [ '1', 20 ] ]
+[ [ 'own', 2 ] ]
+1
+null: TypeError
+undefined: TypeError

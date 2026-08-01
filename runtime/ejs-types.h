@@ -127,6 +127,7 @@ EJS_BEGIN_DECLS
 
 extern jschar* ucs2_strdup (const jschar *str);
 extern int32_t ucs2_strcmp (const jschar *s1, const jschar *s2);
+extern int32_t ucs2_strcmp_len (const jschar *s1, int32_t len1, const jschar *s2, int32_t len2);
 extern int32_t ucs2_strlen (const jschar *str);
 extern jschar* ucs2_strstr (const jschar *haystack, const jschar *needle);
 extern char* ucs2_to_utf8 (const jschar *str);

@@ -1766,6 +1766,37 @@ class LowerFunction {
                 }
                 return;
             }
+            case "ExportAllDeclaration": {
+                if (!this.isToplevel) throw LowerNotSupported("export declaration", n.loc);
+                const source = n.source_path!.value;
+                const source_info =
+                    this.mod_ctx.module_infos && this.mod_ctx.module_infos.get(source);
+                if (!source_info || source_info.isNative())
+                    throw LowerNotSupported(`re-export from '${source}'`, n.loc);
+                if (n.exported) {
+                    // export * as ns from "m": bind the source module's
+                    // namespace object to our `ns` slot.  member reads on
+                    // it resolve at runtime through the module object's
+                    // export accessors.
+                    const ns = this.b.emit("module_get_exotic", [], { module: source });
+                    this.storeExportSlot(n.exported.name, ns, n.loc);
+                    return;
+                }
+                // export * from "m": copy the source module's slots into
+                // the same-named slots of ours at init time (a snapshot,
+                // exactly like `export { a } from "m"`).  The name list
+                // was computed by gather-imports' star expansion.
+                for (const name of n.star_export_names ?? []) {
+                    const export_info = source_info.exports.get(name);
+                    if (!export_info || export_info.promoted) continue;
+                    const v = this.b.emit("module_slot_load", [], {
+                        module: source,
+                        slot: export_info.slot_num,
+                    });
+                    this.storeExportSlot(name, v, n.loc);
+                }
+                return;
+            }
             case "ExportDefaultDeclaration": {
                 if (!this.isToplevel) throw LowerNotSupported("export default", n.loc);
                 const v = this.expr(n.declaration as e.Expression);

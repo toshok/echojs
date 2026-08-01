@@ -2215,6 +2215,119 @@ static EJS_NATIVE_FUNC(_ejs_Object_keys) {
     return EnumerableOwnNames(obj);
 }
 
+// ECMA262: 20.1.2.5 Object.entries ( O )
+static EJS_NATIVE_FUNC(_ejs_Object_entries) {
+    ejsval O = _ejs_undefined;
+    if (argc > 0) O = args[0];
+
+    // 1. Let obj be ? ToObject(O).
+    ejsval obj = ToObject(O);
+
+    // 2. Let entryList be ? EnumerableOwnPropertyNames(obj, key+value).
+    // 3. Return CreateArrayFromList(entryList).
+    ejsval names = EnumerableOwnNames(obj);
+    EJSArray* names_ = (EJSArray*)EJSVAL_TO_OBJECT(names);
+
+    ejsval entryList = _ejs_array_new(0, EJS_FALSE);
+    for (int i = 0; i < EJSARRAY_LEN(names_); i ++) {
+        ejsval key = EJSDENSEARRAY_ELEMENTS(names_)[i];
+        ejsval entry_elements[2] = { key, Get(obj, key) };
+        ejsval entry = _ejs_array_new(0, EJS_FALSE);
+        _ejs_array_push_dense(entry, 2, entry_elements);
+        _ejs_array_push_dense(entryList, 1, &entry);
+    }
+    return entryList;
+}
+
+// ECMA262: 20.1.2.22 Object.values ( O )
+static EJS_NATIVE_FUNC(_ejs_Object_values) {
+    ejsval O = _ejs_undefined;
+    if (argc > 0) O = args[0];
+
+    // 1. Let obj be ? ToObject(O).
+    ejsval obj = ToObject(O);
+
+    // 2. Let valueList be ? EnumerableOwnPropertyNames(obj, value).
+    // 3. Return CreateArrayFromList(valueList).
+    ejsval names = EnumerableOwnNames(obj);
+    EJSArray* names_ = (EJSArray*)EJSVAL_TO_OBJECT(names);
+
+    ejsval valueList = _ejs_array_new(0, EJS_FALSE);
+    for (int i = 0; i < EJSARRAY_LEN(names_); i ++) {
+        ejsval key = EJSDENSEARRAY_ELEMENTS(names_)[i];
+        ejsval value = Get(obj, key);
+        _ejs_array_push_dense(valueList, 1, &value);
+    }
+    return valueList;
+}
+
+// ECMA262: 20.1.2.7 Object.fromEntries ( iterable )
+static EJS_NATIVE_FUNC(_ejs_Object_fromEntries) {
+    ejsval iterable = _ejs_undefined;
+    if (argc > 0) iterable = args[0];
+
+    // 1. Perform ? RequireObjectCoercible(iterable).
+    if (EJSVAL_IS_NULL(iterable) || EJSVAL_IS_UNDEFINED(iterable))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Object.fromEntries requires an iterable argument");
+
+    // 2. Let obj be OrdinaryObjectCreate(%Object.prototype%).
+    ejsval obj = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
+
+    // 3. Assert: obj is an extensible ordinary object with no own properties.
+    // 4. Let closure be a new Abstract Closure ... (the adder below)
+    // 5. Return ? AddEntriesFromIterable(obj, iterable, adder).
+
+    // ECMA262: 24.1.1.2 AddEntriesFromIterable ( target, iterable, adder )
+    ejsval iter = GetIterator(iterable, _ejs_undefined);
+
+    for (;;) {
+        // a. Let next be ? IteratorStep(iteratorRecord).
+        ejsval next = IteratorStep (iter);
+
+        // b. If next is false, return target.
+        if (!EJSVAL_TO_BOOLEAN(next))
+            return obj;
+
+        // c. Let nextItem be ? IteratorValue(next).
+        ejsval nextItem = IteratorValue (next);
+
+        // d. If Type(nextItem) is not Object, then
+        if (!EJSVAL_IS_OBJECT(nextItem)) {
+            // i. Let error be ThrowCompletion(a newly created TypeError object).
+            ejsval error = _ejs_nativeerror_new_utf8(EJS_TYPE_ERROR, "iterator value is not an entry object");
+
+            // ii. Return ? IteratorClose(iteratorRecord, error).
+            return IteratorClose(iter, error, EJS_TRUE);
+        }
+
+        // e. Let k be Get(nextItem, "0").
+        ejsval k = Get(nextItem, _ejs_atom_0); // XXX call IteratorClose here on exception
+
+        // f. Let v be Get(nextItem, "1").
+        ejsval v = Get(nextItem, _ejs_atom_1); // XXX call IteratorClose here on exception
+
+        // g. (the adder) Let propertyKey be ? ToPropertyKey(k), then CreateDataPropertyOrThrow(obj, propertyKey, v).
+        _ejs_object_define_value_property (obj, ToPropertyKey(k), v, EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+    }
+}
+
+// ECMA262: 20.1.2.13 Object.hasOwn ( O, P )
+static EJS_NATIVE_FUNC(_ejs_Object_hasOwn) {
+    ejsval O = _ejs_undefined;
+    ejsval P = _ejs_undefined;
+    if (argc > 0) O = args[0];
+    if (argc > 1) P = args[1];
+
+    // 1. Let obj be ? ToObject(O).
+    ejsval obj = ToObject(O);
+
+    // 2. Let key be ? ToPropertyKey(P).
+    ejsval key = ToPropertyKey(P);
+
+    // 3. Return ? HasOwnProperty(obj, key).
+    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(obj),GetOwnProperty)(obj, key, NULL) != NULL);
+}
+
 // ECMA262: 19.1.3.6
 EJS_NATIVE_FUNC(_ejs_Object_prototype_toString) {
     // 1. If the this value is undefined, return "[object Undefined]". 
@@ -2422,6 +2535,7 @@ _ejs_object_init (ejsval global)
                                        EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Object, x, _ejs_Object_##x, EJS_PROP_NOT_ENUMERABLE)
+#define OBJ_METHOD_LEN(x,l) EJS_INSTALL_ATOM_FUNCTION_LEN_FLAGS(_ejs_Object, x, _ejs_Object_##x, l, EJS_PROP_NOT_ENUMERABLE)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Object_prototype, x, _ejs_Object_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 
     OBJ_METHOD(assign);
@@ -2441,6 +2555,10 @@ _ejs_object_init (ejsval global)
     OBJ_METHOD(isFrozen);
     OBJ_METHOD(isExtensible);
     OBJ_METHOD(keys);
+    OBJ_METHOD_LEN(entries, 1);
+    OBJ_METHOD_LEN(values, 1);
+    OBJ_METHOD_LEN(fromEntries, 1);
+    OBJ_METHOD_LEN(hasOwn, 2);
 
     PROTO_METHOD(toString);
     PROTO_METHOD(toLocaleString);
@@ -2450,6 +2568,7 @@ _ejs_object_init (ejsval global)
     PROTO_METHOD(propertyIsEnumerable);
 
 #undef PROTO_METHOD
+#undef OBJ_METHOD_LEN
 #undef OBJ_METHOD
 }
 

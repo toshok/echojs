@@ -522,8 +522,15 @@ export interface ExportDefaultDeclaration extends BaseNode {
 
 export interface ExportAllDeclaration extends BaseNode {
     type: "ExportAllDeclaration";
+    // `export * as ns from "m"` carries the namespace name; plain
+    // `export * from "m"` has null
+    exported: Identifier | null;
     source: Literal;
     source_path?: Literal & { value: string };
+    // for the plain form: the names this declaration re-exports, filled
+    // in by gather-imports' post-gather star expansion (the source
+    // module's export list isn't known while this module is visited)
+    star_export_names?: string[];
 }
 
 // --- unions -----------------------------------------------------------------

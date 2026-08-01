@@ -523,6 +523,11 @@ class LLVMIRVisitor implements VisitorSurface {
     }
 
     generateEJSValueForString(id: number | string): llvm.GlobalVariable {
+        // the name is cosmetic (debugging); the created global itself is
+        // the literal's identity.  NEVER re-resolve it by name: LLVM
+        // names are NUL-terminated C strings, so two literals differing
+        // only past an embedded U+0000 truncate to the same name — a
+        // name lookup would fuse them into one global.
         let name = `ejsval-${id}`;
         let strglobal = new llvm.GlobalVariable(
             this.module,
@@ -532,9 +537,7 @@ class LLVMIRVisitor implements VisitorSurface {
             false
         );
         strglobal.setAlignment(8);
-        let val = this.module.getOrInsertGlobal(name, types.EjsValue);
-        val.setAlignment(8);
-        return val;
+        return strglobal;
     }
 
     addStringLiteralInitialization(
@@ -611,9 +614,11 @@ class LLVMIRVisitor implements VisitorSurface {
                 `${prefix}_ejsval`
             );
             let intval = ir.createPtrToInt(ptr, types.Int64, `${prefix}_intval`);
+            // OBJECT_TO_EJSVAL: OR in SHIFTED_TAG_OBJECT (tag 0x1FFFA —
+            // object is the maximum ejsval tag; see isObject)
             let payload = ir.createOr(
                 intval,
-                consts.int64_lowhi(0xfffc0000, 0x00000000),
+                consts.int64_lowhi(0xfffd0000, 0x00000000),
                 `${prefix}_payload`
             );
             let alloca_as_int64 = ir.createBitCast(

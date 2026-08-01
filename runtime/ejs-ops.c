@@ -595,7 +595,8 @@ SameValue(ejsval x, ejsval y)
         if (EJSVAL_TO_STRLEN(x) != EJSVAL_TO_STRLEN(y)) return EJS_FALSE;
 
         // XXX there is doubtless a more efficient way to compare two ropes, but we convert but to flat strings for now.
-        return ucs2_strcmp (EJSVAL_TO_FLAT_STRING(x), EJSVAL_TO_FLAT_STRING(y)) ? EJS_FALSE : EJS_TRUE;
+        // length-aware compare: embedded NULs are ordinary code units
+        return ucs2_strcmp_len (EJSVAL_TO_FLAT_STRING(x), EJSVAL_TO_STRLEN(x), EJSVAL_TO_FLAT_STRING(y), EJSVAL_TO_STRLEN(y)) ? EJS_FALSE : EJS_TRUE;
     }
     // 8. If Type(x) is Boolean, then
     if (EJSVAL_IS_BOOLEAN(x)) {
@@ -651,7 +652,8 @@ SameValueZero(ejsval x, ejsval y)
         if (EJSVAL_TO_STRLEN(x) != EJSVAL_TO_STRLEN(y)) return EJS_FALSE;
 
         // XXX there is doubtless a more efficient way to compare two ropes, but we convert but to flat strings for now.
-        return ucs2_strcmp (EJSVAL_TO_FLAT_STRING(x), EJSVAL_TO_FLAT_STRING(y)) ? EJS_FALSE : EJS_TRUE;
+        // length-aware compare: embedded NULs are ordinary code units
+        return ucs2_strcmp_len (EJSVAL_TO_FLAT_STRING(x), EJSVAL_TO_STRLEN(x), EJSVAL_TO_FLAT_STRING(y), EJSVAL_TO_STRLEN(y)) ? EJS_FALSE : EJS_TRUE;
     }
     // 8. If Type(x) is Boolean, then
     if (EJSVAL_IS_BOOLEAN(x)) {
@@ -1036,7 +1038,7 @@ _ejs_op_lt_ejsbool (ejsval lhs, ejsval rhs)
         ejsval lstr = ToString(lprim);
         ejsval rstr = ToString(rprim);
 
-        return ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lstr), EJSVAL_TO_FLAT_STRING(rstr)) < 0;
+        return ucs2_strcmp_len (EJSVAL_TO_FLAT_STRING(lstr), EJSVAL_TO_STRLEN(lstr), EJSVAL_TO_FLAT_STRING(rstr), EJSVAL_TO_STRLEN(rstr)) < 0;
     }
 
     if (EJSVAL_IS_BIGINT(lprim) || EJSVAL_IS_BIGINT(rprim)) {
@@ -1059,7 +1061,7 @@ _ejs_op_le (ejsval lhs, ejsval rhs)
         ejsval lstr = ToString(lprim);
         ejsval rstr = ToString(rprim);
 
-        return BOOLEAN_TO_EJSVAL (ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lstr), EJSVAL_TO_FLAT_STRING(rstr)) <= 0);
+        return BOOLEAN_TO_EJSVAL (ucs2_strcmp_len (EJSVAL_TO_FLAT_STRING(lstr), EJSVAL_TO_STRLEN(lstr), EJSVAL_TO_FLAT_STRING(rstr), EJSVAL_TO_STRLEN(rstr)) <= 0);
     }
 
     if (EJSVAL_IS_BIGINT(lprim) || EJSVAL_IS_BIGINT(rprim)) {
@@ -1082,7 +1084,7 @@ _ejs_op_gt (ejsval lhs, ejsval rhs)
         ejsval lstr = ToString(lprim);
         ejsval rstr = ToString(rprim);
 
-        return BOOLEAN_TO_EJSVAL (ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lstr), EJSVAL_TO_FLAT_STRING(rstr)) > 0);
+        return BOOLEAN_TO_EJSVAL (ucs2_strcmp_len (EJSVAL_TO_FLAT_STRING(lstr), EJSVAL_TO_STRLEN(lstr), EJSVAL_TO_FLAT_STRING(rstr), EJSVAL_TO_STRLEN(rstr)) > 0);
     }
 
     if (EJSVAL_IS_BIGINT(lprim) || EJSVAL_IS_BIGINT(rprim)) {
@@ -1105,7 +1107,7 @@ _ejs_op_ge (ejsval lhs, ejsval rhs)
         ejsval lstr = ToString(lprim);
         ejsval rstr = ToString(rprim);
 
-        return BOOLEAN_TO_EJSVAL (ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lstr), EJSVAL_TO_FLAT_STRING(rstr)) >= 0);
+        return BOOLEAN_TO_EJSVAL (ucs2_strcmp_len (EJSVAL_TO_FLAT_STRING(lstr), EJSVAL_TO_STRLEN(lstr), EJSVAL_TO_FLAT_STRING(rstr), EJSVAL_TO_STRLEN(rstr)) >= 0);
     }
 
     if (EJSVAL_IS_BIGINT(lprim) || EJSVAL_IS_BIGINT(rprim)) {
@@ -1152,7 +1154,8 @@ _ejs_op_strict_eq (ejsval x, ejsval y)
         //    b. Else, return false.
         if (EJSVAL_TO_STRLEN(x) != EJSVAL_TO_STRLEN(y))
             return _ejs_false;
-        return BOOLEAN_TO_EJSVAL (!ucs2_strcmp (EJSVAL_TO_FLAT_STRING(x), EJSVAL_TO_FLAT_STRING(y)));
+        // length-aware compare: embedded NULs are ordinary code units
+        return BOOLEAN_TO_EJSVAL (!ucs2_strcmp_len (EJSVAL_TO_FLAT_STRING(x), EJSVAL_TO_STRLEN(x), EJSVAL_TO_FLAT_STRING(y), EJSVAL_TO_STRLEN(y)));
     }
     // 6. If Type(x) is Boolean, then
     if (EJSVAL_IS_BOOLEAN(x)) {

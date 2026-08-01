@@ -38,6 +38,20 @@ ucs2_strcmp (const jschar *s1, const jschar *s2)
     return ((int32_t)*s1) - ((int32_t)*(s2 - 1));
 }
 
+// code-unit comparison over explicit lengths: embedded NULs are ordinary
+// characters (U+0000 is a valid code unit), unlike the C-string walk in
+// ucs2_strcmp
+int32_t
+ucs2_strcmp_len (const jschar *s1, int32_t len1, const jschar *s2, int32_t len2)
+{
+    int32_t n = len1 < len2 ? len1 : len2;
+    for (int32_t i = 0; i < n; i ++) {
+        if (s1[i] != s2[i])
+            return ((int32_t)s1[i]) - ((int32_t)s2[i]);
+    }
+    return len1 - len2;
+}
+
 jschar*
 ucs2_strdup (const jschar *str)
 {
@@ -469,6 +483,10 @@ GetReplaceSubstitution(ejsval matched, ejsval string, int position, ejsval captu
                 result_len += matchLength;
                 i ++;
                 break;
+            case '`':
+                result_len += position;
+                i ++;
+                break;
             case '\'':
                 if (tailPos < stringLength)
                     result_len += stringLength - tailPos;
@@ -513,6 +531,11 @@ GetReplaceSubstitution(ejsval matched, ejsval string, int position, ejsval captu
             case '&':
                 memmove (result_p, EJSVAL_TO_FLAT_STRING(matched), matchLength*sizeof(jschar));
                 result_p += matchLength;
+                i ++;
+                break;
+            case '`':
+                memmove (result_p, EJSVAL_TO_FLAT_STRING(string), position*sizeof(jschar));
+                result_p += position;
                 i ++;
                 break;
             case '\'':
@@ -651,11 +674,134 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_replace) {
     //     concatenation will be the empty String.
     ejsval newString = _ejs_string_concatv(pos == 0 ? _ejs_atom_empty : _ejs_string_new_substring(string, 0, pos),
                                            replStr,
-                                           tailPos == EJSVAL_TO_STRLEN(string)-1 ? _ejs_atom_empty :  _ejs_string_new_substring(string, tailPos, EJSVAL_TO_STRLEN(string)-tailPos),
+                                           tailPos == EJSVAL_TO_STRLEN(string) ? _ejs_atom_empty :  _ejs_string_new_substring(string, tailPos, EJSVAL_TO_STRLEN(string)-tailPos),
                                            _ejs_undefined);
 
     // 16. Return newString.
     return newString;
+}
+
+// ES2021 22.1.3.20
+// String.prototype.replaceAll ( searchValue, replaceValue )
+static EJS_NATIVE_FUNC(_ejs_String_prototype_replaceAll) {
+    ejsval searchValue = _ejs_undefined;
+    if (argc > 0) searchValue = args[0];
+
+    ejsval replaceValue = _ejs_undefined;
+    if (argc > 1) replaceValue = args[1];
+
+    // 1. Let O be RequireObjectCoercible(this value).
+    ejsval O = *_this;
+
+    // 2. If searchValue is neither undefined nor null, then
+    if (!EJSVAL_IS_UNDEFINED(searchValue) && !EJSVAL_IS_NULL(searchValue)) {
+        // a. Let isRegExp be ? IsRegExp(searchValue).
+        // b. If isRegExp is true, then
+        if (IsRegExp(searchValue)) {
+            // i. Let flags be ? Get(searchValue, "flags").
+            ejsval flags = Get(searchValue, _ejs_atom_flags);
+
+            // ii. Perform ? RequireObjectCoercible(flags).
+            if (EJSVAL_IS_UNDEFINED(flags) || EJSVAL_IS_NULL(flags))
+                _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "String.prototype.replaceAll called with a RegExp without flags");
+
+            // iii. If ? ToString(flags) does not contain "g", throw a TypeError exception.
+            ejsval flagsStr = ToString(flags);
+            jschar* flags_cstr = EJSVAL_TO_FLAT_STRING(flagsStr);
+            EJSBool global = EJS_FALSE;
+            for (int i = 0; i < EJSVAL_TO_STRLEN(flagsStr); i ++) {
+                if (flags_cstr[i] == 'g') {
+                    global = EJS_TRUE;
+                    break;
+                }
+            }
+            if (!global)
+                _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "String.prototype.replaceAll called with a non-global RegExp argument");
+        }
+        // c. Let replacer be ? GetMethod(searchValue, @@replace).
+        ejsval replacer = GetMethod(searchValue, _ejs_Symbol_replace);
+
+        // d. If replacer is not undefined, then
+        if (!EJSVAL_IS_UNDEFINED(replacer)) {
+            // i. Return ? Call(replacer, searchValue, «O, replaceValue»).
+            ejsval call_args[2] = { O, replaceValue };
+            return _ejs_invoke_closure(replacer, &searchValue, 2, call_args, _ejs_undefined);
+        }
+    }
+
+    // 3. Let string be ? ToString(O).
+    ejsval string = ToString(O);
+
+    // 4. Let searchString be ? ToString(searchValue).
+    ejsval searchString = ToString(searchValue);
+
+    // 5. Let functionalReplace be IsCallable(replaceValue).
+    EJSBool functionalReplace = EJSVAL_IS_FUNCTION(replaceValue);
+
+    // 6. If functionalReplace is false, then
+    if (!functionalReplace) {
+        // a. Set replaceValue to ? ToString(replaceValue).
+        replaceValue = ToString(replaceValue);
+    }
+
+    // 7. Let searchLength be the length of searchString.
+    int searchLength = EJSVAL_TO_STRLEN(searchString);
+
+    // 8. Let advanceBy be max(1, searchLength).
+    int advanceBy = MAX(1, searchLength);
+
+    int stringLength = EJSVAL_TO_STRLEN(string);
+
+    // 9-13. walk the non-overlapping match positions in order,
+    //     accumulating the preserved slices and their replacements
+    ejsval result = _ejs_atom_empty;
+    int endOfLastMatch = 0;
+
+    int position = 0;
+    while (position + searchLength <= stringLength) {
+        // the flat buffers are re-fetched each iteration: the
+        // replacement step below can allocate (and so move strings)
+        jschar* string_cstr = EJSVAL_TO_FLAT_STRING(string);
+        jschar* search_cstr = EJSVAL_TO_FLAT_STRING(searchString);
+        if (memcmp(string_cstr + position, search_cstr, searchLength * sizeof(jschar)) != 0) {
+            position ++;
+            continue;
+        }
+
+        ejsval replacement;
+        // a. If functionalReplace is true, then
+        if (functionalReplace) {
+            // i. Let replacement be ? ToString(? Call(replaceValue, undefined, «searchString, F(position), string»)).
+            ejsval call_args[3] = { searchString, NUMBER_TO_EJSVAL(position), string };
+            ejsval undef_this = _ejs_undefined;
+            replacement = ToString(_ejs_invoke_closure(replaceValue, &undef_this, 3, call_args, _ejs_undefined));
+        }
+        // b. Else,
+        else {
+            // i. Let captures be a new empty List.
+            ejsval captures = _ejs_array_new(0, EJS_FALSE);
+            // ii. Let replacement be ! GetSubstitution(searchString, string, position, captures, undefined, replaceValue).
+            replacement = GetReplaceSubstitution(searchString, string, position, captures, replaceValue);
+        }
+        // c. Let stringSlice be the substring of string from endOfLastMatch to position.
+        ejsval stringSlice = position == endOfLastMatch ? _ejs_atom_empty : _ejs_string_new_substring(string, endOfLastMatch, position - endOfLastMatch);
+
+        // d. Set result to the string-concatenation of result, stringSlice, and replacement.
+        result = _ejs_string_concatv(result, stringSlice, replacement, _ejs_undefined);
+
+        // e. Set endOfLastMatch to position + searchLength.
+        endOfLastMatch = position + searchLength;
+
+        position += advanceBy;
+    }
+
+    // 14. If endOfLastMatch < the length of string, then
+    //     a. Set result to the string-concatenation of result and the substring of string from endOfLastMatch.
+    if (endOfLastMatch < stringLength)
+        result = _ejs_string_concat(result, _ejs_string_new_substring(string, endOfLastMatch, stringLength - endOfLastMatch));
+
+    // 15. Return result.
+    return result;
 }
 
 jschar
@@ -700,6 +846,38 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_charAt) {
         return _ejs_atom_empty;
 
     jschar c = _ejs_string_ucs2_at(EJSVAL_TO_STRING(primStr), idx);
+    return _ejs_string_new_ucs2_len (&c, 1);
+}
+
+// ES2022 22.1.3.1
+// String.prototype.at ( index )
+static EJS_NATIVE_FUNC(_ejs_String_prototype_at) {
+    ejsval index = _ejs_undefined;
+    if (argc > 0) index = args[0];
+
+    // 1. Let O be ? RequireObjectCoercible(this value).
+    ejsval O = *_this;
+
+    // 2. Let S be ? ToString(O).
+    ejsval S = ToString(O);
+
+    // 3. Let len be the length of S.
+    int len = EJSVAL_TO_STRLEN(S);
+
+    // 4. Let relativeIndex be ? ToIntegerOrInfinity(index).
+    double relativeIndex = ToDouble(index);
+    relativeIndex = isnan(relativeIndex) ? 0 : trunc(relativeIndex);
+
+    // 5. If relativeIndex >= 0, then let k be relativeIndex.
+    // 6. Else, let k be len + relativeIndex.
+    double k = relativeIndex >= 0 ? relativeIndex : len + relativeIndex;
+
+    // 7. If k < 0 or k >= len, return undefined.
+    if (k < 0 || k >= len)
+        return _ejs_undefined;
+
+    // 8. Return the substring of S from k to k + 1.
+    jschar c = _ejs_string_ucs2_at(EJSVAL_TO_STRING(S), (uint32_t)k);
     return _ejs_string_new_ucs2_len (&c, 1);
 }
 
@@ -1085,6 +1263,130 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_trim) {
 
     // 5. Return T.
     return T;
+}
+
+// ES2019 21.1.3.29
+// String.prototype.trimStart ()
+static EJS_NATIVE_FUNC(_ejs_String_prototype_trimStart) {
+    // 1. Let S be RequireObjectCoercible(this value).
+    ejsval O = *_this;
+
+    // 2. Let T be ? ToString(S).
+    ejsval S = ToString(O);
+
+    // 3. Return a copy of S with leading white space removed (the same
+    //    whitespace set trim uses).
+    EJSPrimString* flat = _ejs_string_flatten(S);
+
+    int leading = 0;
+    while (leading < flat->length && IsWhitespace(flat->data.flat[leading])) {
+        leading++;
+    }
+    if (leading == flat->length) return _ejs_atom_empty;
+
+    if (leading == 0)
+        return S;
+
+    return _ejs_string_new_substring(S, leading, flat->length - leading);
+}
+
+// ES2019 21.1.3.30
+// String.prototype.trimEnd ()
+static EJS_NATIVE_FUNC(_ejs_String_prototype_trimEnd) {
+    // 1. Let S be RequireObjectCoercible(this value).
+    ejsval O = *_this;
+
+    // 2. Let T be ? ToString(S).
+    ejsval S = ToString(O);
+
+    // 3. Return a copy of S with trailing white space removed (the same
+    //    whitespace set trim uses).
+    EJSPrimString* flat = _ejs_string_flatten(S);
+
+    int trailing = 0;
+    while (trailing < flat->length && IsWhitespace(flat->data.flat[flat->length - 1 - trailing])) {
+        trailing ++;
+    }
+    if (trailing == flat->length) return _ejs_atom_empty;
+
+    if (trailing == 0)
+        return S;
+
+    return _ejs_string_new_substring(S, 0, flat->length - trailing);
+}
+
+// ES2017 21.1.3.14.1
+// StringPad ( O, maxLength, fillString, placement )
+static ejsval
+StringPad(ejsval O, ejsval maxLength, ejsval fillString, EJSBool pad_start)
+{
+    // 1. Let S be ? ToString(O).
+    ejsval S = ToString(O);
+
+    // 2. Let intMaxLength be ? ToLength(maxLength).
+    int64_t intMaxLength = ToLength(maxLength);
+
+    // 3. Let stringLength be the length of S.
+    int64_t stringLength = EJSVAL_TO_STRLEN(S);
+
+    // 4. If intMaxLength <= stringLength, return S.
+    if (intMaxLength <= stringLength)
+        return S;
+
+    // 5. If fillString is undefined, let filler be the String value consisting solely of the code unit 0x0020 (SPACE).
+    // 6. Else, let filler be ? ToString(fillString).
+    ejsval filler = EJSVAL_IS_UNDEFINED(fillString) ? _ejs_atom_space : ToString(fillString);
+
+    // 7. If filler is the empty String, return S.
+    int64_t fillLen = EJSVAL_TO_STRLEN(filler);
+    if (fillLen == 0)
+        return S;
+
+    // 8. Let fillLen be intMaxLength - stringLength.
+    // 9. Let truncatedStringFiller be the String value consisting of repeated concatenations of filler truncated to length fillLen.
+    int64_t padLen = intMaxLength - stringLength;
+    ejsval pad = _ejs_atom_empty;
+    int64_t remaining = padLen;
+    while (remaining >= fillLen) {
+        pad = _ejs_string_concat(pad, filler);
+        remaining -= fillLen;
+    }
+    if (remaining > 0)
+        pad = _ejs_string_concat(pad, _ejs_string_new_substring(filler, 0, remaining));
+
+    // 10. If placement is start, return the string-concatenation of truncatedStringFiller and S.
+    // 11. Else, return the string-concatenation of S and truncatedStringFiller.
+    return pad_start ? _ejs_string_concat(pad, S) : _ejs_string_concat(S, pad);
+}
+
+// ES2017 21.1.3.14
+// String.prototype.padStart ( maxLength [ , fillString ] )
+static EJS_NATIVE_FUNC(_ejs_String_prototype_padStart) {
+    ejsval maxLength = _ejs_undefined;
+    ejsval fillString = _ejs_undefined;
+    if (argc > 0) maxLength = args[0];
+    if (argc > 1) fillString = args[1];
+
+    // 1. Let O be ? RequireObjectCoercible(this value).
+    ejsval O = *_this;
+
+    // 2. Return ? StringPad(O, maxLength, fillString, start).
+    return StringPad(O, maxLength, fillString, EJS_TRUE);
+}
+
+// ES2017 21.1.3.13
+// String.prototype.padEnd ( maxLength [ , fillString ] )
+static EJS_NATIVE_FUNC(_ejs_String_prototype_padEnd) {
+    ejsval maxLength = _ejs_undefined;
+    ejsval fillString = _ejs_undefined;
+    if (argc > 0) maxLength = args[0];
+    if (argc > 1) fillString = args[1];
+
+    // 1. Let O be ? RequireObjectCoercible(this value).
+    ejsval O = *_this;
+
+    // 2. Return ? StringPad(O, maxLength, fillString, end).
+    return StringPad(O, maxLength, fillString, EJS_FALSE);
 }
 
 static EJS_NATIVE_FUNC(_ejs_String_prototype_valueOf) {
@@ -1908,6 +2210,7 @@ _ejs_string_init(ejsval global)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_String_prototype, x, _ejs_String_prototype_##x)
 #define PROTO_METHOD_LEN(x,l) EJS_INSTALL_ATOM_FUNCTION_LEN_FLAGS (_ejs_String_prototype, x, _ejs_String_prototype_##x, l, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 
+    PROTO_METHOD_LEN(at, 1);
     PROTO_METHOD(charAt);
     PROTO_METHOD(charCodeAt);
     PROTO_METHOD(codePointAt);
@@ -1920,6 +2223,7 @@ _ejs_string_init(ejsval global)
     PROTO_METHOD(match);
     PROTO_METHOD(repeat);
     PROTO_METHOD(replace);
+    PROTO_METHOD_LEN(replaceAll, 2);
     PROTO_METHOD(search);
     PROTO_METHOD(slice);
     PROTO_METHOD(split);
@@ -1932,6 +2236,10 @@ _ejs_string_init(ejsval global)
     PROTO_METHOD(toString);
     PROTO_METHOD(toUpperCase);
     PROTO_METHOD(trim);
+    PROTO_METHOD_LEN(trimStart, 0);
+    PROTO_METHOD_LEN(trimEnd, 0);
+    PROTO_METHOD_LEN(padStart, 1);
+    PROTO_METHOD_LEN(padEnd, 1);
     PROTO_METHOD(valueOf);
 
     OBJ_METHOD(fromCharCode);
@@ -2172,13 +2480,23 @@ _ejs_string_new_utf8_len (const char* str, int len)
     }
     jschar *p = rv->data.flat;
     const unsigned char *stru = (const unsigned char*)str;
-    while (len > 0) {
+    const unsigned char *end = stru + len;
+    while (stru < end) {
+        // a byte-counted buffer legitimately contains NULs (source files,
+        // arbitrary data): U+0000 is a code point here, not a terminator.
+        // utf8_to_codepoint treats it as end-of-input, so consume it
+        // directly.  (`len` is a BYTE count: advance by bytes consumed,
+        // not one per code point.)
+        if (*stru == 0) {
+            p = append_codepoint (p, 0);
+            stru++;
+            continue;
+        }
         int32_t c = utf8_to_codepoint (stru, &stru);
         if (c == -1) {
             break;
         }
         p = append_codepoint (p, c);
-        len--;
     }
     *p = 0;
     rv->length = p - rv->data.flat;

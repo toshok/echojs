@@ -668,7 +668,12 @@ export class ScopeAnalysis {
                 return;
             }
             case "ExportAllDeclaration":
-                throw LowerNotSupported("export *", n.loc);
+                // both forms name only the SOURCE module's exports —
+                // nothing local to resolve (lowering validates them
+                // against the source's export table)
+                if (this.moduleSlotNames === null || this.curFn !== this.rootInfo)
+                    throw LowerNotSupported("export declaration", n.loc);
+                return;
             case "ExpressionStatement":
                 this.walkExpr(n.expression);
                 return;

@@ -658,8 +658,9 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_every) {
             };
             ejsval testResult = _ejs_invoke_closure (callbackfn, &T, 3, callbackargs, _ejs_undefined);
 
-            // v. If testResult is false, return false.
-            if (EJSVAL_IS_BOOLEAN(testResult) && !EJSVAL_TO_BOOLEAN(testResult))
+            // v. If ToBoolean(testResult) is false, return false — any
+            // falsy result fails the predicate, not just literal false.
+            if (!EJSVAL_TO_BOOLEAN(ToBoolean(testResult)))
                 return _ejs_false;
         }
 
@@ -913,6 +914,58 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_findIndex) {
     return NUMBER_TO_EJSVAL(-1);
 }
 
+// ES2023
+// 23.1.3.11
+// Array.prototype.findLast ( predicate [, thisArg] )
+static EJS_NATIVE_FUNC(_ejs_Array_prototype_findLast) {
+    ejsval predicate = _ejs_undefined;
+    ejsval thisArg = _ejs_undefined;
+
+    if (argc > 0) predicate = args[0];
+    if (argc > 1) thisArg = args[1];
+
+    // 1. Let O be ? ToObject(this value).
+    ejsval O = ToObject(*_this);
+
+    // 2. Let len be ? LengthOfArrayLike(O).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
+
+    // 3. If IsCallable(predicate) is false, throw a TypeError exception.
+    if (!IsCallable(predicate))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "callback function is not a function");
+
+    ejsval T = thisArg;
+
+    // 4. Let k be len - 1.
+    int64_t k = len - 1;
+
+    // 5. Repeat, while k >= 0
+    while (k >= 0) {
+        // a. Let Pk be ! ToString(F(k)).
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+        // b. Let kValue be ? Get(O, Pk).
+        ejsval kValue = Get(O, Pk);
+
+        // c. Let testResult be ToBoolean(? Call(predicate, thisArg, «kValue, F(k), O»)).
+        ejsval predicateargs[3] = {
+            kValue,
+            NUMBER_TO_EJSVAL(k),
+            O
+        };
+
+        ejsval testResult = ToBoolean(_ejs_invoke_closure (predicate, &T, 3, predicateargs, _ejs_undefined));
+
+        // d. If testResult is true, return kValue.
+        if (EJSVAL_TO_BOOLEAN(testResult))
+            return kValue;
+
+        // e. Set k to k - 1.
+        k--;
+    }
+    // 6. Return undefined.
+    return _ejs_undefined;
+}
+
 // ES6 Draft January 15, 2015
 // 22.1.3.10
 // Array.prototype.forEach ( callbackfn [ , thisArg ] ) 
@@ -1045,6 +1098,90 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_indexOf) {
     }
     // 12. Return -1.
     return NUMBER_TO_EJSVAL(-1);
+}
+
+// ES2023
+// 23.1.3.16
+// Array.prototype.includes ( searchElement [, fromIndex ] )
+static EJS_NATIVE_FUNC(_ejs_Array_prototype_includes) {
+    ejsval searchElement = _ejs_undefined;
+    ejsval fromIndex = _ejs_undefined;
+
+    if (argc > 0) searchElement = args[0];
+    if (argc > 1) fromIndex = args[1];
+
+    // 1. Let O be ? ToObject(this value).
+    ejsval O = ToObject(*_this);
+
+    // 2. Let len be ? LengthOfArrayLike(O).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
+
+    // 3. If len is 0, return false.
+    if (len == 0) return _ejs_false;
+
+    // 4. Let n be ? ToIntegerOrInfinity(fromIndex).
+    // 5. Assert: If fromIndex is undefined, then n is 0.
+    // 6. If n is +∞, return false.
+    // 7. Else if n is -∞, set n to 0.
+    double n_ = (argc > 1) ? ToDouble(fromIndex) : 0;
+    if (isnan(n_)) n_ = 0;
+    if (isinf(n_) && n_ > 0) return _ejs_false;
+    int64_t n = isinf(n_) ? 0 : (int64_t)n_;
+
+    // 8. If n >= 0, then
+    int64_t k;
+    if (n >= 0)
+        // a. Let k be n.
+        k = n;
+    // 9. Else,
+    else {
+        // a. Let k be len + n.
+        k = len + n;
+        // b. If k < 0, set k to 0.
+        if (k < 0) k = 0;
+    }
+
+    // 10. Repeat, while k < len,
+    while (k < len) {
+        // a. Let elementK be ? Get(O, ! ToString(F(k))).
+        ejsval elementK = Get(O, ToString(NUMBER_TO_EJSVAL(k)));
+        // b. If SameValueZero(searchElement, elementK) is true, return true.
+        if (SameValueZero(searchElement, elementK))
+            return _ejs_true;
+        // c. Set k to k + 1.
+        k++;
+    }
+    // 11. Return false.
+    return _ejs_false;
+}
+
+// ES2023
+// 23.1.3.1
+// Array.prototype.at ( index )
+static EJS_NATIVE_FUNC(_ejs_Array_prototype_at) {
+    ejsval index = _ejs_undefined;
+    if (argc > 0) index = args[0];
+
+    // 1. Let O be ? ToObject(this value).
+    ejsval O = ToObject(*_this);
+
+    // 2. Let len be ? LengthOfArrayLike(O).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
+
+    // 3. Let relativeIndex be ? ToIntegerOrInfinity(index).
+    double relativeIndex = ToDouble(index);
+    relativeIndex = isnan(relativeIndex) ? 0 : trunc(relativeIndex);
+
+    // 4. If relativeIndex >= 0, then let k be relativeIndex.
+    // 5. Else, let k be len + relativeIndex.
+    double k = relativeIndex >= 0 ? relativeIndex : len + relativeIndex;
+
+    // 6. If k < 0 or k >= len, return undefined.
+    if (k < 0 || k >= len)
+        return _ejs_undefined;
+
+    // 7. Return ? Get(O, ! ToString(F(k))).
+    return Get(O, ToString(NUMBER_TO_EJSVAL((int64_t)k)));
 }
 
 // ES6 Draft January 15, 2015
@@ -1241,6 +1378,149 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_map) {
     }
 
     // 11. Return A.
+    return A;
+}
+
+// ES2023
+// 23.1.3.13.1
+// FlattenIntoArray ( target, source, sourceLen, start, depth [, mapperFunction [, thisArg ]] )
+// depth is a double so Infinity flattens without bound
+static int64_t
+FlattenIntoArray(ejsval target, ejsval source, int64_t sourceLen, int64_t start, double depth, ejsval mapperFunction, ejsval thisArg)
+{
+    // 1. Let targetIndex be start.
+    int64_t targetIndex = start;
+
+    // 2. Let sourceIndex be +0.
+    int64_t sourceIndex = 0;
+
+    // 3. Repeat, while sourceIndex < sourceLen,
+    while (sourceIndex < sourceLen) {
+        // a. Let P be ! ToString(F(sourceIndex)).
+        ejsval P = ToString(NUMBER_TO_EJSVAL(sourceIndex));
+
+        // b. Let exists be ? HasProperty(source, P).
+        EJSBool exists = OP(EJSVAL_TO_OBJECT(source), HasProperty)(source, P);
+
+        // c. If exists is true, then
+        if (exists) {
+            // i. Let element be ? Get(source, P).
+            ejsval element = Get(source, P);
+
+            // ii. If mapperFunction is present, then
+            if (!EJSVAL_IS_UNDEFINED(mapperFunction)) {
+                // 1. Set element to ? Call(mapperFunction, thisArg, «element, F(sourceIndex), source»).
+                ejsval mapper_args[3] = {
+                    element,
+                    NUMBER_TO_EJSVAL(sourceIndex),
+                    source
+                };
+                element = _ejs_invoke_closure (mapperFunction, &thisArg, 3, mapper_args, _ejs_undefined);
+            }
+
+            // iii. Let shouldFlatten be false.
+            EJSBool shouldFlatten = EJS_FALSE;
+
+            // iv. If depth > 0, then
+            if (depth > 0)
+                // 1. Set shouldFlatten to ? IsArray(element).
+                shouldFlatten = EJSVAL_IS_ARRAY(element);
+
+            // v. If shouldFlatten is true, then
+            if (shouldFlatten) {
+                // 1. If depth is +∞, let newDepth be +∞.
+                // 2. Else, let newDepth be depth - 1.
+                double newDepth = isinf(depth) ? depth : depth - 1;
+
+                // 3. Let elementLen be ? LengthOfArrayLike(element).
+                int64_t elementLen = ToLength(Get(element, _ejs_atom_length));
+
+                // 4. Set targetIndex to ? FlattenIntoArray(target, element, elementLen, targetIndex, newDepth).
+                targetIndex = FlattenIntoArray(target, element, elementLen, targetIndex, newDepth, _ejs_undefined, _ejs_undefined);
+            }
+            // vi. Else,
+            else {
+                // 1. If targetIndex >= 2^53 - 1, throw a TypeError exception.
+                if (targetIndex >= EJS_MAX_SAFE_INTEGER)
+                    _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "flattened array is too long");
+
+                // 2. Perform ? CreateDataPropertyOrThrow(target, ! ToString(F(targetIndex)), element).
+                _ejs_object_define_value_property (target, ToString(NUMBER_TO_EJSVAL(targetIndex)), element, EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+
+                // 3. Set targetIndex to targetIndex + 1.
+                targetIndex++;
+            }
+        }
+        // d. Set sourceIndex to sourceIndex + 1.
+        sourceIndex++;
+    }
+    // 4. Return targetIndex.
+    return targetIndex;
+}
+
+// ES2023
+// 23.1.3.13
+// Array.prototype.flat ( [ depth ] )
+static EJS_NATIVE_FUNC(_ejs_Array_prototype_flat) {
+    ejsval depth = _ejs_undefined;
+    if (argc > 0) depth = args[0];
+
+    // 1. Let O be ? ToObject(this value).
+    ejsval O = ToObject(*_this);
+
+    // 2. Let sourceLen be ? LengthOfArrayLike(O).
+    int64_t sourceLen = ToLength(Get(O, _ejs_atom_length));
+
+    // 3. Let depthNum be 1.
+    double depthNum = 1;
+
+    // 4. If depth is not undefined, then
+    if (!EJSVAL_IS_UNDEFINED(depth)) {
+        // a. Set depthNum to ? ToIntegerOrInfinity(depth).
+        depthNum = ToDouble(depth);
+        depthNum = isnan(depthNum) ? 0 : trunc(depthNum);
+
+        // b. If depthNum < 0, set depthNum to 0.
+        if (depthNum < 0) depthNum = 0;
+    }
+
+    // 5. Let A be ? ArraySpeciesCreate(O, 0).
+    ejsval A = ArraySpeciesCreate(O, 0);
+
+    // 6. Perform ? FlattenIntoArray(A, O, sourceLen, 0, depthNum).
+    FlattenIntoArray(A, O, sourceLen, 0, depthNum, _ejs_undefined, _ejs_undefined);
+
+    // 7. Return A.
+    return A;
+}
+
+// ES2023
+// 23.1.3.14
+// Array.prototype.flatMap ( mapperFunction [, thisArg ] )
+static EJS_NATIVE_FUNC(_ejs_Array_prototype_flatMap) {
+    ejsval mapperFunction = _ejs_undefined;
+    ejsval thisArg = _ejs_undefined;
+
+    if (argc > 0) mapperFunction = args[0];
+    if (argc > 1) thisArg = args[1];
+
+    // 1. Let O be ? ToObject(this value).
+    ejsval O = ToObject(*_this);
+
+    // 2. Let sourceLen be ? LengthOfArrayLike(O).
+    int64_t sourceLen = ToLength(Get(O, _ejs_atom_length));
+
+    // 3. If IsCallable(mapperFunction) is false, throw a TypeError exception.
+    if (!IsCallable(mapperFunction))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Array.prototype.flatMap called with a non-function.");
+
+    // 4. Let A be ? ArraySpeciesCreate(O, 0).
+    ejsval A = ArraySpeciesCreate(O, 0);
+
+    // 5. Perform ? FlattenIntoArray(A, O, sourceLen, 0, 1, mapperFunction, thisArg).
+    FlattenIntoArray(A, O, sourceLen, 0, 1, mapperFunction, thisArg);
+
+    // 6. Return A.
     return A;
 }
 
@@ -2695,6 +2975,11 @@ _ejs_array_init(ejsval global)
     PROTO_METHOD(fill);
     PROTO_METHOD_LEN(find, 1);
     PROTO_METHOD(findIndex);
+    PROTO_METHOD_LEN(findLast, 1);
+    PROTO_METHOD_LEN(includes, 1);
+    PROTO_METHOD_LEN(at, 1);
+    PROTO_METHOD_LEN(flat, 0);
+    PROTO_METHOD_LEN(flatMap, 1);
     PROTO_METHOD(keys);
 
     // we expand PROTO_METHOD(values) here so that we can install the function as @@iterator below
