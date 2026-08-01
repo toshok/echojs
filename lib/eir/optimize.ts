@@ -835,19 +835,22 @@ function foldIteratorWrappers(useMap: UseMap, fn: Func, stats: OptStats): boolea
         if (!usesOf(useMap, arr).every((u) => (u.inst === itfn && u.index === 0) || (u.inst === it && u.index === 1)))
             continue;
 
-        // wrapper uses: getNextValue getters + their calls, nothing else
+        // wrapper uses: getNextValue getters + their calls, plus the
+        // desugar's close() pair (IteratorClose on a literal's exhausted
+        // array iterator is a no-op — there is no return method)
         const getters = new Set<Inst>();
-        const calls: Inst[] = [];
+        const closeGetters = new Set<Inst>();
+        const rawCalls: Inst[] = [];
         let ok = true;
         for (const u of usesOf(useMap, w)) {
             const i = u.inst;
             if (
                 i.op === "get_prop_atom" &&
-                i.imms.atom === "getNextValue" &&
+                (i.imms.atom === "getNextValue" || i.imms.atom === "close") &&
                 u.index === 0 &&
                 !hasTargets(i)
             ) {
-                getters.add(i);
+                (i.imms.atom === "close" ? closeGetters : getters).add(i);
             } else if (
                 i.op === "call" &&
                 i.operands.length === 2 &&
@@ -856,14 +859,22 @@ function foldIteratorWrappers(useMap: UseMap, fn: Func, stats: OptStats): boolea
                 !hasTargets(i) &&
                 i.block === w.block
             ) {
-                calls.push(i);
+                rawCalls.push(i);
             } else {
                 ok = false;
                 break;
             }
         }
-        if (!ok || calls.length !== getters.size) continue;
-        for (const c of calls) if (!getters.has(c.operands[0]!) || !soleUse(c.operands[0]!, c)) ok = false;
+        if (!ok) continue;
+        const calls = rawCalls.filter((c) => getters.has(c.operands[0]!));
+        const closeCalls = rawCalls.filter((c) => closeGetters.has(c.operands[0]!));
+        if (
+            calls.length !== getters.size ||
+            closeCalls.length !== closeGetters.size ||
+            calls.length + closeCalls.length !== rawCalls.length
+        )
+            continue;
+        for (const c of rawCalls) if (!soleUse(c.operands[0]!, c)) ok = false;
         if (!ok) continue;
 
         // k-th call in block order sees element k
@@ -872,7 +883,9 @@ function foldIteratorWrappers(useMap: UseMap, fn: Func, stats: OptStats): boolea
             const el = k < arr.operands.length ? arr.operands[k]! : constUndefinedBefore(fn, calls[k]!);
             foldRead(useMap, fn, calls[k]!, el);
         }
+        for (const c of closeCalls) foldRead(useMap, fn, c, constUndefinedBefore(fn, c));
         for (const g of getters) removeInst(useMap, g);
+        for (const g of closeGetters) removeInst(useMap, g);
         removeInst(useMap, w);
         removeInst(useMap, it);
         removeInst(useMap, itfn);
