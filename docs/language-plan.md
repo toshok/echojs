@@ -63,6 +63,9 @@ safer with types underneath it.
       Still gated with located errors: async generator functions,
       BigInt (value-representation decision pending, likely heap-boxed),
       dynamic `import()`/`import.meta` (AOT module-story design).
+      (Async generators subsequently landed in the language-P4.1
+      conformance pass — docs/language-p4.1-results.md; BigInt and
+      dynamic import remain gated.)
 - [x] **language-P4 — test262 lane.**  DONE 2026-07-31 —
       docs/language-p4-results.md.  `test/test262/lane.sh` runs the
       curated selection (every 6th language test, 2 per built-ins leaf

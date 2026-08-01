@@ -163,7 +163,12 @@ Catch up with the language; adopt test262.  Detail: language-plan.md.
 - [x] **P8.4** test262 CI lane (language-P4).  DONE 2026-07-31 —
       docs/language-p4-results.md (`test/test262/lane.sh`: curated
       selection vs pinned suite SHA, checked-in expectations file as a
-      conformance ratchet; runs in the macOS bootstrap job).
+      conformance ratchet; runs in the macOS bootstrap job).  First
+      ratchet turn same day (language-P4.1,
+      docs/language-p4.1-results.md): async generators landed, `yield*`
+      value-position/forwarding fixed, function `.length`/`.name`,
+      for-in symbol-key crash, globalThis; class/elements and
+      for-await-of both 71%/31% → 90%.
 - [ ] **P8.5** un-fork the JS external-deps (language-P5).
 
 ## P9 — Distribution
