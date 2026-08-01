@@ -227,3 +227,34 @@ interleaves freely with P9.5/P10.  Detail: maam-plan.md.
       the --types differential lane run stage0-vs-stage1 (identical
       typed output), and the README caveat deleted (maam-P5).
       Consider pairing with the maam repo merge.
+      Prereqs (measured 2026-07-31 by compiling maam's ES-module tsc
+      output with stage1 — the ES2022 *syntax* surface is already
+      covered: all 22 modules lower clean, and the execution smoke
+      reaches makeMachine before hitting the first stdlib gap):
+      - [ ] `export * from` + `export * as ns from` (GatherImports#
+            visitExportAllDeclaration unimplemented; maam's index.ts
+            is built from star re-exports).
+      - [ ] `.js`-suffixed import specifiers (NodeNext output style):
+            the module gathers but bindings get no slot — the same
+            root cause as the test262 `skip-module`/`_FIXTURE.js`
+            class, so fixing it also unlocks the 824 skipped module
+            tests in the lane.
+      - [ ] stdlib methods maam's output calls (probe-verified
+            missing): Object.{entries, fromEntries, hasOwn},
+            Array.prototype.{includes, at, flat, flatMap, findLast},
+            String.prototype.{padStart, padEnd, trimStart, trimEnd,
+            replaceAll, at}.
+      - [ ] source files containing a raw NUL byte inside a string
+            literal truncate at parse ("unterminated template" — a
+            NUL-terminated read path; maam's state.ts env-key
+            separator triggers it).
+      - [ ] maam soundness under the new language surface: the
+            ⊤-operand arithmetic refinement (maam values.ts binop)
+            claims `anyNum` for `- * / % ** & | ^ << >>` — false now
+            that BigInt exists, and specialize.ts trusted clones take
+            oracle claims as facts.  Apply the one-proven-number-
+            operand rule (mixing throws, so an op that completes with
+            a number operand produced a number); the `+` num|str join
+            needs the same treatment.  Add bigint/async programs to
+            the differential-harness corpus (the stated hard
+            precondition can't catch what it hasn't seen).

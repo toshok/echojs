@@ -597,9 +597,11 @@ messages/results docs).
       Work items: (1) an ESM build flavor in the maam repo (tsc
       module variant; `import` is what the self-compile's
       gather-imports follows statically — `require()` never is);
-      (2) the residual stdlib call sites if language-P3 hasn't
-      covered them (Object.entries/fromEntries, padStart — six sites
-      total); (3) oracle.ts loads via static import when self-hosted,
+      (2) the residual stdlib call sites — the measured list (larger
+      than the six-site estimate) lives in plans.md P11.1's prereq
+      checklist, alongside the module-system gaps (`export *`,
+      `.js`-suffixed specifiers) and the values.ts ⊤-operand
+      arithmetic soundness fix the 2026-07-31 probe recorded; (3) oracle.ts loads via static import when self-hosted,
       keeping the lazy, off-by-default shape so `--types` stays
       pay-for-use; (4) srcdir-tree/BUCK wiring so the bootstrap
       compiles maam in (~315KB of JS per stage; deterministic input,
