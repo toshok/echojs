@@ -10,16 +10,17 @@
 // over the result.  Lowering consumes it only under --types;
 // --types-dump prints per-binding types for hand-checking.
 //
-// Two hard rules, both load-bearing:
-//   - maam is require()d lazily, only when the probe actually runs, so
-//     a flag-off compile never touches it (and never pays for it);
-//   - every failure here — missing/unbuilt submodule, an analysis
-//     error, a self-hosted compiler with no host require() — degrades
-//     to a compiler warning.  --types must never turn a compiling
-//     program into a failing one.
+// maam arrives through the static `$maam` import, so it is part of the
+// compiler in BOTH hosts: the self-hosted compiler compiles maam's ESM
+// build in (gather-imports follows the import), the node-hosted stage0
+// require()s the CJS build (buck-gen-js.sh rewrites the specifier).
+// Two rules, both load-bearing:
+//   - the ANALYSIS runs only under --types — flag-off compiles never
+//     invoke maam (module load is the only cost they pay);
+//   - every analysis failure degrades to a compiler warning.  --types
+//     must never turn a compiling program into a failing one.
 
-import * as path from "@node-compat/path";
-import * as fs from "@node-compat/fs";
+import * as maam_namespace from "$maam";
 import type * as e from "../estree";
 import { reportWarning } from "../errors";
 import * as commonIds from "../common-ids";
@@ -65,63 +66,13 @@ interface MaamModule {
     kCFA(...args: unknown[]): unknown;
 }
 
-const MAAM_DIST_REL = ["external-deps", "echojs-maam", "dist", "cjs", "index.js"];
-const MAAM_SUBMODULE_REL = ["external-deps", "echojs-maam"];
-
-// undefined = not attempted yet; null = attempted and unavailable (the
-// warning has already been issued — don't repeat it per module)
-let cached_maam: MaamModule | null | undefined;
+// the loose "$maam" ambient surface (lib/maam.d.ts), narrowed to the
+// structural slice above
+const maam: MaamModule = maam_namespace as unknown as MaamModule;
 
 function errorMessage(err: unknown): string {
     if (err instanceof Error) return `${err.name}: ${err.message}`;
     return String(err);
-}
-
-// Locate and require() the maam CJS build.  We walk up from this
-// module's directory looking for external-deps/echojs-maam — that works
-// both for the source tree (lib/eir/) and for the babel'd node tree
-// (lib/generated/lib/eir/, whose ancestors include the repo root).  A
-// self-hosted (stage1+) compiler has no host require()/__dirname; the
-// probe is a documented no-op-with-a-warning there.
-function loadMaam(source_filename: string): MaamModule | null {
-    if (cached_maam !== undefined) return cached_maam;
-    cached_maam = null;
-
-    if (typeof require !== "function" || typeof __dirname !== "string") {
-        reportWarning(
-            "--types is not available in a self-hosted compiler (no host require()); type analysis skipped.",
-            source_filename
-        );
-        return null;
-    }
-
-    let submodule_dir: string | null = null;
-    for (let dir = __dirname, prev = ""; dir !== prev; prev = dir, dir = path.dirname(dir)) {
-        const sub = path.join(dir, ...MAAM_SUBMODULE_REL);
-        if (!fs.existsSync(sub)) continue;
-        submodule_dir = sub;
-        const dist = path.join(dir, ...MAAM_DIST_REL);
-        if (!fs.existsSync(dist)) break; // submodule present, build output missing
-        try {
-            cached_maam = require(dist) as MaamModule;
-            return cached_maam;
-        } catch (err) {
-            reportWarning(
-                `--types: failed to load echojs-maam from ${dist} (${errorMessage(err)}); type analysis skipped.`,
-                source_filename
-            );
-            return null;
-        }
-    }
-
-    reportWarning(
-        submodule_dir !== null
-            ? `--types: echojs-maam is present at ${submodule_dir} but its CJS build is missing; ` +
-              "run `npm run build && npm run build:cjs` there. Type analysis skipped."
-            : "--types: could not locate the external-deps/echojs-maam submodule; type analysis skipped.",
-        source_filename
-    );
-    return null;
 }
 
 function warningSummary(warnings: Array<{ kind: string }>): string {
@@ -346,13 +297,17 @@ function dumpBindingTypes(
 ): void {
     const ids = collectDeclarationIds(program);
     const rows = ids.map((ident, index) => ({ ident, index, loc: locOf(ident) }));
+    // code-point name ordering, NOT localeCompare: the dump must be
+    // byte-identical across hosts (node's ICU vs the self-hosted
+    // runtime's collation)
+    const byName = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
     rows.sort((a, b) => {
         if (a.loc && b.loc)
             return a.loc.line - b.loc.line || a.loc.col - b.loc.col ||
-                a.ident.name.localeCompare(b.ident.name) || a.index - b.index;
+                byName(a.ident.name, b.ident.name) || a.index - b.index;
         if (a.loc) return -1;
         if (b.loc) return 1;
-        return a.ident.name.localeCompare(b.ident.name) || a.index - b.index;
+        return byName(a.ident.name, b.ident.name) || a.index - b.index;
     });
     for (const row of rows) {
         const sig = result.typeOfNode(row.ident);
@@ -374,9 +329,6 @@ export function runTypeAnalysisProbe(
     source_filename: string,
     dump = false
 ): ProbeOracle | null {
-    const maam = loadMaam(source_filename);
-    if (!maam) return null;
-
     const toplevel = tree.body[0];
     if (!toplevel || toplevel.type !== "FunctionDeclaration") {
         reportWarning(

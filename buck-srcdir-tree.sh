@@ -33,6 +33,7 @@ DTOA_A="${17}"     # //runtime:echo-dtoa[static]
 BIGINT_A="${18}"   # //runtime:echo-bigint[static]
 V8BIGINT_A="${19}" # //external-deps:v8-bigint[static]
 OBJC_A="${20}"     # //runtime:echo-objc[static] on macos, "-" elsewhere
+MAAM_ESM="${21}"   # //external-deps:maam-esm (the maam ESM build)
 
 mkdir -p "$OUT"
 ROOT="$(cd "$OUT" && pwd)"
@@ -72,6 +73,11 @@ cp "$PCRE_A" "$ROOT/external-deps/pcre-$OSNAME/.libs/libpcre16.a"
 mkdir -p "$ROOT/external-deps/double-conversion-$OSNAME/double-conversion"
 cp "$DC_A" "$ROOT/external-deps/double-conversion-$OSNAME/double-conversion/libdouble-conversion.a"
 cp -RL "$EXT_JS"/. "$ROOT/external-deps/"
+
+# the maam ESM build: compiled into the self-hosted compiler through the
+# "$maam" import variable (see buck-stage.sh)
+mkdir -p "$ROOT/external-deps/echojs-maam/dist"
+cp -RL "$MAAM_ESM/src" "$ROOT/external-deps/echojs-maam/dist/src"
 
 # compiler sources (the tsjs tree: tsc output + passed-through JS)
 mkdir -p "$ROOT/lib"

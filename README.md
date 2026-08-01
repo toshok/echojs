@@ -123,9 +123,10 @@ The surface most users touch (`ejs --help` has the rest):
 - `-g` / `--leave-temp` / `--dump-after eir-opt` — debugging the
   compile itself.
 - `--record-types` / `--types` — the experimental type-feedback path
-  (MAAM analysis-guided specialization).  Currently only available
-  when running the compiler from a source checkout under node; the
-  shipped self-hosted binary declines it.
+  (MAAM analysis-guided specialization).  The MAAM abstract interpreter
+  is compiled into the compiler itself, so this works the same in the
+  self-hosted binary as under node; `--types-dump` prints the inferred
+  per-binding types.
 
 Environment:
 

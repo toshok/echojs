@@ -132,3 +132,51 @@ filegroup(
     ]),
     visibility = ["PUBLIC"],
 )
+
+# ---------------------------------------------------------------------------
+# echojs-maam: the MAAM type oracle, compiled into the bootstrap.  Two
+# flavors of the same src/: the ESM build (dist/src — star re-exports and
+# .js-suffixed specifiers intact; the self-hosted compiler compiles these
+# modules in), and the CommonJS build (dist/cjs — what the node-hosted
+# stage0 require()s).  Emit-only (--noCheck): the maam repo owns its own
+# typechecking; typescript comes from the repo's node_modules, the same
+# treatment as //lib's tsc steps.  Maps/declarations are disabled so the
+# output tree is deterministic build input.
+# ---------------------------------------------------------------------------
+
+genrule(
+    name = "maam-esm",
+    srcs = glob(["echojs-maam/src/**/*.ts"]) + [
+        # package.json carries "type": "module" — without it staged,
+        # tsc's NodeNext mode silently emits CommonJS
+        "echojs-maam/package.json",
+        "echojs-maam/tsconfig.json",
+        "echojs-maam/tsconfig.build.json",
+    ],
+    out = "maam-esm",
+    cmd = 'set -e; REPO="${TMP%%/buck-out/*}"; TSC="$REPO/node_modules/typescript/bin/tsc"; ' +
+          'mkdir -p "$OUT"; OUTABS="`cd \"$OUT\" && pwd`"; ' +
+          'cd "$SRCDIR/echojs-maam"; ' +
+          'node "$TSC" -p tsconfig.build.json --noCheck ' +
+          '--declaration false --declarationMap false --sourceMap false ' +
+          '--outDir "$OUTABS"',
+    visibility = ["PUBLIC"],
+)
+
+genrule(
+    name = "maam-cjs",
+    srcs = glob(["echojs-maam/src/**/*.ts"]) + [
+        "echojs-maam/package.json",
+        "echojs-maam/tsconfig.json",
+        "echojs-maam/tsconfig.build.json",
+        "echojs-maam/tsconfig.cjs.json",
+    ],
+    out = "maam-cjs",
+    cmd = 'set -e; REPO="${TMP%%/buck-out/*}"; TSC="$REPO/node_modules/typescript/bin/tsc"; ' +
+          'mkdir -p "$OUT"; OUTABS="`cd \"$OUT\" && pwd`"; ' +
+          'cd "$SRCDIR/echojs-maam"; ' +
+          'node "$TSC" -p tsconfig.cjs.json --noCheck ' +
+          '--declaration false --declarationMap false --sourceMap false ' +
+          '--outDir "$OUTABS"',
+    visibility = ["PUBLIC"],
+)

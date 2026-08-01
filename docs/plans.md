@@ -222,39 +222,19 @@ milestone makes maam's ES2022 output compile as-is — decided
 2026-07-31, see maam-plan.md's self-hosting strategy addendum);
 interleaves freely with P9.5/P10.  Detail: maam-plan.md.
 
-- [ ] **P11.1** compile maam into the bootstrap: ESM build flavor,
-      static-import seam in the oracle, srcdir/BUCK wiring; gate =
-      the --types differential lane run stage0-vs-stage1 (identical
-      typed output), and the README caveat deleted (maam-P5).
-      Consider pairing with the maam repo merge.
-      Prereqs (measured 2026-07-31 by compiling maam's ES-module tsc
-      output with stage1 — the ES2022 *syntax* surface is already
-      covered: all 22 modules lower clean, and the execution smoke
-      reaches makeMachine before hitting the first stdlib gap):
-      - [ ] `export * from` + `export * as ns from` (GatherImports#
-            visitExportAllDeclaration unimplemented; maam's index.ts
-            is built from star re-exports).
-      - [ ] `.js`-suffixed import specifiers (NodeNext output style):
-            the module gathers but bindings get no slot — the same
-            root cause as the test262 `skip-module`/`_FIXTURE.js`
-            class, so fixing it also unlocks the 824 skipped module
-            tests in the lane.
-      - [ ] stdlib methods maam's output calls (probe-verified
-            missing): Object.{entries, fromEntries, hasOwn},
-            Array.prototype.{includes, at, flat, flatMap, findLast},
-            String.prototype.{padStart, padEnd, trimStart, trimEnd,
-            replaceAll, at}.
-      - [ ] source files containing a raw NUL byte inside a string
-            literal truncate at parse ("unterminated template" — a
-            NUL-terminated read path; maam's state.ts env-key
-            separator triggers it).
-      - [ ] maam soundness under the new language surface: the
-            ⊤-operand arithmetic refinement (maam values.ts binop)
-            claims `anyNum` for `- * / % ** & | ^ << >>` — false now
-            that BigInt exists, and specialize.ts trusted clones take
-            oracle claims as facts.  Apply the one-proven-number-
-            operand rule (mixing throws, so an op that completes with
-            a number operand produced a number); the `+` num|str join
-            needs the same treatment.  Add bigint/async programs to
-            the differential-harness corpus (the stated hard
-            precondition can't catch what it hasn't seen).
+- [x] **P11.1** compile maam into the bootstrap (maam-P5).  DONE
+      2026-07-31 — docs/maam-p5-results.md (the `$maam` static-import
+      seam: ESM build compiled into stage1+ via srcdir/BUCK wiring,
+      CJS build require()d by stage0; gates: the --types differential
+      lane host-vs-host mode — stage0 and stage1 produce byte-identical
+      typed output over the suite — plus the full matrix, and the
+      README caveat deleted.  All five prereqs landed: `export
+      */export * as ns`, `.js`-suffixed specifiers, the 14 stdlib
+      methods (+Object.values), NUL-safe source reads, and the maam
+      ⊤-operand soundness fix with bigint/async corpus.  The gate
+      flushed four pre-existing echojs bugs: NUL-truncated LLVM-name
+      literal fusion, NUL-truncating string compares in
+      SameValue(Zero)/relational ops, the stale pre-BigInt object
+      tag in emitEjsvalFromPtr, and Array.prototype.every skipping
+      ToBoolean on the callback result).  The maam repo merge remains
+      a follow-on.

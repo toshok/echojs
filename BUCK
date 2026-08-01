@@ -50,7 +50,8 @@ genrule(
           select({
               "DEFAULT": " -",
               "config//os:macos": ' "$(location //runtime:echo-objc[static])"',
-          }),
+          }) +
+          ' "$(location //external-deps:maam-esm)"',
 )
 
 # stage1: the generated (CommonJS) compiler running under node (with the

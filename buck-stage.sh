@@ -41,7 +41,11 @@ if [ "$(uname -s)" = "Darwin" ]; then
     export SDKROOT="${SDKROOT:-$(/usr/bin/xcrun --show-sdk-path)}"
 fi
 
-EJS_ARGS=(--srcdir --leave-temp --moduledir node-compat --moduledir ejs-llvm)
+# "$maam" (lib/eir/oracle) resolves to the maam ESM build carried in the
+# tree; the path relativizes against the workroot cwd, so the module key
+# is the stable "external-deps/echojs-maam/dist/src/index" in every stage
+EJS_ARGS=(--srcdir --leave-temp --moduledir node-compat --moduledir ejs-llvm
+          -I "maam=$WORK/external-deps/echojs-maam/dist/src/index")
 if [ -n "$EXTRA_FLAGS" ]; then
     EJS_ARGS+=($EXTRA_FLAGS)
 fi

@@ -587,32 +587,17 @@ messages/results docs).
       with gc-plan P1, and the P4.1–P4.6 implementation checklist with
       gates — that checklist lives in shapes-plan.md, which owns the
       phase from here.
-- [ ] **maam-P5** self-hosted oracle: `--types` in the stage1+/shipped
-      compiler (plans P11.1; **sequenced after plans P8** — the
-      language milestone makes the downlevel moot, see the
-      self-hosting strategy addendum above).  The seam is
-      lib/eir/oracle.ts's lazy host-`require()` of
-      `dist/cjs/index.js` located by a `__dirname` walk — the
-      self-hosted compiler has neither, and declines with a warning.
-      Work items: (1) an ESM build flavor in the maam repo (tsc
-      module variant; `import` is what the self-compile's
-      gather-imports follows statically — `require()` never is);
-      (2) the residual stdlib call sites — the measured list (larger
-      than the six-site estimate) lives in plans.md P11.1's prereq
-      checklist, alongside the module-system gaps (`export *`,
-      `.js`-suffixed specifiers) and the values.ts ⊤-operand
-      arithmetic soundness fix the 2026-07-31 probe recorded; (3) oracle.ts loads via static import when self-hosted,
-      keeping the lazy, off-by-default shape so `--types` stays
-      pay-for-use; (4) srcdir-tree/BUCK wiring so the bootstrap
-      compiles maam in (~315KB of JS per stage; deterministic input,
-      byte-identity unthreatened); (5) consider pairing with the
-      planned maam repo merge (separate only for the paper) — a
-      first-class lib/ citizen beats an external-deps fork.
-      Gates: the `--types` differential lane run **stage0-vs-stage1**
-      — node-hosted and self-hosted oracles must produce identical
-      typed output over the corpus; matrix green; the README's
-      "source-checkout-only" caveat deleted.
-      Downstream: prerequisite for the selfhost epic's call-site
-      inlining under oracle evidence (a shipped binary needs a
-      shipped oracle), and opens a typed bootstrap lane (the compiler
-      compiling itself under --types).
+- [x] **maam-P5** self-hosted oracle: `--types` in the stage1+/shipped
+      compiler (plans P11.1).  DONE 2026-07-31 —
+      docs/maam-p5-results.md.  The seam: oracle.ts statically imports
+      `$maam` (ambient lib/maam.d.ts); the self-compile resolves it
+      with `-I maam=<tree>/external-deps/echojs-maam/dist/src/index`
+      to the ESM build (compiled in by gather-imports), the stage0
+      CJS conversion seds it to the CJS build staged into the
+      generated tree.  Both builds are emit-only tsc genrules
+      (`//external-deps:maam-esm`/`:maam-cjs`) over the submodule
+      src.  Gates passed: buck-test-types-diff.sh host-vs-host mode
+      (identical typed output stage0-vs-stage1), full matrix, README
+      caveat deleted.  The maam repo merge stays a follow-on.
+      Downstream (unchanged): call-site inlining under oracle
+      evidence, and a typed bootstrap lane.

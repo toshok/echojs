@@ -14,6 +14,35 @@ packaged artifacts + a clean-machine install smoke — see
 
 ## [Unreleased]
 
+### Added
+
+- `--types` works in the self-hosted compiler: the MAAM abstract
+  interpreter (external-deps/echojs-maam) is compiled into the
+  bootstrap, so the shipped binary runs the same type analysis the
+  node-hosted compiler does, with byte-identical output.
+- Module system: `export * from` and `export * as ns from`, and
+  `.js`-suffixed relative import specifiers (NodeNext output style).
+- Standard library: `Object.entries`/`values`/`fromEntries`/`hasOwn`,
+  `Array.prototype.includes`/`at`/`flat`/`flatMap`/`findLast`, and
+  `String.prototype.at`/`padStart`/`padEnd`/`trimStart`/`trimEnd`/
+  `replaceAll`.
+
+### Fixed
+
+- Strings containing an embedded `U+0000` are handled correctly
+  end-to-end: source files no longer truncate at a raw NUL byte,
+  distinct string literals differing only past a NUL no longer fuse
+  into one constant, and `===`/`Object.is`/relational
+  comparisons/`Map`/`Set` see the full code-unit sequence.
+- Namespace objects (`import * as ns` / `export * as ns`) carry the
+  correct object tag; runtime property reads on module namespace
+  objects resolve through the export accessors.
+- `String.prototype.replace` no longer drops the tail of the string
+  when the match ends at the second-to-last character, and `` $` ``
+  (before-match) substitutions are supported.
+- `Array.prototype.every` applies ToBoolean to the callback result:
+  falsy non-boolean results (null, 0, "") now fail the predicate.
+
 ## [0.2.0] - 2026-07-30
 
 ### Added
