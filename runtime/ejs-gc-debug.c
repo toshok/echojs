@@ -76,6 +76,7 @@ profile_note_alloc(size_t size, int ffs_bucket, EJSScanType scan_type)
     case EJS_SCAN_TYPE_PRIMSYM:    prof_kind_count[1]++; break;
     case EJS_SCAN_TYPE_OBJECT:     prof_kind_count[2]++; break;
     case EJS_SCAN_TYPE_CLOSUREENV: prof_kind_count[3]++; break;
+    case EJS_SCAN_TYPE_BIGINT:     break; // no dedicated census bucket
     }
     prof_young_count++;
     prof_young_bytes += size;

@@ -28,6 +28,7 @@
 #include "ejs-stream.h"
 #include "ejs-string.h"
 #include "ejs-symbol.h"
+#include "ejs-bigint.h"
 #include "ejs-timers.h"
 #include "ejs-typedarrays.h"
 #include "ejs-uri.h"
@@ -111,6 +112,7 @@ _ejs_init_classes()
     _ejs_Class_initialize (&_ejs_String_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_StringIterator_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Symbol_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_BigInt_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_ArrayBuffer_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Timer_specops, &_ejs_Object_specops);
 
@@ -197,6 +199,7 @@ _ejs_root_builtin_globals(void)
     extern ejsval _ejs_String;
     extern ejsval _ejs_StringIterator;
     extern ejsval _ejs_Symbol;
+    extern ejsval _ejs_BigInt;
     extern ejsval _ejs_Symbol_create;
     extern ejsval _ejs_Symbol_hasInstance;
     extern ejsval _ejs_Symbol_isConcatSpreadable;
@@ -282,6 +285,7 @@ _ejs_root_builtin_globals(void)
     _ejs_gc_add_root (&_ejs_String);
     _ejs_gc_add_root (&_ejs_StringIterator);
     _ejs_gc_add_root (&_ejs_Symbol);
+    _ejs_gc_add_root (&_ejs_BigInt);
     _ejs_gc_add_root (&_ejs_Symbol_create);
     _ejs_gc_add_root (&_ejs_Symbol_hasInstance);
     _ejs_gc_add_root (&_ejs_Symbol_isConcatSpreadable);
@@ -367,6 +371,7 @@ _ejs_init(int argc, char** argv)
     _ejs_object_init(_ejs_global);
 
     _ejs_symbol_init(_ejs_global);
+    _ejs_bigint_init(_ejs_global);
 
     _ejs_iterator_init_proto();
     _ejs_iterator_wrapper_init(_ejs_global);

@@ -1442,14 +1442,15 @@ class LowerFunction {
         throw LowerNotSupported(`assignment target ${n.left.type}`, n.loc);
     }
 
-    // ++/--: ToNumber(old value) via unary_plus, then add/sub 1
+    // ++/--: ToNumeric(old value), then add/sub 1 (the `update` imm
+    // keeps BigInt increments off the mixed-operand TypeError)
     update(n: e.UpdateExpression): Inst {
         let one = this.b.constNumber(1);
         let op = n.operator === "++" ? "add" : "sub";
         if (n.argument.type === "Identifier") {
             let cur = this.identifier(n.argument);
-            let old = this.b.emit("unary_plus", [cur], {});
-            let nv = this.b.emit(op, [old, one], {});
+            let old = this.b.emit("to_numeric", [cur], {});
+            let nv = this.b.emit(op, [old, one], { update: 1 });
             this.writeIdentifier(n.argument, nv);
             return n.prefix ? nv : old;
         }
@@ -1465,8 +1466,8 @@ class LowerFunction {
                 atom !== null
                     ? this.propGet(objNode, obj, atom)
                     : this.b.emit("get_prop", [obj, key!], {});
-            const old = this.b.emit("unary_plus", [cur], {});
-            const nv = this.b.emit(op, [old, one], {});
+            const old = this.b.emit("to_numeric", [cur], {});
+            const nv = this.b.emit(op, [old, one], { update: 1 });
             if (atom !== null) this.propSet(objNode, obj, atom, nv);
             else this.b.emit("set_prop", [obj, key!, nv], {});
             return n.prefix ? nv : old;

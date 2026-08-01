@@ -15,7 +15,10 @@ typedef enum {
   EJS_SCAN_TYPE_PRIMSTR = 1 << 0,
   EJS_SCAN_TYPE_PRIMSYM = 1 << 1,
   EJS_SCAN_TYPE_OBJECT = 1 << 2,
-  EJS_SCAN_TYPE_CLOSUREENV = 1 << 3
+  EJS_SCAN_TYPE_CLOSUREENV = 1 << 3,
+  // a GC leaf: no child ejsvals, no self-interior pointers, no
+  // finalizer — every collector dispatch correctly falls through
+  EJS_SCAN_TYPE_BIGINT = 1 << 4
 } EJSScanType;
 
 #define EJS_GC_INTERNAL_FLAGS_MASK 0x0000ffff

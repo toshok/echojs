@@ -122,6 +122,30 @@ const runtime_interface = {
         );
     },
 
+    bigint_from_literal: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_bigint_from_literal", ty.EjsValue, [
+            ty.EjsValue,
+        ]);
+    },
+
+    op_to_numeric: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_op_to_numeric", ty.EjsValue, [
+            ty.EjsValue,
+        ]);
+    },
+    op_add_update: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_op_add_update", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+        ]);
+    },
+    op_sub_update: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_op_sub_update", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+        ]);
+    },
+
     make_closure: function (this: RuntimeContext) {
         return this.abi.createExternalFunction(
             this.module,

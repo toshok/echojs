@@ -10,6 +10,7 @@
 #include "ejs.h"
 #include "ejs-exception.h"
 #include "ejs-value.h"
+#include "ejs-bigint.h"
 #include "ejs-date.h"
 #include "ejs-function.h"
 #include "ejs-number.h"
@@ -26,14 +27,6 @@ ejsval _ejs_isNaN EJSVAL_ALIGNMENT;
 ejsval _ejs_isFinite EJSVAL_ALIGNMENT;
 ejsval _ejs_parseInt EJSVAL_ALIGNMENT;
 ejsval _ejs_parseFloat EJSVAL_ALIGNMENT;
-
-typedef enum {
-    TO_PRIM_HINT_DEFAULT,
-    TO_PRIM_HINT_STRING,
-    TO_PRIM_HINT_NUMBER
-} ToPrimitiveHint;
-ejsval
-ToPrimitive(ejsval inputargument, ToPrimitiveHint PreferredType);
 
 static const size_t UINT32_CHAR_BUFFER_LENGTH = sizeof("4294967295") - 1;
 
@@ -198,6 +191,8 @@ ejsval ToString(ejsval exp)
     else if (EJSVAL_IS_SYMBOL(exp)) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Cannot convert a Symbol value to a string");
     }
+    else if (EJSVAL_IS_BIGINT(exp))
+        return _ejs_bigint_to_ejs_string(exp, 10);
     else if (EJSVAL_IS_OBJECT(exp)) {
         ejsval prim = ToPrimitive(exp, TO_PRIM_HINT_STRING);
         return ToString(prim);
@@ -304,6 +299,9 @@ ejsval ToNumber(ejsval exp)
     }
     else if (EJSVAL_IS_SYMBOL(exp)) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1"); // XXX
+    }
+    else if (EJSVAL_IS_BIGINT(exp)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Cannot convert a BigInt value to a number");
     }
     else if (EJSVAL_IS_UNDEFINED(exp))
         return _ejs_nan;
@@ -432,6 +430,9 @@ ejsval ToObject(ejsval exp)
     else if (EJSVAL_IS_SYMBOL(exp)) {
         return _ejs_symbol_new_object(exp);
     }
+    else if (EJSVAL_IS_BIGINT(exp)) {
+        return _ejs_bigint_new_object(exp);
+    }
     else if (EJSVAL_IS_UNDEFINED(exp)) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1"); // XXX
     }
@@ -459,6 +460,8 @@ EJSBool ToEJSBool(ejsval exp)
         return EJSVAL_TO_STRLEN(exp) != 0;
     else if (EJSVAL_IS_SYMBOL(exp))
         return EJS_TRUE;
+    else if (EJSVAL_IS_BIGINT(exp))
+        return !_ejs_bigint_is_zero(exp);
     else if (EJSVAL_IS_OBJECT(exp))
         return EJS_TRUE;
     else
@@ -604,6 +607,8 @@ SameValue(ejsval x, ejsval y)
         // a. If x and y are both the same Symbol value, then return true; otherwise, return false.
         EJS_NOT_IMPLEMENTED();
     }
+    // BigInt: value comparison
+    if (EJSVAL_IS_BIGINT(x)) return _ejs_bigint_cmp(x, y) == 0 ? EJS_TRUE : EJS_FALSE;
     // 10. Return true if x and y are the same Object value. Otherwise, return false.
     return EJSVAL_EQ(x, y);
 }
@@ -658,6 +663,8 @@ SameValueZero(ejsval x, ejsval y)
         //    a. If x and y are both the same Symbol value, then return true; otherwise, return false.
         EJS_NOT_IMPLEMENTED();
     }
+    // BigInt: value comparison
+    if (EJSVAL_IS_BIGINT(x)) return _ejs_bigint_cmp(x, y) == 0 ? EJS_TRUE : EJS_FALSE;
     // 10. Return true if x and y are the same Object value. Otherwise, return false.
     return EJSVAL_EQ(x, y);
 }
@@ -665,9 +672,14 @@ SameValueZero(ejsval x, ejsval y)
 ejsval
 _ejs_op_neg (ejsval exp)
 {
-    return NUMBER_TO_EJSVAL (-ToDouble(exp));
+    ejsval prim = ToPrimitive(exp, TO_PRIM_HINT_NUMBER);
+    if (EJSVAL_IS_BIGINT(prim))
+        return _ejs_bigint_neg(prim);
+    return NUMBER_TO_EJSVAL (-ToDouble(prim));
 }
 
+// unary + is ToNumber, so it is the one numeric operator that rejects
+// bigints outright
 ejsval
 _ejs_op_plus (ejsval exp)
 {
@@ -684,7 +696,10 @@ _ejs_op_not (ejsval exp)
 ejsval
 _ejs_op_bitwise_not (ejsval val)
 {
-    int32_t val_int = ToInt32(val);
+    ejsval prim = ToPrimitive(val, TO_PRIM_HINT_NUMBER);
+    if (EJSVAL_IS_BIGINT(prim))
+        return _ejs_bigint_bitnot(prim);
+    int32_t val_int = ToInt32(prim);
     return NUMBER_TO_EJSVAL (~val_int);
 }
 
@@ -718,6 +733,12 @@ ejsval
 _ejs_op_typeof_is_symbol(ejsval exp)
 {
     return EJSVAL_IS_SYMBOL(exp) ? _ejs_true : _ejs_false;
+}
+
+ejsval
+_ejs_op_typeof_is_bigint(ejsval exp)
+{
+    return EJSVAL_IS_BIGINT(exp) ? _ejs_true : _ejs_false;
 }
 
 ejsval
@@ -763,6 +784,8 @@ _ejs_op_typeof (ejsval exp)
         return _ejs_atom_string;
     else if (EJSVAL_IS_SYMBOL(exp))
         return _ejs_atom_symbol;
+    else if (EJSVAL_IS_BIGINT(exp))
+        return _ejs_atom_bigint;
     else if (EJSVAL_IS_NUMBER(exp))
         return _ejs_atom_number;
     else if (EJSVAL_IS_UNDEFINED(exp))
@@ -787,54 +810,84 @@ _ejs_op_delete (ejsval obj, ejsval prop)
     return BOOLEAN_TO_EJSVAL(delete_rv);
 }
 
+// ES2020 numeric operators: after ToPrimitive(number hint) a BigInt
+// operand selects the BigInt path; mixing BigInt and anything else in
+// an arithmetic/bitwise operator is a TypeError
+static void throw_bigint_mix (void) __attribute__ ((noreturn));
+static void
+throw_bigint_mix (void)
+{
+    _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Cannot mix BigInt and other types, use explicit conversions");
+}
+
+#define EJS_NUMERIC_BINOP_PRELUDE(bigint_op)                            \
+    ejsval lprim = ToPrimitive(lhs, TO_PRIM_HINT_NUMBER);               \
+    ejsval rprim = ToPrimitive(rhs, TO_PRIM_HINT_NUMBER);               \
+    if (EJSVAL_IS_BIGINT(lprim) || EJSVAL_IS_BIGINT(rprim)) {           \
+        if (!EJSVAL_IS_BIGINT(lprim) || !EJSVAL_IS_BIGINT(rprim))       \
+            throw_bigint_mix();                                         \
+        return bigint_op(lprim, rprim);                                 \
+    }
+
 ejsval
 _ejs_op_mod (ejsval lhs, ejsval rhs)
 {
-    double ld = ToDouble(lhs);
-    double rd = ToDouble(rhs);
+    EJS_NUMERIC_BINOP_PRELUDE(_ejs_bigint_mod);
+    double ld = ToDouble(lprim);
+    double rd = ToDouble(rprim);
     return NUMBER_TO_EJSVAL (fmod(ld, rd));
 }
 
 ejsval
 _ejs_op_bitwise_xor (ejsval lhs, ejsval rhs)
 {
-    int lhs_int = ToInt32(lhs);
-    int rhs_int = ToInt32(rhs);
+    EJS_NUMERIC_BINOP_PRELUDE(_ejs_bigint_bitxor);
+    int lhs_int = ToInt32(lprim);
+    int rhs_int = ToInt32(rprim);
     return NUMBER_TO_EJSVAL (lhs_int ^ rhs_int);
 }
 
 ejsval
 _ejs_op_bitwise_and (ejsval lhs, ejsval rhs)
 {
-    int32_t lhs_int = ToInt32(lhs);
-    int32_t rhs_int = ToInt32(rhs);
+    EJS_NUMERIC_BINOP_PRELUDE(_ejs_bigint_bitand);
+    int32_t lhs_int = ToInt32(lprim);
+    int32_t rhs_int = ToInt32(rprim);
     return NUMBER_TO_EJSVAL (lhs_int & rhs_int);
 }
 
 ejsval
 _ejs_op_bitwise_or (ejsval lhs, ejsval rhs)
 {
-    int32_t lhs_int = ToInt32(lhs);
-    int32_t rhs_int = ToInt32(rhs);
+    EJS_NUMERIC_BINOP_PRELUDE(_ejs_bigint_bitor);
+    int32_t lhs_int = ToInt32(lprim);
+    int32_t rhs_int = ToInt32(rprim);
     return NUMBER_TO_EJSVAL (lhs_int | rhs_int);
 }
 
 ejsval
 _ejs_op_rsh (ejsval lhs, ejsval rhs)
 {
-    return NUMBER_TO_EJSVAL (ToInt32(lhs) >> (ToUint32(rhs) & 0x1f));
+    EJS_NUMERIC_BINOP_PRELUDE(_ejs_bigint_shr);
+    return NUMBER_TO_EJSVAL (ToInt32(lprim) >> (ToUint32(rprim) & 0x1f));
 }
 
 ejsval
 _ejs_op_ursh (ejsval lhs, ejsval rhs)
 {
-    return NUMBER_TO_EJSVAL (ToUint32(lhs) >> (ToUint32(rhs) & 0x1f));
+    ejsval lprim = ToPrimitive(lhs, TO_PRIM_HINT_NUMBER);
+    ejsval rprim = ToPrimitive(rhs, TO_PRIM_HINT_NUMBER);
+    // BigInts have no unsigned right shift (they have no fixed width)
+    if (EJSVAL_IS_BIGINT(lprim) || EJSVAL_IS_BIGINT(rprim))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "BigInts have no unsigned right shift, use >> instead");
+    return NUMBER_TO_EJSVAL (ToUint32(lprim) >> (ToUint32(rprim) & 0x1f));
 }
 
 ejsval
 _ejs_op_lsh (ejsval lhs, ejsval rhs)
 {
-    return NUMBER_TO_EJSVAL ((int32_t)((uint32_t)ToInt32(lhs) << (ToUint32(rhs) & 0x1f)));
+    EJS_NUMERIC_BINOP_PRELUDE(_ejs_bigint_shl);
+    return NUMBER_TO_EJSVAL ((int32_t)((uint32_t)ToInt32(lprim) << (ToUint32(rprim) & 0x1f)));
 }
 
 ejsval
@@ -862,6 +915,11 @@ _ejs_op_add (ejsval lhs, ejsval rhs)
         ejsval result = _ejs_string_concat (lhstring, rhstring);
         rv = result;
     }
+    else if (EJSVAL_IS_BIGINT(lprim) || EJSVAL_IS_BIGINT(rprim)) {
+        if (!EJSVAL_IS_BIGINT(lprim) || !EJSVAL_IS_BIGINT(rprim))
+            throw_bigint_mix();
+        rv = _ejs_bigint_add(lprim, rprim);
+    }
     else {
         rv = NUMBER_TO_EJSVAL (ToDouble(lprim) + ToDouble(rprim));
     }
@@ -869,11 +927,40 @@ _ejs_op_add (ejsval lhs, ejsval rhs)
     return rv;
 }
 
+// ToNumeric (7.1.3): bigints pass through, everything else ToNumber
+ejsval
+_ejs_op_to_numeric (ejsval exp)
+{
+    ejsval prim = ToPrimitive(exp, TO_PRIM_HINT_NUMBER);
+    if (EJSVAL_IS_BIGINT(prim)) return prim;
+    return ToNumber(prim);
+}
+
+// ++/--: the operand is already numeric (to_numeric ran); the constant
+// 1 rides as a Number and converts here per the operand's type, so
+// bigint increments stay in-type instead of hitting the mixing error
+ejsval
+_ejs_op_add_update (ejsval lhs, ejsval rhs)
+{
+    if (EJSVAL_IS_BIGINT(lhs))
+        return _ejs_bigint_add(lhs, _ejs_bigint_new_from_int64((int64_t)ToDouble(rhs)));
+    return NUMBER_TO_EJSVAL(ToDouble(lhs) + ToDouble(rhs));
+}
+
+ejsval
+_ejs_op_sub_update (ejsval lhs, ejsval rhs)
+{
+    if (EJSVAL_IS_BIGINT(lhs))
+        return _ejs_bigint_sub(lhs, _ejs_bigint_new_from_int64((int64_t)ToDouble(rhs)));
+    return NUMBER_TO_EJSVAL(ToDouble(lhs) - ToDouble(rhs));
+}
+
 ejsval
 _ejs_op_mult (ejsval lhs, ejsval rhs)
 {
-    double ld = ToDouble(lhs);
-    double rd = ToDouble(rhs);
+    EJS_NUMERIC_BINOP_PRELUDE(_ejs_bigint_mul);
+    double ld = ToDouble(lprim);
+    double rd = ToDouble(rprim);
     return NUMBER_TO_EJSVAL (ld * rd);
 }
 
@@ -892,17 +979,43 @@ _ejs_number_exponentiate (double base, double exponent)
 ejsval
 _ejs_op_exp (ejsval lhs, ejsval rhs)
 {
-    double ld = ToDouble(lhs);
-    double rd = ToDouble(rhs);
+    EJS_NUMERIC_BINOP_PRELUDE(_ejs_bigint_pow);
+    double ld = ToDouble(lprim);
+    double rd = ToDouble(rprim);
     return NUMBER_TO_EJSVAL (_ejs_number_exponentiate(ld, rd));
 }
 
 ejsval
 _ejs_op_div (ejsval lhs, ejsval rhs)
 {
-    double ld = ToDouble(lhs);
-    double rd = ToDouble(rhs);
+    EJS_NUMERIC_BINOP_PRELUDE(_ejs_bigint_div);
+    double ld = ToDouble(lprim);
+    double rd = ToDouble(rprim);
     return NUMBER_TO_EJSVAL (ld / rd);
+}
+
+// mixed relational with at least one bigint operand (both already
+// primitives): -1/0/1, or 2 for unordered (NaN / unparseable string)
+static int
+bigint_relational (ejsval l, ejsval r)
+{
+    if (EJSVAL_IS_BIGINT(l) && EJSVAL_IS_BIGINT(r))
+        return _ejs_bigint_cmp(l, r);
+    if (EJSVAL_IS_BIGINT(l)) {
+        if (EJSVAL_IS_STRING(r)) {
+            ejsval rb = _ejs_bigint_from_string(r);
+            if (!EJSVAL_IS_BIGINT(rb)) return 2;
+            return _ejs_bigint_cmp(l, rb);
+        }
+        return _ejs_bigint_cmp_double(l, ToDouble(r));
+    }
+    if (EJSVAL_IS_STRING(l)) {
+        ejsval lb = _ejs_bigint_from_string(l);
+        if (!EJSVAL_IS_BIGINT(lb)) return 2;
+        return _ejs_bigint_cmp(lb, r);
+    }
+    int c = _ejs_bigint_cmp_double(r, ToDouble(l));
+    return c == 2 ? 2 : -c;
 }
 
 ejsval
@@ -926,6 +1039,11 @@ _ejs_op_lt_ejsbool (ejsval lhs, ejsval rhs)
         return ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lstr), EJSVAL_TO_FLAT_STRING(rstr)) < 0;
     }
 
+    if (EJSVAL_IS_BIGINT(lprim) || EJSVAL_IS_BIGINT(rprim)) {
+        int c = bigint_relational(lprim, rprim);
+        return c == -1;
+    }
+
     return ToDouble(lprim) < ToDouble(rprim);
 }
 
@@ -942,6 +1060,11 @@ _ejs_op_le (ejsval lhs, ejsval rhs)
         ejsval rstr = ToString(rprim);
 
         return BOOLEAN_TO_EJSVAL (ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lstr), EJSVAL_TO_FLAT_STRING(rstr)) <= 0);
+    }
+
+    if (EJSVAL_IS_BIGINT(lprim) || EJSVAL_IS_BIGINT(rprim)) {
+        int c = bigint_relational(lprim, rprim);
+        return BOOLEAN_TO_EJSVAL(c == -1 || c == 0);
     }
 
     return BOOLEAN_TO_EJSVAL(ToDouble(lprim) <= ToDouble(rprim));
@@ -962,6 +1085,11 @@ _ejs_op_gt (ejsval lhs, ejsval rhs)
         return BOOLEAN_TO_EJSVAL (ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lstr), EJSVAL_TO_FLAT_STRING(rstr)) > 0);
     }
 
+    if (EJSVAL_IS_BIGINT(lprim) || EJSVAL_IS_BIGINT(rprim)) {
+        int c = bigint_relational(lprim, rprim);
+        return BOOLEAN_TO_EJSVAL(c == 1);
+    }
+
     return BOOLEAN_TO_EJSVAL(ToDouble(lprim) > ToDouble(rprim));
 }
 
@@ -980,14 +1108,20 @@ _ejs_op_ge (ejsval lhs, ejsval rhs)
         return BOOLEAN_TO_EJSVAL (ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lstr), EJSVAL_TO_FLAT_STRING(rstr)) >= 0);
     }
 
+    if (EJSVAL_IS_BIGINT(lprim) || EJSVAL_IS_BIGINT(rprim)) {
+        int c = bigint_relational(lprim, rprim);
+        return BOOLEAN_TO_EJSVAL(c == 0 || c == 1);
+    }
+
     return BOOLEAN_TO_EJSVAL(ToDouble(lprim) >= ToDouble(rprim));
 }
 
 ejsval
 _ejs_op_sub (ejsval lhs, ejsval rhs)
 {
-    double ld = ToDouble(lhs);
-    double rd = ToDouble(rhs);
+    EJS_NUMERIC_BINOP_PRELUDE(_ejs_bigint_sub);
+    double ld = ToDouble(lprim);
+    double rd = ToDouble(rprim);
     return NUMBER_TO_EJSVAL(ld - rd);
 }
 
@@ -1029,6 +1163,10 @@ _ejs_op_strict_eq (ejsval x, ejsval y)
     // 7. If x and y are the same Symbol value, return true.
     if (EJSVAL_IS_SYMBOL(x)) {
         return BOOLEAN_TO_EJSVAL(EJSVAL_EQ(x,y)); // XXX is this sufficient?
+    }
+    // BigInt::equal — value comparison, not identity
+    if (EJSVAL_IS_BIGINT(x)) {
+        return BOOLEAN_TO_EJSVAL(_ejs_bigint_cmp(x, y) == 0);
     }
     // 8. If x and y are the same Object value, return true.
     // 9. Return false.
@@ -1072,11 +1210,21 @@ _ejs_op_eq (ejsval x, ejsval y)
     // 9. If Type(y) is Boolean, return the result of the comparison x == ToNumber(y).
     if (EJSVAL_IS_BOOLEAN(y)) return _ejs_op_eq(x, ToNumber(y));
 
-    // 10. If Type(x) is either String, Number, or Symbol and Type(y) is Object, return the result of the comparison x == ToPrimitive(y).
-    if ((EJSVAL_IS_STRING(x) || EJSVAL_IS_NUMBER(x) || EJSVAL_IS_SYMBOL(x)) && EJSVAL_IS_OBJECT(y)) return _ejs_op_eq(x, ToPrimitive(y, TO_PRIM_HINT_DEFAULT));
+    // ES2020 steps 8-10: BigInt loose equality across types
+    if (EJSVAL_IS_BIGINT(x) && EJSVAL_IS_STRING(y)) return BOOLEAN_TO_EJSVAL(_ejs_bigint_equals_string(x, y));
+    if (EJSVAL_IS_STRING(x) && EJSVAL_IS_BIGINT(y)) return BOOLEAN_TO_EJSVAL(_ejs_bigint_equals_string(y, x));
+    if (EJSVAL_IS_BIGINT(x) && EJSVAL_IS_NUMBER(y)) {
+        double d = EJSVAL_TO_NUMBER(y);
+        if (isnan(d) || isinf(d)) return _ejs_false;
+        return BOOLEAN_TO_EJSVAL(_ejs_bigint_cmp_double(x, d) == 0);
+    }
+    if (EJSVAL_IS_NUMBER(x) && EJSVAL_IS_BIGINT(y)) return _ejs_op_eq(y, x);
 
-    // 11. If Type(x) is Object and Type(y) is either String, Number, or Symbol, return the result of the comparison ToPrimitive(x) == y.
-    if (EJSVAL_IS_OBJECT(x) && (EJSVAL_IS_STRING(y) || EJSVAL_IS_NUMBER(y) || EJSVAL_IS_SYMBOL(y))) return _ejs_op_eq(ToPrimitive(x, TO_PRIM_HINT_DEFAULT), y);
+    // 10. If Type(x) is either String, Number, BigInt, or Symbol and Type(y) is Object, return the result of the comparison x == ToPrimitive(y).
+    if ((EJSVAL_IS_STRING(x) || EJSVAL_IS_NUMBER(x) || EJSVAL_IS_SYMBOL(x) || EJSVAL_IS_BIGINT(x)) && EJSVAL_IS_OBJECT(y)) return _ejs_op_eq(x, ToPrimitive(y, TO_PRIM_HINT_DEFAULT));
+
+    // 11. If Type(x) is Object and Type(y) is either String, Number, BigInt, or Symbol, return the result of the comparison ToPrimitive(x) == y.
+    if (EJSVAL_IS_OBJECT(x) && (EJSVAL_IS_STRING(y) || EJSVAL_IS_NUMBER(y) || EJSVAL_IS_SYMBOL(y) || EJSVAL_IS_BIGINT(y))) return _ejs_op_eq(ToPrimitive(x, TO_PRIM_HINT_DEFAULT), y);
 
     // 12. Return false.
     return _ejs_false;

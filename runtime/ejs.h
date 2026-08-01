@@ -74,6 +74,7 @@ typedef int32_t EJSBool;
 
 typedef struct _EJSPrimString EJSPrimString;
 typedef struct _EJSPrimSymbol EJSPrimSymbol;
+typedef struct _EJSBigInt EJSBigInt;
 typedef struct _EJSClosureEnv EJSClosureEnv;
 typedef struct _EJSObject EJSObject;
 

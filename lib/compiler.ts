@@ -679,17 +679,21 @@ class LLVMIRVisitor implements VisitorSurface {
 
     // EJSVAL_IS_OBJECT: object is the topmost shifted tag, so on 64-bit a
     // single unsigned compare suffices (mirrors EJSVAL_IS_OBJECT_IMPL)
+    // NOTE: OBJECT must stay the maximum ejsval tag (BigInt slotted in
+    // below it) — this constant is SHIFTED_TAG_OBJECT and the check is >=
     isObject(val: llvm.Value): llvm.Value {
         if (this.triple.pointerSize() === 64) {
             return ir.createICmpUGE(
                 this.getEjsvalBits(val),
-                consts.int64_lowhi(0xfffc8000, 0x00000000),
+                // SHIFTED_TAG_OBJECT (tag 0x1FFFA — object moved up when
+                // BIGINT took 0x09)
+                consts.int64_lowhi(0xfffd0000, 0x00000000),
                 "isobj"
             );
         } else {
             // 32-bit: tag compare, the isNumber trunc convention
             let trunc = ir.createTrunc(this.getEjsvalBits(val), types.Int32, "trunc.i");
-            return ir.createICmpEq(trunc, consts.int32(-119) /* 0xFFFFFF89 */, "isobj");
+            return ir.createICmpEq(trunc, consts.int32(-118) /* 0xFFFFFF8A */, "isobj");
         }
     }
 

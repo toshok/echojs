@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "ejs-ops.h"
+#include "ejs-bigint.h"
 #include "ejs-value.h"
 #include "ejs-number.h"
 #include "ejs-function.h"
@@ -27,10 +28,14 @@ static EJS_NATIVE_FUNC(_ejs_Number_impl) {
     // 1. If no arguments were passed to this function invocation, let n be +0.
     if (argc == 0)
         n = 0;
-    // 2. Else, let n be ToNumber(value).
+    // 2. Else, let prim be ToNumeric(value): the Number constructor is
+    //    the one ToNumber caller that CONVERTS bigints instead of
+    //    throwing (ES2020 Number(value) step 1.a).
     // 3. ReturnIfAbrupt(n).
-    else
-        n = ToDouble(args[0]);
+    else {
+        ejsval prim = _ejs_op_to_numeric(args[0]);
+        n = EJSVAL_IS_BIGINT(prim) ? _ejs_bigint_to_double(prim) : EJSVAL_TO_NUMBER(prim);
+    }
 
     // 4. If NewTarget is undefined, return n.
     if (EJSVAL_IS_UNDEFINED(newTarget)) return NUMBER_TO_EJSVAL(n);

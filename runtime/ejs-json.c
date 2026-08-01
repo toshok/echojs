@@ -15,6 +15,8 @@
 #include "ejs-string.h"
 #include "ejs-boolean.h"
 #include "ejs-symbol.h"
+#include "ejs-bigint.h"
+#include "ejs-error.h"
 #include "external-deps/parson/parson.h"
 
 ejsval _ejs_JSON EJSVAL_ALIGNMENT;
@@ -524,6 +526,9 @@ SerializeJSONProperty(StringifyState* state, ejsval key, ejsval holder) {
         else
             return _ejs_atom_null;
     }
+    // ES2020: BigInts have no JSON representation
+    if (EJSVAL_IS_BIGINT(value))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Do not know how to serialize a BigInt");
     // 11. If Type(value) is Object, and IsCallable(value) is false, then
     if (EJSVAL_IS_OBJECT(value) && !IsCallable(value)) {
         // a. Let isArray be IsArray(value).

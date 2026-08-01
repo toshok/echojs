@@ -67,6 +67,7 @@ export const eir_intrinsics: Record<string, IntrinsicEntry> = {
 
     // DesugarSpread / DesugarDestructuring: object spread + object rest
     "%copyDataProps": { runtime: "copy_data_properties" },
+    "%bigintFromLiteral": { runtime: "bigint_from_literal" },
     "%objectSpreadMerge": { runtime: "object_spread_merge" },
 
     // DesugarClasses: class fields + private members

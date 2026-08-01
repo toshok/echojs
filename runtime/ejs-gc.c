@@ -282,6 +282,7 @@ static int num_object_allocs = 0;
 static int num_closureenv_allocs = 0;
 static int num_primstr_allocs = 0;
 static int num_primsym_allocs = 0;
+static int num_bigint_allocs = 0;
 
 int total_allocs = 0;
 
@@ -336,6 +337,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     case EJS_SCAN_TYPE_PRIMSYM: num_primsym_allocs ++; break;
     case EJS_SCAN_TYPE_OBJECT: num_object_allocs ++; break;
     case EJS_SCAN_TYPE_CLOSUREENV: num_closureenv_allocs ++; break;
+    case EJS_SCAN_TYPE_BIGINT: num_bigint_allocs ++; break;
     }
 
     int bucket;

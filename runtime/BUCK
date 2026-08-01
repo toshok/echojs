@@ -165,6 +165,21 @@ cxx_library(
     visibility = ["PUBLIC"],
 )
 
+# BigInt over the vendored v8-bigint library (C++20 like the library);
+# merged into libecho.a by //:srcdir-tree, same as echo-dtoa.
+cxx_library(
+    name = "echo-bigint",
+    srcs = ["ejs-bigint.cpp"],
+    header_namespace = "",
+    compiler_flags = EJS_COMPILER_FLAGS + ["-std=c++20"],
+    preferred_linkage = "static",
+    deps = [
+        ":echo",
+        "//external-deps:v8-bigint",
+    ],
+    visibility = ["PUBLIC"],
+)
+
 # The prelude's system cxx toolchain can't compile .m files, so alias them
 # to .c and force the language with -x objective-c.  The resulting archive
 # is merged into libecho.a by //:srcdir-tree (libtool -static).

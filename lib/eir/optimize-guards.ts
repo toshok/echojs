@@ -121,8 +121,10 @@ import { passes } from "../pass-config";
 // (see the soundness inventory above)
 const SLOW_OPS = new Set(["add", "sub", "mul", "div", "lt"]);
 
-// generic ops whose RESULT is always a number (ES + runtime/ejs-ops.c)
-const NUMBER_RESULT_OPS = new Set(["mul", "div", "sub"]);
+// generic ops that return a number exactly when their operands are
+// numbers (bigint operands produce bigint results, so number-ness must
+// be proven through the operands, as with "add")
+const NUMERIC_OPS = new Set(["mul", "div", "sub"]);
 
 function isNumberGuard(inst: Inst): boolean {
     return inst.op === "has_tag" && inst.imms["tag"] === "number";
@@ -227,9 +229,17 @@ function provenNumberAt(
 ): boolean {
     if (v.op === "const") return v.imms["kind"] === "number";
     if (v.op === "box_f64") return true;
-    if (NUMBER_RESULT_OPS.has(v.op)) return true;
     if (guardFactAt(v, block, idom)) return true;
     if (depth <= 0) return false;
+    // one proven-number operand suffices for the numeric ops: mixing
+    // BigInt with anything else throws, so a completing op with a
+    // number operand produced a number.  add still needs both (string
+    // concatenation).
+    if (NUMERIC_OPS.has(v.op))
+        return (
+            provenNumberAt(v.operands[0]!, block, idom, depth - 1) ||
+            provenNumberAt(v.operands[1]!, block, idom, depth - 1)
+        );
     if (v.op === "add")
         return (
             provenNumberAt(v.operands[0]!, block, idom, depth - 1) &&

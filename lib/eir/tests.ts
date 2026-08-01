@@ -1381,12 +1381,12 @@ test("guard-merge: hypot2 becomes one guard region with one slow path", () => {
     assert(countOps(fn, "has_tag") === 2, `has_tag = ${countOps(fn, "has_tag")}`);
     const ft = guardFalseTargets(fn);
     assert(ft.size === 1, `guard-failure targets = ${ft.size}`);
-    // the generic muls survive on the (single) slow path; the slow add
-    // is lattice-lowered afterwards (mul results are proven numbers —
-    // cleanup.ts), so the ToNumber/throw behavior the slow path owes is
-    // exactly the muls'
+    // the generic muls survive on the (single) slow path, and so does
+    // the slow add: with BigInt, untyped mul results may legally be
+    // bigints (hypot2(1n, 2n) is 5n), so cleanup.ts may no longer
+    // lattice-lower the add over them
     assert(countOps(fn, "mul") === 2, "generic muls must survive");
-    assert(countOps(fn, "add") === 0, `slow add lowers to f64, saw ${countOps(fn, "add")}`);
+    assert(countOps(fn, "add") === 1, `slow add stays generic, saw ${countOps(fn, "add")}`);
 });
 
 test("guard-merge: merged fast region is unboxed end-to-end, boxing once", () => {
@@ -1394,11 +1394,11 @@ test("guard-merge: merged fast region is unboxed end-to-end, boxing once", () =>
         "function hypot2(a, b) { return a * a + b * b; }",
         numericStubOracle(["a", "b"])
     );
-    // one box at the region exit, one more where cleanup.ts lowers the
-    // slow path's add over the (proven-number) mul results; the region
-    // INPUTS unbox on the fast side, the mul results on the slow side
-    assert(countOps(fn, "box_f64") === 2, `box_f64 = ${countOps(fn, "box_f64")}`);
-    assert(countOps(fn, "unbox_f64") === 6, `unbox_f64 = ${countOps(fn, "unbox_f64")}`);
+    // one box at the region exit; the slow path stays fully generic
+    // (its mul results may be bigints, so its add can't f64-lower),
+    // leaving the fast region's two input unboxes plus their twins
+    assert(countOps(fn, "box_f64") === 1, `box_f64 = ${countOps(fn, "box_f64")}`);
+    assert(countOps(fn, "unbox_f64") <= 6, `unbox_f64 = ${countOps(fn, "unbox_f64")}`);
     // intermediate joins carry raw f64 params (the optimizer-scoped lift
     // of the P2 boxed-edges rule), all marked for the verifier
     let rawParams = 0;

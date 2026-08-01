@@ -51,8 +51,12 @@ export const OPS = {
     const: { arity: 0, effects: E.NONE, imms: ["kind", "value"] },
 
     // --- generic (high tier) operators ------------------------------------
-    add: { arity: 2, effects: GENERIC_OP },
-    sub: { arity: 2, effects: GENERIC_OP },
+    // add/sub carry an optional `update` imm from ++/-- lowering: the
+    // generic emission then calls the increment-flavored runtime entry
+    // (BigInt::add(x, 1n) instead of the mixed-operand TypeError); typed
+    // paths and folds see the ordinary op
+    add: { arity: 2, effects: GENERIC_OP, imms: ["update"] },
+    sub: { arity: 2, effects: GENERIC_OP, imms: ["update"] },
     mul: { arity: 2, effects: GENERIC_OP },
     div: { arity: 2, effects: GENERIC_OP },
     mod: { arity: 2, effects: GENERIC_OP },
@@ -73,6 +77,8 @@ export const OPS = {
     in: { arity: 2, effects: GENERIC_OP },
     neg: { arity: 1, effects: GENERIC_OP },
     unary_plus: { arity: 1, effects: GENERIC_OP },
+    // ToNumeric: like unary_plus but bigints pass through (++/--)
+    to_numeric: { arity: 1, effects: GENERIC_OP },
     bitnot: { arity: 1, effects: GENERIC_OP },
 
     // pure predicates / conversions

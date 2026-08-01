@@ -164,7 +164,23 @@ function adaptNode(n: Node): void {
             break;
         }
         case "Literal":
-            if (n["bigint"] != null) notSupported(n, "BigInt literal syntax");
+            // BigInt literals: acorn stores the source digits (minus the
+            // trailing n, prefix and separators included) in `bigint`,
+            // and `value` only when the HOST has BigInt — the self-hosted
+            // parse leaves it null, so the digit string is the one
+            // portable representation.  Transmute into the runtime-parse
+            // intrinsic call in place.
+            if (n["bigint"] != null) {
+                const digits = String(n["bigint"]);
+                n.type = "CallExpression";
+                n["callee"] = { type: "Identifier", name: "%bigintFromLiteral" };
+                n["arguments"] = [
+                    { type: "Literal", value: digits, raw: JSON.stringify(digits) },
+                ];
+                delete n["bigint"];
+                delete n["value"];
+                delete n["raw"];
+            }
             break;
         case "ImportExpression":
             notSupported(n, "dynamic import()");

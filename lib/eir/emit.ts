@@ -1416,11 +1416,20 @@ export class EIREmitter {
                 return this.emitCallLike(inst, callee, argv, "rtres");
             }
 
+            case "to_numeric":
+                return this.emitCallLike(inst, rt.op_to_numeric, [this.val(inst.operands[0])], "tonum");
+
             default: {
                 // generic binops / unops through the runtime interfaces
                 let binop = binop_for_op[inst.op];
                 if (binop) {
-                    let callee = this.v.ejs_binops[binop];
+                    // ++/-- adds carry the update imm: the increment-
+                    // flavored entries keep BigInt in-type instead of
+                    // throwing the mixed-operand TypeError
+                    let callee =
+                        inst.imms["update"] && inst.op === "add" ? rt.op_add_update :
+                        inst.imms["update"] && inst.op === "sub" ? rt.op_sub_update :
+                        this.v.ejs_binops[binop];
                     if (!callee) throw new Error(`EIR emit: no binop interface for ${binop}`);
                     return this.emitCallLike(
                         inst,

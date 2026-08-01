@@ -30,7 +30,9 @@ NC_A="${14}"       # //node-compat:node-compat[static]
 LLVM_EJS="${15}"   # //ejs-llvm:ejs-llvm.ejs
 LLVM_A="${16}"     # //ejs-llvm:ejs-llvm[static]
 DTOA_A="${17}"     # //runtime:echo-dtoa[static]
-OBJC_A="${18}"     # //runtime:echo-objc[static] on macos, "-" elsewhere
+BIGINT_A="${18}"   # //runtime:echo-bigint[static]
+V8BIGINT_A="${19}" # //external-deps:v8-bigint[static]
+OBJC_A="${20}"     # //runtime:echo-objc[static] on macos, "-" elsewhere
 
 mkdir -p "$OUT"
 ROOT="$(cd "$OUT" && pwd)"
@@ -42,7 +44,7 @@ mkdir -p "$ROOT/runtime/out/$TRIPLE"
 cp -RL "$HDRS"/. "$ROOT/runtime/"
 LIB="$ROOT/runtime/out/$TRIPLE/libecho.a"
 cp "$ICC_O" "$TMP/ejs-invoke-closure-catch.o"
-ARCHIVES=("$LIBECHO" "$DTOA_A")
+ARCHIVES=("$LIBECHO" "$DTOA_A" "$BIGINT_A" "$V8BIGINT_A")
 if [ "$OBJC_A" != "-" ]; then
     ARCHIVES+=("$OBJC_A")
 fi
