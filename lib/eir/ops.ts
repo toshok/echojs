@@ -103,7 +103,7 @@ export const OPS = {
     // imms.fn = the EIR function to target; imms.name = the source-level
     // display name (Function.prototype.name) — the internal fn name is
     // scope-qualified and must not leak
-    make_closure: { arity: 1, effects: E.GC, imms: ["fn", "name"] },
+    make_closure: { arity: 1, effects: E.GC, imms: ["fn", "name", "len"] },
 
     // --- modules -------------------------------------------------------------
     module_slot_load: { arity: 0, effects: E.READ, imms: ["module", "slot"] },

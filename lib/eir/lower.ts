@@ -181,7 +181,27 @@ const binops: Record<string, string | undefined> = {
 // the function\'s own id, or "" for anonymous functions — never the
 // scope-qualified EIR name
 function displayNameOf(childInfo: FnInfo): string {
+    // ejs_display_name carries the spec .name when it differs from the
+    // id (class methods' ids are qualified LLVM names, NamedEvaluation
+    // names anonymous functions after their binding/property)
+    const display = (childInfo.node as unknown as Record<string, unknown>)["ejs_display_name"];
+    if (typeof display === "string") return display;
     return (childInfo.node.id && childInfo.node.id.name) || "";
+}
+
+// the function's spec .length.  The parser records it before the desugar
+// passes rewrite param lists (`ejs_fn_length`); synthesized functions
+// (and the esprima fallback) get the count of leading no-default,
+// non-rest formals as seen here.
+function specFnLength(n: e.Function): number {
+    const recorded = (n as unknown as Record<string, unknown>)["ejs_fn_length"];
+    if (typeof recorded === "number") return recorded;
+    let count = 0;
+    for (let i = 0; i < n.params.length; i++) {
+        if (n.params[i]!.type === "RestElement" || (n.defaults && n.defaults[i]) != null) break;
+        count++;
+    }
+    return count;
 }
 
 class LowerFunction {
@@ -350,6 +370,7 @@ class LowerFunction {
                 let closure = this.b.emit("make_closure", [this.curEnv], {
                     fn: childInfo.name,
                     name: displayNameOf(childInfo),
+                    len: specFnLength(childInfo.node),
                 });
                 this.writeBinding(binding, closure);
             }
@@ -785,6 +806,7 @@ class LowerFunction {
         return this.b.emit("make_closure", [this.curEnvValue()], {
             fn: childInfo.name,
             name: displayNameOf(childInfo),
+            len: specFnLength(childInfo.node),
         });
     }
 
@@ -1690,6 +1712,7 @@ class LowerFunction {
                     let closure = this.b.emit("make_closure", [this.curEnvValue()], {
                         fn: childInfo.name,
                         name: displayNameOf(childInfo),
+                        len: specFnLength(childInfo.node),
                     });
                     this.writeModuleSlotInit(n.id, closure);
                     return;

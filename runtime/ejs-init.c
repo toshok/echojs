@@ -354,6 +354,9 @@ _ejs_init(int argc, char** argv)
     _ejs_object_setprop (_ejs_global, _ejs_atom_undefined, _ejs_undefined);
     _ejs_object_setprop (_ejs_global, _ejs_atom_NaN, _ejs_nan);
     _ejs_object_setprop (_ejs_global, _ejs_atom_Infinity, _ejs_Infinity);
+    // ES2020 globalThis (writable+configurable, non-enumerable)
+    _ejs_object_define_value_property (_ejs_global, _ejs_atom_globalThis, _ejs_global,
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
     _ejs_object_setprop (_ejs_global, _ejs_atom_eval, _ejs_function_new_native (_ejs_undefined, _ejs_atom_eval, _ejs_eval));
 
 

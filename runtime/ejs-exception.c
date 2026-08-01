@@ -178,10 +178,22 @@ static void _ejs_exception_destructor(void *exc_gen) {
 }
 
 
+// the most recently thrown value, so the terminate handler can print
+// something useful for an uncaught exception (the cxa machinery doesn't
+// hand the payload back at terminate time)
+static ejsval _ejs_last_thrown_val EJSVAL_ALIGNMENT;
+static EJSBool _ejs_last_thrown_rooted = EJS_FALSE;
+
 void _ejs_exception_throw(ejsval val)
 {
-    struct ejs_exception *exc = 
+    struct ejs_exception *exc =
         (struct ejs_exception*)__cxa_allocate_exception(sizeof(struct ejs_exception));
+
+    if (!_ejs_last_thrown_rooted) {
+        _ejs_gc_add_root(&_ejs_last_thrown_val);
+        _ejs_last_thrown_rooted = EJS_TRUE;
+    }
+    _ejs_last_thrown_val = val;
 
     exc->val = val;
     // need to root the exception until it's caught
@@ -276,7 +288,18 @@ static void _ejs_terminate(void)
     }
     else {
         // for right now assume that we got here from an ejs exception.
-        _ejs_log ("unhandled exception: \n");
+        // ToString can run user code (or throw); the guard keeps a
+        // failure here from recursing back into terminate
+        static EJSBool printing = EJS_FALSE;
+        if (!printing && !EJSVAL_IS_UNDEFINED(_ejs_last_thrown_val)) {
+            printing = EJS_TRUE;
+            ejsval str = ToString(_ejs_last_thrown_val);
+            char* utf8 = _ejs_string_to_utf8(_ejs_string_flatten(str));
+            _ejs_log ("unhandled exception: %s\n", utf8);
+            free (utf8);
+        } else {
+            _ejs_log ("unhandled exception: \n");
+        }
         _ejs_log ("trace:\n");
 
         void* callstack[128];

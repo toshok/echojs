@@ -474,8 +474,12 @@ export class DesugarClasses extends TransformPass {
                 privDecls.push(b.letDeclaration(info.mapId!, intrinsic(makePrivateMap_id, [])));
         });
         for (const el of priv_method_elements) {
-            const info = privScope.get((el.key as e.PrivateIdentifier).name)!;
+            const privName = (el.key as e.PrivateIdentifier).name;
+            const info = privScope.get(privName)!;
             const fnId = el.kind === "get" ? info.getFnId! : el.kind === "set" ? info.setFnId! : info.fnId!;
+            // spec .name: "#m" (accessors: "get #m"/"set #m")
+            const prefix = el.kind === "get" || el.kind === "set" ? `${el.kind} ` : "";
+            (el.value as unknown as Record<string, unknown>)["ejs_display_name"] = `${prefix}#${privName}`;
             privDecls.push(b.letDeclaration(fnId, el.value));
         }
 
@@ -864,6 +868,9 @@ export class DesugarClasses extends TransformPass {
         // b.functionExpression hardcodes generator: false — losing the
         // flag here left `*method() {}` yields undesugared
         method.generator = ast_method.value.generator;
+        // the qualified id is the LLVM symbol; .name is the bare key
+        if (!ast_method.computed)
+            (method as unknown as Record<string, unknown>)["ejs_display_name"] = method_name;
 
         const Object_defineProperty = b.memberExpression(Object_id, defineProperty_id);
         // spec method attributes: writable, non-enumerable, configurable

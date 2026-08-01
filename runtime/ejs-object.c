@@ -954,6 +954,10 @@ collect_keys (ejsval objval, int *num, int *alloc, ejsval **keys)
         ejsval names[256];
         _ejs_shape_fields (shape, names);
         for (uint32_t i = 0; i < nfields; i ++) {
+            // for..in enumerates string keys only (symbol-named fields
+            // like the weak-collection inverted-rep slot stay hidden)
+            if (!EJSVAL_IS_STRING(names[i]))
+                continue;
             if (!name_in_keys (names[i], *keys, *num)) {
                 if (*num == *alloc-1) {
                     (*alloc) += 10;
@@ -967,6 +971,9 @@ collect_keys (ejsval objval, int *num, int *alloc, ejsval **keys)
     }
 
     for (_EJSPropertyMapEntry *s = obj->map->head_insert; s; s = s->next_insert) {
+        // string keys only, as above
+        if (!EJSVAL_IS_STRING(s->name))
+            continue;
         if (_ejs_property_desc_is_enumerable (s->desc) && !name_in_keys (s->name, *keys, *num)) {
             if (*num == *alloc-1) {
                 // we need to reallocate
@@ -2327,7 +2334,10 @@ static EJS_NATIVE_FUNC(_ejs_Object_prototype_hasOwnProperty) {
     if (EJS_UNLIKELY(argc > 0))
         needle = args[0];
 
-    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(*_this),GetOwnProperty)(*_this, needle, NULL) != NULL);
+    // ToObject(this) — a null/undefined receiver is a TypeError, and
+    // primitives get their wrapper's properties
+    ejsval O = ToObject(*_this);
+    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(O),GetOwnProperty)(O, needle, NULL) != NULL);
 }
 
 // ECMA262: 15.2.4.6

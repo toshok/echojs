@@ -54,8 +54,10 @@ function bindTarget(
         );
     }
 
-    if (target.type === "Identifier") {
-        bindings.push({ key: target, value: value });
+    // member expressions are valid targets in assignment position only
+    // (`[a.b] = arr`); the parser keeps them out of declarations
+    if (target.type === "Identifier" || target.type === "MemberExpression") {
+        bindings.push({ key: target as e.Identifier | e.Pattern, value: value });
         return;
     }
 
@@ -86,14 +88,16 @@ function createObjectPatternBindings(
 
     for (const prop of pattern.properties) {
         if (prop.type === "RestElement") {
-            bindings.push({
-                key: prop.argument as e.Pattern,
-                value: intrinsic(copyDataProps_id, [
+            bindTarget(
+                prop.argument as e.Pattern,
+                intrinsic(copyDataProps_id, [
                     b.objectExpression([]),
                     b.identifier(id.name),
                     b.arrayExpression(excluded.slice()),
                 ]),
-            });
+                null,
+                bindings
+            );
             continue;
         }
 
@@ -163,17 +167,22 @@ function createArrayPatternBindingsUsingIterator(
             );
 
         if (el == null) {
-            bindings.push({ key: fresh() /*unused*/, value: nextValue() });
+            // elision: consume the iterator slot into a declared throwaway
+            // (assignment position emits undeclared temps otherwise)
+            bindings.push({ key: fresh() /*unused*/, value: nextValue(), need_decl: true });
         } else if (el.type === "SpreadElement" || el.type === "RestElement") {
             // declaration-position rests parse as SpreadElement,
-            // assignment-position ones as RestElement
-            bindings.push({
-                key: el.argument as e.Pattern,
-                value: b.callExpression(
+            // assignment-position ones as RestElement; the target can
+            // itself be a pattern ([...[a, b]]) — bindTarget recurses
+            bindTarget(
+                el.argument as e.Pattern,
+                b.callExpression(
                     b.memberExpression(b.identifier(wrapper_id.name), getRest_id),
                     []
                 ),
-            });
+                null,
+                bindings
+            );
             seen_spread = true;
         } else {
             let target: e.Pattern = el;
@@ -281,6 +290,19 @@ export class DesugarDestructuring extends TransformPass {
             } else if (p.type === "RestElement" && p.argument.type === "Identifier") {
                 // a trailing ...rest stays in place (EIR handles it natively)
                 new_params.push(p);
+            } else if (p.type === "RestElement") {
+                // ...[a, b] / ...{x}: collect into a fresh rest id, then
+                // destructure it at the top of the body
+                const r_id = fresh();
+                new_params.push(b.restElement(r_id));
+                const bindings: Binding[] = [];
+                bindTarget(p.argument as e.Pattern, b.identifier(r_id.name), null, bindings);
+                new_decls.push(
+                    b.variableDeclaration(
+                        "let",
+                        bindings.map((binding) => b.variableDeclarator(binding.key, binding.value))
+                    )
+                );
             } else {
                 throw new Error(
                     `unhandled type of formal parameter in DesugarDestructuring ${p.type}`

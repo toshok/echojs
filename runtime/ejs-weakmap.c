@@ -181,7 +181,9 @@ static EJS_NATIVE_FUNC(_ejs_WeakMap_prototype_set) {
     ejsval imap = _ejs_object_getprop(key, _ejs_WeakMapData_symbol);
     if (EJSVAL_IS_NULL_OR_UNDEFINED(imap)) {
         imap = _ejs_map_new();
-        _ejs_object_setprop(key, _ejs_WeakMapData_symbol, imap);
+        // hidden: enumeration/spread must not see the inverted-rep slot
+        _ejs_object_define_value_property (key, _ejs_WeakMapData_symbol, imap,
+                                           EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
     }
 
     if (!EJSVAL_IS_MAP(imap))
@@ -371,7 +373,9 @@ _ejs_private_field_init (ejsval map, ejsval obj, ejsval value)
     ejsval imap = private_imap (obj);
     if (EJSVAL_IS_NULL_OR_UNDEFINED(imap)) {
         imap = _ejs_map_new();
-        _ejs_object_setprop (obj, _ejs_WeakMapData_symbol, imap);
+        // hidden: enumeration/spread must not see the inverted-rep slot
+        _ejs_object_define_value_property (obj, _ejs_WeakMapData_symbol, imap,
+                                           EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
     }
     _ejs_map_set (imap, map, value);
     return _ejs_undefined;

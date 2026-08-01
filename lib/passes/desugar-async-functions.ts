@@ -23,8 +23,15 @@
 // async-iteration protocol: prefer src[Symbol.asyncIterator](), fall back
 // to the sync iterator with each value awaited (async-from-sync).
 //
-// async GENERATOR functions (async function*) have no lowering and are
-// gated at the parser seam.
+// async GENERATOR functions ride the same coroutines with a marker
+// protocol: the body becomes a sync generator whose awaits yield
+// { mark, "await", v } and whose yields yield { mark, "yield", v };
+// %asyncGenDrive consumes the markers, serializing next()/throw()/
+// return() requests through a queue and settling each with a promised
+// iterator result.  `yield*` delegates through a sync relay generator
+// (__ejs_agenDelegate) whose marked yields pass through the outer
+// generator's `yield*` untouched, so delegated awaits and yields reach
+// the driver directly.
 //
 // runs before DesugarClasses (async methods' values are plain functions
 // by the time the class machinery sees them) and before
@@ -76,13 +83,117 @@ function driveCall(genObj: e.Expression): e.Expression {
     return b.callExpression(b.identifier(DRIVE_NAME), [genObj]);
 }
 
+const AGEN_DRIVE_NAME = "__ejs_asyncGenDrive";
+const AGEN_MARK_NAME = "__ejs_agenMark";
+const AGEN_DELEGATE_NAME = "__ejs_agenDelegate";
+
+// the async-generator runtime, injected per wrapper like the async
+// driver.  Requests (next/throw/return) queue and settle in order; the
+// generator resumes synchronously inside the request call (matching
+// AsyncGeneratorResumeNext), with awaits and yielded values resolved
+// through Promise.resolve.  A yielded value is awaited before delivery;
+// its rejection is thrown at the yield.  The relay generator adapts
+// `yield*`: async sources have next() results awaited, sync sources get
+// each value awaited (async-from-sync), and marked requests it yields
+// pass through the delegating generator to the driver unchanged.
+const AGEN_RUNTIME_SRC = `
+var ${AGEN_MARK_NAME} = {};
+function ${AGEN_DRIVE_NAME}(gen) {
+    var queue = [];
+    var running = false;
+    function enqueue(key, arg) {
+        return new Promise(function (resolve, reject) {
+            queue.push({ key: key, arg: arg, resolve: resolve, reject: reject });
+            if (!running) { running = true; pump(); }
+        });
+    }
+    function pump() {
+        if (queue.length === 0) { running = false; return; }
+        var req = queue[0];
+        step(req, req.key, req.arg);
+    }
+    function finish(req, result) { queue.shift(); req.resolve(result); pump(); }
+    function fail(req, e) { queue.shift(); req.reject(e); pump(); }
+    function step(req, key, arg) {
+        var res;
+        try { res = gen[key](arg); }
+        catch (e) { fail(req, e); return; }
+        var y = res.value;
+        if (res.done) {
+            Promise.resolve(y).then(
+                function (v) { finish(req, { value: v, done: true }); },
+                function (e) { fail(req, e); });
+            return;
+        }
+        if (y !== null && typeof y === "object" && y.s === ${AGEN_MARK_NAME}) {
+            if (y.k === "await") {
+                Promise.resolve(y.v).then(
+                    function (v) { step(req, "next", v); },
+                    function (e) { step(req, "throw", e); });
+            } else {
+                Promise.resolve(y.v).then(
+                    function (v) { finish(req, { value: v, done: false }); },
+                    function (e) { step(req, "throw", e); });
+            }
+            return;
+        }
+        finish(req, { value: y, done: false });
+    }
+    var agen = {};
+    agen.next = function (v) { return enqueue("next", v); };
+    agen["throw"] = function (e) { return enqueue("throw", e); };
+    agen["return"] = function (v) { return enqueue("return", v); };
+    agen[Symbol.asyncIterator] = function () { return agen; };
+    return agen;
+}
+function* ${AGEN_DELEGATE_NAME}(z) {
+    var useAsync = z[Symbol.asyncIterator] != null;
+    var it = useAsync ? z[Symbol.asyncIterator]() : z[Symbol.iterator]();
+    var sent = undefined;
+    for (;;) {
+        var res = it.next(sent);
+        if (useAsync) res = yield { s: ${AGEN_MARK_NAME}, k: "await", v: res };
+        var v = res.value;
+        if (!useAsync) v = yield { s: ${AGEN_MARK_NAME}, k: "await", v: v };
+        if (res.done) return v;
+        sent = yield { s: ${AGEN_MARK_NAME}, k: "yield", v: v };
+    }
+}
+`;
+
+function agenRuntimeDecls(): e.Statement[] {
+    return parse(AGEN_RUNTIME_SRC).body as e.Statement[];
+}
+
+function agenDriveCall(genObj: e.Expression): e.Expression {
+    return b.callExpression(b.identifier(AGEN_DRIVE_NAME), [genObj]);
+}
+
 // rewrites the *direct* body of one async function: awaits become yields,
 // `for await` becomes the async-iteration loop.  nested functions are
 // their own await scopes and are left alone (the outer pass has already
-// processed any async ones among them).
+// processed any async ones among them).  In async-generator mode both
+// awaits and yields become marked yields for %asyncGenDrive, and
+// `yield*` delegates through the relay generator.
 class AwaitToYield extends TreeVisitor {
+    constructor(private asyncGen = false) {
+        super();
+    }
+
     run<T extends e.Node>(n: T): T {
         return this.visitAs(n);
+    }
+
+    private markObj(kind: "await" | "yield", value: e.Expression): e.Expression {
+        return b.objectExpression([
+            b.property(b.identifier("s"), b.identifier(AGEN_MARK_NAME)),
+            b.property(b.identifier("k"), b.literal(kind)),
+            b.property(b.identifier("v"), value),
+        ]);
+    }
+
+    private yieldExpr(arg: e.Expression, delegate = false): e.YieldExpression {
+        return { type: "YieldExpression", argument: arg, delegate } as e.YieldExpression;
     }
 
     override visitFunctionDeclaration(n: e.FunctionDeclaration): VisitResult {
@@ -96,12 +207,21 @@ class AwaitToYield extends TreeVisitor {
     }
 
     override visitAwaitExpression(n: e.AwaitExpression): VisitResult {
-        const arg = this.visitAs(n.argument);
-        return { type: "YieldExpression", argument: arg, delegate: false } as e.YieldExpression;
+        return this.awaited(this.visitAs(n.argument));
+    }
+
+    override visitYield(n: e.YieldExpression): VisitResult {
+        // only reachable in async-generator mode: yields in nested plain
+        // generators belong to functions this visitor doesn't enter
+        const arg = n.argument ? this.visitAs(n.argument) : b.undefinedLit();
+        if (n.delegate)
+            return this.yieldExpr(b.callExpression(b.identifier(AGEN_DELEGATE_NAME), [arg]), true);
+        return this.yieldExpr(this.markObj("yield", arg));
     }
 
     private awaited(value: e.Expression): e.Expression {
-        return { type: "YieldExpression", argument: value, delegate: false } as e.YieldExpression;
+        if (this.asyncGen) return this.yieldExpr(this.markObj("await", value));
+        return this.yieldExpr(value);
     }
 
     override visitForOf(n: e.ForOfStatement): VisitResult {
@@ -205,7 +325,9 @@ export class DesugarAsyncFunctions extends TransformPass {
         this.fnAsyncStack.push(n.async === true);
         visitSuper();
         this.fnAsyncStack.pop();
-        if (n.async) this.rewriteAsync(n);
+        if (!n.async) return;
+        if (n.generator) this.rewriteAsyncGen(n);
+        else this.rewriteAsync(n);
     }
 
     override visitFunctionDeclaration(n: e.FunctionDeclaration): VisitResult {
@@ -237,6 +359,48 @@ export class DesugarAsyncFunctions extends TransformPass {
             this.filename,
             n.loc ?? undefined
         );
+    }
+
+    // the wrapper's .length must match the original's: as many fresh
+    // placeholder params as leading no-default, non-rest formals (the
+    // real params live on the inner generator; calls forward arguments)
+    private lengthParams(n: e.Function): e.Pattern[] {
+        let count = 0;
+        for (let i = 0; i < n.params.length; i++) {
+            if (n.params[i]!.type === "RestElement" || n.defaults[i] != null) break;
+            count++;
+        }
+        return Array.from({ length: count }, () => fresh("arg"));
+    }
+
+    // async function* f(a) { ... }  becomes
+    //
+    //   function f() {
+    //       <agen runtime: mark + %asyncGenDrive + relay>
+    //       return __ejs_asyncGenDrive(function* (a) { <marked body> }
+    //                                  .apply(this, arguments));
+    //   }
+    //
+    // (arrows can't be generators, so only the function forms arrive)
+    private rewriteAsyncGen(n: e.Function): void {
+        const genBody = new AwaitToYield(true).run(n.body as e.BlockStatement);
+        const genFn = b.functionExpression(null, n.params, genBody, n.defaults);
+        genFn.generator = true;
+        n.params = this.lengthParams(n);
+        n.defaults = [];
+        n.async = false;
+        n.generator = false;
+        n.body = b.blockStatement([
+            ...agenRuntimeDecls(),
+            b.returnStatement(
+                agenDriveCall(
+                    b.callExpression(b.memberExpression(genFn, b.identifier("apply")), [
+                        b.thisExpression(),
+                        b.identifier("arguments"),
+                    ])
+                )
+            ),
+        ]);
     }
 
     private rewriteAsync(n: e.Function): void {
@@ -274,7 +438,7 @@ export class DesugarAsyncFunctions extends TransformPass {
         // generator; this and arguments forward through .apply
         const genFn = b.functionExpression(null, n.params, genBody, n.defaults);
         genFn.generator = true;
-        n.params = [];
+        n.params = this.lengthParams(n);
         n.defaults = [];
         n.async = false;
         n.body = b.blockStatement([

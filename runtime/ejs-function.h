@@ -122,6 +122,7 @@ ejsval  _ejs_construct_closure (ejsval closure, ejsval* unused_this, uint32_t ar
 ejsval  _ejs_construct_closure_apply (ejsval closure, ejsval* unused_this, uint32_t argc, ejsval* args, ejsval newTarget);
 
 extern ejsval _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func);
+extern ejsval _ejs_function_new_closure (ejsval env, ejsval name, EJSClosureFunc func, uint32_t len);
 extern ejsval _ejs_function_new_native (ejsval env, ejsval name, EJSClosureFunc func);
 extern ejsval _ejs_function_new_anon (ejsval env, EJSClosureFunc func);
 extern ejsval _ejs_function_new_utf8 (ejsval env, const char* name, EJSClosureFunc func);

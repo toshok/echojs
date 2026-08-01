@@ -12,9 +12,9 @@
 // --parser esprima for bisection.
 //
 // The adapter also *gates*: syntax acorn parses but the backend does not
-// implement (async generator functions, BigInt, dynamic import(), ...)
-// dies here with a clear message instead of miscompiling silently.
-// Gates are deleted as lowering support lands.
+// implement (BigInt, dynamic import(), ...) dies here with a clear
+// message instead of miscompiling silently.  Gates are deleted as
+// lowering support lands.
 
 import * as acorn from "../external-deps/acorn/acorn-es6";
 import * as esprima from "../external-deps/esprima/esprima-es6";
@@ -62,9 +62,6 @@ function adaptNode(n: Node): void {
         case "FunctionDeclaration":
         case "FunctionExpression":
         case "ArrowFunctionExpression": {
-            // plain async functions desugar (DesugarAsyncFunctions); the
-            // async-generator combination still has no lowering
-            if (n["async"] && n["generator"]) notSupported(n, "async generator functions");
             // acorn nests parameter defaults as AssignmentPattern; the
             // dialect wants bare params plus an aligned defaults array
             // (empty when no parameter has a default)
@@ -74,14 +71,27 @@ function adaptNode(n: Node): void {
             for (let i = 0; i < params.length; i++) {
                 const p = params[i]!;
                 if (p.type === "AssignmentPattern") {
-                    params[i] = p["left"] as Node;
-                    defaults.push(p["right"] as Node);
+                    const left = p["left"] as Node;
+                    const right = p["right"] as Node;
+                    // NamedEvaluation: f(cb = () => {}) names the default
+                    if (left.type === "Identifier" && isAnonFn(right))
+                        right["ejs_display_name"] = left["name"];
+                    params[i] = left;
+                    defaults.push(right);
                     sawDefault = true;
                 } else {
                     defaults.push(null);
                 }
             }
             n["defaults"] = sawDefault ? defaults : [];
+            // spec .length (params before the first default or rest),
+            // recorded now — the desugar passes rewrite param lists
+            let fn_length = 0;
+            for (let i = 0; i < params.length; i++) {
+                if (params[i]!.type === "RestElement" || defaults[i] != null) break;
+                fn_length++;
+            }
+            n["ejs_fn_length"] = fn_length;
             break;
         }
         case "TryStatement": {
@@ -98,6 +108,52 @@ function adaptNode(n: Node): void {
             if (n["param"] == null)
                 n["param"] = { type: "Identifier", name: `%unused_catch_${catch_gen++}` };
             break;
+        case "Property": {
+            // NamedEvaluation: an anonymous function/arrow property value
+            // is named after its (non-computed) key — { om() {} }, { a: () => {} }
+            const key = n["key"] as Node;
+            const value = n["value"] as Node;
+            if (
+                !n["computed"] &&
+                isAnonFn(value) &&
+                (key.type === "Identifier" || key.type === "Literal")
+            ) {
+                value["ejs_display_name"] =
+                    key.type === "Identifier" ? key["name"] : String(key["value"]);
+            }
+            break;
+        }
+        case "PropertyDefinition": {
+            // class field initialized with an anonymous function
+            const key = n["key"] as Node;
+            const value = n["value"] as Node | null;
+            if (
+                !n["computed"] &&
+                value != null &&
+                isAnonFn(value) &&
+                (key.type === "Identifier" || key.type === "Literal")
+            ) {
+                value["ejs_display_name"] =
+                    key.type === "Identifier" ? key["name"] : String(key["value"]);
+            }
+            break;
+        }
+        case "AssignmentPattern": {
+            // NamedEvaluation: a destructuring default — [x = () => {}]
+            const pleft = n["left"] as Node;
+            const pright = n["right"] as Node;
+            if (pleft.type === "Identifier" && isAnonFn(pright))
+                pright["ejs_display_name"] = pleft["name"];
+            break;
+        }
+        case "VariableDeclarator": {
+            // NamedEvaluation: let f = function () {} / () => {}
+            const vid = n["id"] as Node;
+            const init = n["init"] as Node | null;
+            if (vid.type === "Identifier" && init != null && isAnonFn(init))
+                init["ejs_display_name"] = vid["name"];
+            break;
+        }
         case "MetaProperty": {
             // dialect stores the raw names, not Identifier nodes
             const meta = n["meta"] as Node;
@@ -117,10 +173,16 @@ function adaptNode(n: Node): void {
             if (!BINARY_OPS.has(n["operator"] as string))
                 notSupported(n, `the ${n["operator"]} operator`);
             break;
-        case "AssignmentExpression":
+        case "AssignmentExpression": {
             if (!ASSIGN_OPS.has(n["operator"] as string))
                 notSupported(n, `the ${n["operator"]} operator`);
+            // NamedEvaluation: f = function () {}
+            const left = n["left"] as Node;
+            const right = n["right"] as Node;
+            if (n["operator"] === "=" && left.type === "Identifier" && isAnonFn(right))
+                right["ejs_display_name"] = left["name"];
             break;
+        }
         case "LogicalExpression":
             if (!LOGICAL_OPS.has(n["operator"] as string))
                 notSupported(n, `the ${n["operator"]} operator`);
@@ -132,6 +194,14 @@ function adaptNode(n: Node): void {
 
 function isNode(v: unknown): v is Node {
     return v != null && typeof v === "object" && typeof (v as Node).type === "string";
+}
+
+// an anonymous function-valued node NamedEvaluation applies to
+function isAnonFn(n: Node): boolean {
+    return (
+        (n.type === "FunctionExpression" && n["id"] == null) ||
+        n.type === "ArrowFunctionExpression"
+    );
 }
 
 function adaptTree(n: Node): void {

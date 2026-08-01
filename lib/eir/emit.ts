@@ -1000,7 +1000,12 @@ export class EIREmitter {
                 );
                 let rv = this.call(
                     rt.make_closure,
-                    [this.val(inst.operands[0]), name, target],
+                    [
+                        this.val(inst.operands[0]),
+                        name,
+                        target,
+                        consts.int32((inst.imms["len"] as number) ?? 0),
+                    ],
                     "closure"
                 );
                 this.values.set(inst, rv);

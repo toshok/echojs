@@ -123,11 +123,12 @@ const runtime_interface = {
     },
 
     make_closure: function (this: RuntimeContext) {
-        return this.abi.createExternalFunction(this.module, "_ejs_function_new", ty.EjsValue, [
+        return this.abi.createExternalFunction(
+            this.module,
+            "_ejs_function_new_closure",
             ty.EjsValue,
-            ty.EjsValue,
-            ty.getEjsClosureFunc(this.abi),
-        ]);
+            [ty.EjsValue, ty.EjsValue, ty.getEjsClosureFunc(this.abi), ty.Int32]
+        );
     },
     make_closure_noenv: function (this: RuntimeContext) {
         return this.abi.createExternalFunction(

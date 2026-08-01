@@ -53,6 +53,18 @@ _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func)
     return fun;
 }
 
+// closure creation for compiled JS functions: same as _ejs_function_new
+// plus the spec .length own property (ES6 19.2.4.1: non-writable,
+// non-enumerable, configurable)
+ejsval
+_ejs_function_new_closure (ejsval env, ejsval name, EJSClosureFunc func, uint32_t len)
+{
+    ejsval fun = _ejs_function_new (env, name, func);
+    _ejs_object_define_value_property (fun, _ejs_atom_length, NUMBER_TO_EJSVAL(len),
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
+    return fun;
+}
+
 ejsval
 _ejs_function_new_without_env (ejsval name, EJSClosureFunc func)
 {

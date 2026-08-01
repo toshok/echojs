@@ -39,6 +39,10 @@ import type * as e from "../estree";
 export class DesugarGeneratorFunctions extends TransformPass {
     // innermost generator's %gen identifier first; functions nest
     private mapping: e.Identifier[] = [];
+    // parallel to mapping: the generator's delegation-helper name, and
+    // whether a yield* actually referenced it (inject only then)
+    private delegateIds: e.Identifier[] = [];
+    private usedDelegate: boolean[] = [];
     private genGen = startGenerator();
 
     override visitFunction(n: e.Function): VisitResult {
@@ -46,7 +50,11 @@ export class DesugarGeneratorFunctions extends TransformPass {
         // unconditional shift would let any non-generator function nested
         // in a generator body pop the generator's own %gen id
         const is_generator = n.generator;
-        if (is_generator) this.mapping.unshift(b.identifier(`%_gen_${this.genGen()}`));
+        if (is_generator) {
+            this.mapping.unshift(b.identifier(`%_gen_${this.genGen()}`));
+            this.delegateIds.unshift(b.identifier(`__ejs_genDelegate_${this.genGen()}`));
+            this.usedDelegate.unshift(false);
+        }
         super.visitFunction(n);
         if (n.generator) {
             const gen_id = this.mapping[0]!;
@@ -56,7 +64,11 @@ export class DesugarGeneratorFunctions extends TransformPass {
             // finally blocks run, and this outermost catch completes the
             // generator with v
             const exc_id = b.identifier(`%_genexc_${this.genGen()}`);
+            const body_stmts: e.Statement[] = [];
+            if (this.usedDelegate[0])
+                body_stmts.push(this.delegateHelperDecl(this.delegateIds[0]!.name));
             const old_body = b.blockStatement([
+                ...body_stmts,
                 b.tryStatement(
                     n.body as e.BlockStatement,
                     [
@@ -89,39 +101,123 @@ export class DesugarGeneratorFunctions extends TransformPass {
             ]);
             n.generator = false;
         }
-        if (is_generator) this.mapping.shift();
+        if (is_generator) {
+            this.mapping.shift();
+            this.delegateIds.shift();
+            this.usedDelegate.shift();
+        }
         return n;
     }
 
-    // yield* x  →  for (let %_yield of x) %generatorYield(%gen, %_yield);
-    // (n.argument must already be visited)
-    private delegateLoop(n: e.YieldExpression): e.ForOfStatement {
-        const yield_id = b.identifier(`%_yield_${this.genGen()}`);
-        return b.forOfStatement(
-            b.letDeclaration(yield_id, null),
-            n.argument!,
+    // yield* x  →  __ejs_genDelegate_N(%gen, x) — a plain call, so it
+    // works in any expression position; the generator runs on its own
+    // coroutine stack, so the helper yields fine from its nested frame.
+    // The helper forwards sent values into the inner iterator's next()
+    // and produces the inner return value (both of which the old for-of
+    // expansion dropped):
+    //
+    //   function __ejs_genDelegate_N(g, x) {
+    //       let it = x[Symbol.iterator]();
+    //       let res = it.next();
+    //       while (!res.done) {
+    //           let sent;
+    //           try { sent = %generatorYield(g, res.value); }
+    //           catch (e) { if (it.return != null) it.return(); throw e; }
+    //           res = it.next(sent);
+    //       }
+    //       return res.value;
+    //   }
+    //
+    // the catch is IteratorClose: gen.throw()/gen.return() surface at the
+    // suspended yield as a throw (the return sentinel included) — close
+    // the inner iterator and let the completion propagate.  Not forwarded
+    // to it.throw()/it.return()'s resumption semantics.
+    private delegateHelperDecl(name: string): e.FunctionDeclaration {
+        const g = b.identifier("g");
+        const x = b.identifier("x");
+        const it = b.identifier("it");
+        const res = b.identifier("res");
+        const sent = b.identifier("sent");
+        const exc = b.identifier("e");
+        const itNext = (arg: e.Expression | null) =>
+            b.callExpression(b.memberExpression(b.identifier(it.name), b.identifier("next")), arg ? [arg] : []);
+        // built per use: AST nodes must not be shared (node-keyed maps)
+        const itReturn = () => b.memberExpression(b.identifier(it.name), b.identifier("return"));
+        return b.functionDeclaration(
+            b.identifier(name),
+            [g, x],
             b.blockStatement([
-                b.expressionStatement(
-                    intrinsic(generatorYield_id, [this.mapping[0]!, yield_id])
+                b.letDeclaration(
+                    it,
+                    b.callExpression(
+                        b.memberExpression(
+                            b.identifier(x.name),
+                            b.memberExpression(b.identifier("Symbol"), b.identifier("iterator")),
+                            true
+                        ),
+                        []
+                    )
                 ),
+                b.letDeclaration(res, itNext(null)),
+                b.whileStatement(
+                    b.unaryExpression(
+                        "!",
+                        b.memberExpression(b.identifier(res.name), b.identifier("done"))
+                    ),
+                    b.blockStatement([
+                        b.letDeclaration(sent, null),
+                        b.tryStatement(
+                            b.blockStatement([
+                                b.expressionStatement(
+                                    b.assignmentExpression(
+                                        b.identifier(sent.name),
+                                        "=",
+                                        intrinsic(generatorYield_id, [
+                                            b.identifier(g.name),
+                                            b.memberExpression(
+                                                b.identifier(res.name),
+                                                b.identifier("value")
+                                            ),
+                                        ])
+                                    )
+                                ),
+                            ]),
+                            [
+                                b.catchClause(
+                                    exc,
+                                    b.blockStatement([
+                                        b.ifStatement(
+                                            b.binaryExpression(itReturn(), "!=", b.nullLit()),
+                                            b.expressionStatement(b.callExpression(itReturn(), []))
+                                        ),
+                                        b.throwStatement(b.identifier(exc.name)),
+                                    ])
+                                ),
+                            ],
+                            null
+                        ),
+                        b.expressionStatement(
+                            b.assignmentExpression(
+                                b.identifier(res.name),
+                                "=",
+                                itNext(b.identifier(sent.name))
+                            )
+                        ),
+                    ])
+                ),
+                b.returnStatement(b.memberExpression(b.identifier(res.name), b.identifier("value"))),
             ])
         );
-    }
-
-    // statement-position yield* replaces the whole ExpressionStatement
-    // with the for-of loop, keeping the AST well-formed
-    override visitExpressionStatement(n: e.ExpressionStatement): VisitResult {
-        if (n.expression.type === "YieldExpression" && n.expression.delegate) {
-            n.expression.argument = this.visitNullable(n.expression.argument);
-            return this.delegateLoop(n.expression);
-        }
-        return super.visitExpressionStatement(n);
     }
 
     override visitYield(n: e.YieldExpression): VisitResult {
         n.argument = this.visitNullable(n.argument);
         if (n.delegate) {
-            return this.delegateLoop(n);
+            this.usedDelegate[0] = true;
+            return b.callExpression(b.identifier(this.delegateIds[0]!.name), [
+                this.mapping[0]!,
+                n.argument!,
+            ]);
         }
         return intrinsic(generatorYield_id, [this.mapping[0]!, n.argument ?? b.undefinedLit()]);
     }
