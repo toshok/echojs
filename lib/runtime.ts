@@ -421,6 +421,13 @@ const runtime_interface = {
             ty.EjsValue,
         ]);
     },
+    sloppy_this: function (this: RuntimeContext) {
+        return only_reads_memory(
+            this.abi.createExternalFunction(this.module, "_ejs_sloppy_this", ty.EjsValue, [
+                ty.EjsValue,
+            ])
+        );
+    },
     mark_async_generator: function (this: RuntimeContext) {
         return this.abi.createExternalFunction(this.module, "_ejs_mark_async_generator", ty.EjsValue, [
             ty.EjsValue,

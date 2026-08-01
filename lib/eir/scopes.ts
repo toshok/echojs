@@ -83,6 +83,9 @@ export class FnInfo {
     argumentsBinding: Binding | null = null;
     usesArguments = false;
     thisBinding: Binding | null = null;
+    // some ThisExpression resolves to this function (directly or through
+    // arrows) — drives the sloppy-mode this coercion at entry
+    usesThis = false;
     isToplevel = false;
     // strict-mode code: inherited from the enclosing function or declared
     // by a "use strict" directive prologue in this body
@@ -93,7 +96,10 @@ export class FnInfo {
         this.name = name;
         this.parent = parent;
         if (parent) parent.children.push(this);
-        this.strict = (parent ? parent.strict : false) || FnInfo.hasUseStrict(node);
+        this.strict =
+            (parent ? parent.strict : false) ||
+            (node as unknown as Record<string, unknown>)["ejs_strict"] === true ||
+            FnInfo.hasUseStrict(node);
     }
 
     private static hasUseStrict(node: e.Function): boolean {
@@ -345,10 +351,19 @@ export class ScopeAnalysis {
     // bindings named in moduleSlotNames get no local binding (their
     // declarations lower as slot stores, their references as slot loads);
     // everything else is an ordinary toplevel local.
-    analyzeToplevel(fnNode: e.FunctionDeclaration, name: string, moduleSlotNames: Set<string>): FnInfo {
+    analyzeToplevel(
+        fnNode: e.FunctionDeclaration,
+        name: string,
+        moduleSlotNames: Set<string>,
+        // module goal: the toplevel is unconditionally strict, and every
+        // nested function inherits it (set before the body walk so child
+        // FnInfos see it)
+        strict = false
+    ): FnInfo {
         this.moduleSlotNames = moduleSlotNames;
         let info = this.enterFunction(fnNode, name);
         info.isToplevel = true;
+        if (strict) info.strict = true;
         this.rootInfo = info;
         this.walkFnBody(fnNode.body);
         this.leaveFunction();
@@ -1002,6 +1017,10 @@ export class ScopeAnalysis {
                 // shape as the `arguments` machinery above)
                 let f = this.curFn;
                 while (f && f.node.type === "ArrowFunctionExpression") f = f.parent;
+                // sloppy-mode functions coerce a null/undefined `this` to
+                // the global object at entry; record the use so lowering
+                // only pays for it where `this` is actually read
+                if (f) f.usesThis = true;
                 // a candidate whose root IS an arrow has no owner here;
                 // its lexical `this` is the module toplevel's — fall back
                 if (!f) throw LowerNotSupported("lexical `this` in a toplevel arrow", n.loc);

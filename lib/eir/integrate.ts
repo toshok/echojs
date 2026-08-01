@@ -426,7 +426,12 @@ export function collectEIRToplevel(
 
     try {
         let analysis = new ScopeAnalysis();
-        let info = analysis.analyzeToplevel(toplevel, toplevel.id.name, moduleSlotNames);
+        let info = analysis.analyzeToplevel(
+            toplevel,
+            toplevel.id.name,
+            moduleSlotNames,
+            /* module-goal toplevels are strict */ !options.script
+        );
 
         // module functions call each other through their slots
         // (slot-load + invoke_closure): a slot-backed function may capture
@@ -445,6 +450,7 @@ export function collectEIRToplevel(
             typed_stats: typed_stats,
             // --types-dump grows the per-site shape census
             shape_dump: !!options.types_dump,
+            script: !!options.script,
         };
 
         let eir_module = new Module(filename);

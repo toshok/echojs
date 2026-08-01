@@ -33,7 +33,9 @@ static EJS_NATIVE_FUNC(_ejs_Process_get_env) {
         ejsval k = _ejs_string_new_utf8_len(env_entry, eq - env_entry);
         ejsval v = _ejs_string_new_utf8(eq+1);
 
-        _ejs_object_define_value_property (env_obj, k, v, EJS_PROP_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+        // node's process.env is mutable (writes are visible to
+        // subsequent reads and child spawns)
+        _ejs_object_define_value_property (env_obj, k, v, EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
         p++;
     }
 

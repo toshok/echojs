@@ -375,6 +375,9 @@ export class DesugarClasses extends TransformPass {
         }
         n.superClass = this.visitNullable(n.superClass);
         const iife = this.generateClassIIFE(n);
+        // 10.2.1: class bodies are always strict — the IIFE hosts every
+        // synthesized class function, so one stamp covers them all
+        (iife as unknown as Record<string, unknown>)["ejs_strict"] = true;
         return b.letDeclaration(n.id, b.callExpression(iife, n.superClass ? [n.superClass] : []));
     }
 
@@ -388,6 +391,8 @@ export class DesugarClasses extends TransformPass {
         }
         n.superClass = this.visitNullable(n.superClass);
         const iife = this.generateClassIIFE(n as NamedClass);
+        // 10.2.1: class bodies are always strict (see visitClassDeclaration)
+        (iife as unknown as Record<string, unknown>)["ejs_strict"] = true;
         return b.callExpression(iife, n.superClass ? [n.superClass] : []);
     }
 

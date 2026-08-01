@@ -131,6 +131,7 @@ const options: CompilerOptions = {
     srcdir: false,
     stdout_writer: new Writer(process.stdout),
     parser: "acorn",
+    script: false,
 };
 
 function add_native_module_dir(dir: string): void {
@@ -302,6 +303,10 @@ const args: Record<string, ArgSpec | undefined> = {
     "--srcdir": {
         flag: "srcdir",
         help: "internal flag.  if set, will look for libecho/libpcre/etc from source directory locations.",
+    },
+    "--script": {
+        flag: "script",
+        help: "compile with script-goal semantics: sloppy toplevel and `this` bound to globalThis.  The default is the module goal (strict toplevel, `this` is undefined).  Module-grammar parsing applies either way.",
     },
     "--print-passes": {
         handler: () => (print_passes = true),

@@ -568,6 +568,9 @@ export class TreeVisitor {
     }
 
     visitMethodDefinition(n: e.MethodDefinition): VisitResult {
+        // computed keys are ordinary expressions (evaluated at class
+        // definition time) — passes must see them
+        if (n.computed) n.key = this.visitAs(n.key);
         n.value = this.visitAs(n.value);
         return n;
     }

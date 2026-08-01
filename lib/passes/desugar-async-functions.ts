@@ -98,7 +98,7 @@ const AGEN_DELEGATE_NAME = "__ejs_agenDelegate";
 // pass through the delegating generator to the driver unchanged.
 const AGEN_RUNTIME_SRC = `
 var ${AGEN_MARK_NAME} = {};
-function ${AGEN_DRIVE_NAME}(gen) {
+function ${AGEN_DRIVE_NAME}(gen, proto) {
     var queue = [];
     var running = false;
     function enqueue(key, arg) {
@@ -139,7 +139,7 @@ function ${AGEN_DRIVE_NAME}(gen) {
         }
         finish(req, { value: y, done: false });
     }
-    var agen = {};
+    var agen = proto != null ? Object.create(proto) : {};
     agen.next = function (v) { return enqueue("next", v); };
     agen["throw"] = function (e) { return enqueue("throw", e); };
     agen["return"] = function (v) { return enqueue("return", v); };
@@ -165,8 +165,11 @@ function agenRuntimeDecls(): e.Statement[] {
     return parse(AGEN_RUNTIME_SRC).body as e.Statement[];
 }
 
-function agenDriveCall(genObj: e.Expression): e.Expression {
-    return b.callExpression(b.identifier(AGEN_DRIVE_NAME), [genObj]);
+function agenDriveCall(genObj: e.Expression, proto?: e.Expression): e.Expression {
+    return b.callExpression(
+        b.identifier(AGEN_DRIVE_NAME),
+        proto ? [genObj, proto] : [genObj]
+    );
 }
 
 // rewrites the *direct* body of one async function: awaits become yields,
@@ -316,6 +319,28 @@ class AwaitToYield extends TreeVisitor {
     }
 }
 
+// toplevel await detection: an AwaitExpression or for-await statement
+// lexically in the module body (nested function bodies don't count)
+function bodyHasToplevelAwait(n: unknown): boolean {
+    if (Array.isArray(n)) return n.some(bodyHasToplevelAwait);
+    if (!n || typeof n !== "object") return false;
+    const node = n as e.Node & Record<string, unknown>;
+    if (typeof node.type !== "string") return false;
+    if (
+        node.type === "FunctionDeclaration" ||
+        node.type === "FunctionExpression" ||
+        node.type === "ArrowFunctionExpression"
+    )
+        return false;
+    if (node.type === "AwaitExpression") return true;
+    if (node.type === "ForOfStatement" && node["await"] === true) return true;
+    for (const k of Object.keys(node)) {
+        if (k === "loc" || k === "type") continue;
+        if (bodyHasToplevelAwait(node[k])) return true;
+    }
+    return false;
+}
+
 export class DesugarAsyncFunctions extends TransformPass {
     // innermost enclosing function's asyncness during the descent (the
     // rewrite itself happens on the way back up)
@@ -331,8 +356,22 @@ export class DesugarAsyncFunctions extends TransformPass {
     }
 
     override visitFunctionDeclaration(n: e.FunctionDeclaration): VisitResult {
+        // top-level await (module goal only): the synthesized module
+        // toplevel becomes an async function; module resolution gets a
+        // promise back and the runloop drives the continuations.  A
+        // rejection is made fatal below — nothing else observes it.
+        const rec = n as unknown as Record<string, unknown>;
+        const isTlaToplevel =
+            rec["toplevel"] === true &&
+            !this.options.script &&
+            !n.async &&
+            n.body.type === "BlockStatement" &&
+            bodyHasToplevelAwait(n.body.body);
+        if (isTlaToplevel) n.async = true;
+
         const wasAsyncGen = n.async === true && n.generator === true;
         this.visitFn(n, () => super.visitFunctionDeclaration(n));
+        if (isTlaToplevel) this.makeToplevelRejectionFatal(n);
         // async-generator definitions join the %AsyncGeneratorFunction%
         // chain; the mark statement follows the (hoisted) declaration
         if (wasAsyncGen && n.id)
@@ -350,6 +389,38 @@ export class DesugarAsyncFunctions extends TransformPass {
         this.visitFn(n, () => super.visitFunctionExpression(n));
         if (wasAsyncGen) return b.callExpression(b.identifier("%markAsyncGen"), [n]);
         return n;
+    }
+
+    // the toplevel's promise has no observer: route a rejection to
+    // __ejs.unhandledException (print + nonzero exit) so a failed
+    // top-level await can't look like success
+    private makeToplevelRejectionFatal(n: e.FunctionDeclaration): void {
+        const body = n.body as e.BlockStatement;
+        const ret = body.body[body.body.length - 1] as e.ReturnStatement;
+        if (!ret || ret.type !== "ReturnStatement" || !ret.argument) return;
+        const err_id = b.identifier("%tla_err");
+        ret.argument = b.callExpression(
+            b.memberExpression(ret.argument as e.Expression, b.identifier("then")),
+            [
+                b.undefinedLit(),
+                b.functionExpression(
+                    null,
+                    [err_id],
+                    b.blockStatement([
+                        b.expressionStatement(
+                            b.callExpression(
+                                b.memberExpression(
+                                    b.identifier("__ejs"),
+                                    b.identifier("unhandledException")
+                                ),
+                                [b.identifier(err_id.name)]
+                            )
+                        ),
+                    ]),
+                    []
+                ),
+            ]
+        );
     }
 
     // class-method values must stay FunctionExpressions for the class
@@ -416,6 +487,14 @@ export class DesugarAsyncFunctions extends TransformPass {
         n.defaults = [];
         n.async = false;
         n.generator = false;
+        // a declaration can reference itself by name (the binding lives in
+        // the enclosing scope), so its instances get the spec prototype
+        // chain (fn.prototype -> %AsyncGeneratorPrototype%, installed by
+        // %markAsyncGen); anonymous forms keep the bare driver object
+        const proto =
+            n.type === "FunctionDeclaration" && n.id
+                ? b.memberExpression(b.identifier(n.id.name), b.identifier("prototype"))
+                : undefined;
         n.body = b.blockStatement([
             ...agenRuntimeDecls(),
             b.returnStatement(
@@ -423,7 +502,8 @@ export class DesugarAsyncFunctions extends TransformPass {
                     b.callExpression(b.memberExpression(genFn, b.identifier("apply")), [
                         b.thisExpression(),
                         b.identifier("arguments"),
-                    ])
+                    ]),
+                    proto
                 )
             ),
         ]);

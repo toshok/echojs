@@ -937,6 +937,14 @@ export class EIREmitter {
                 return;
             }
 
+            case "sloppy_this": {
+                return this.emitCallLike(
+                    inst,
+                    rt.sloppy_this,
+                    [this.val(inst.operands[0])],
+                    "sloppythis"
+                );
+            }
             case "get_global": {
                 let key = this.v.getAtom(String(inst.imms["atom"]));
                 const fn = inst.imms["for_typeof"] ? rt.global_getprop : rt.global_getprop_checked;

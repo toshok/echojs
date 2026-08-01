@@ -85,6 +85,9 @@ export interface ModCtx {
     };
     // --types-dump: per-site shape census lines
     shape_dump?: boolean;
+    // script-goal semantics (--script): toplevel `this` is globalThis
+    // instead of the module goal's undefined
+    script?: boolean;
 }
 
 // clone-lowering mode (specialize.ts).  The clone gets an
@@ -327,12 +330,25 @@ class LowerFunction {
             this.writeBinding(info.argumentsBinding!, a);
         }
 
+        // 9.2.1.2 OrdinaryCallBindThis: sloppy-mode functions replace a
+        // null/undefined `this` with the global object.  Only functions
+        // that actually read `this` pay for the check, and strict code
+        // (all module-goal code) emits nothing.
+        if (!this.isToplevel && !info.strict && info.usesThis && !this.spec) {
+            const coerced = this.b.emit("sloppy_this", [this.thisParam], {});
+            this.b.writeVariable("%this", this.b.fn.entry!, coerced);
+            this.thisParam = coerced;
+        }
+
         // an arrow below captures our `this`: store it in the env (kept
         // in sync by intrinsicCall when super() rebinds this).  the
-        // toplevel's `this` is the global object (script semantics).
+        // toplevel's `this` is undefined under the module goal,
+        // globalThis under --script.
         if (info.thisBinding && info.thisBinding.captured) {
             const this_val = this.isToplevel
-                ? this.b.emit("get_global", [], { atom: "globalThis", for_typeof: 1 })
+                ? this.mod_ctx.script
+                    ? this.b.emit("get_global", [], { atom: "globalThis", for_typeof: 1 })
+                    : this.b.constUndefined()
                 : this.thisParam;
             this.writeBinding(info.thisBinding, this_val);
         }
@@ -541,11 +557,13 @@ class LowerFunction {
                 // owner's captured this, read through the env chain)
                 let binding = this.analysis.resolve(n);
                 if (binding) return this.readBinding(binding);
-                // toplevel `this` is the global object (script
-                // semantics — echojs programs run as scripts, sloppy
-                // outside "use strict")
-                if (this.isToplevel)
-                    return this.b.emit("get_global", [], { atom: "globalThis", for_typeof: 1 });
+                // toplevel `this`: undefined under the module goal,
+                // globalThis under --script
+                if (this.isToplevel) {
+                    if (this.mod_ctx.script)
+                        return this.b.emit("get_global", [], { atom: "globalThis", for_typeof: 1 });
+                    return this.b.constUndefined();
+                }
                 return this.b.readVariable("%this", this.b.cur);
             }
             case "BinaryExpression":

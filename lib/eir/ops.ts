@@ -98,6 +98,8 @@ export const OPS = {
     delete_prop: { arity: 2, effects: GENERIC_OP, imms: ["strict"] },
 
     // --- globals ------------------------------------------------------------
+    // sloppy-mode entry coercion: null/undefined receiver -> global
+    sloppy_this: { arity: 1, effects: E.READ },
     get_global: { arity: 0, effects: E.READ | E.THROW | E.GC, imms: ["atom", "for_typeof"] },
     set_global: { arity: 1, effects: E.WRITE | E.THROW | E.GC, imms: ["atom", "strict"] },
 

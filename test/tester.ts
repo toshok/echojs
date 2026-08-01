@@ -365,6 +365,10 @@ function processOneTest(gen_expected: boolean, test: string, cb: (err?: Error | 
                 compiler,
                 platform_target.concat(extra_flags).concat(output_args).concat([
                     "--srcdir",
+                    // the node side runs tests via require() (CJS, sloppy,
+                    // this = module.exports) — script-goal semantics keep
+                    // the two hosts byte-comparable
+                    "--script",
                     "--moduledir",
                     "../node-compat",
                     "--moduledir",

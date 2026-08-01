@@ -156,8 +156,16 @@ function run(cmd, args, opts, timeoutMs) {
             timedOut = true;
             child.kill("SIGKILL");
         }, timeoutMs);
-        child.stdout.on("data", (d) => (stdout += d));
-        child.stderr.on("data", (d) => (stderr += d));
+        // cap captured output: a runaway test can spew gigabytes (an
+        // unbounded += eventually dies on V8's max string length); only
+        // the head is ever inspected
+        const CAP = 1 << 20;
+        child.stdout.on("data", (d) => {
+            if (stdout.length < CAP) stdout += d;
+        });
+        child.stderr.on("data", (d) => {
+            if (stderr.length < CAP) stderr += d;
+        });
         child.on("close", (code, signal) => {
             clearTimeout(timer);
             resolve({ code, signal, stdout, stderr, timedOut });
@@ -184,22 +192,38 @@ async function runOne(cfg, testPath) {
         flags: meta.flags,
         neg: meta.negative ? `${meta.negative.phase}:${meta.negative.type}` : null,
     };
-    if (meta.flags.includes("module") || (meta.negative && meta.negative.phase === "resolution")) {
-        return { ...base, status: "skip-module" };
-    }
     if (meta.flags.includes("CanBlockIsFalse")) return { ...base, status: "skip-agent" };
 
+    const isModule = meta.flags.includes("module");
     const tmp = fs.mkdtempSync(path.join(cfg.tmpRoot, "t262-"));
     try {
         const { source } = assembleSource(cfg.suite, testPath, meta);
-        const srcFile = path.join(tmp, "test.js");
+        // module tests may import themselves by name — keep the original
+        // basename for them
+        const srcFile = path.join(tmp, isModule ? path.basename(testPath) : "test.js");
         fs.writeFileSync(srcFile, source);
+        // module tests import sibling *_FIXTURE.js specifiers — stage the
+        // test's directory's fixtures next to the assembled source so
+        // file-relative resolution finds them
+        if (isModule) {
+            const dir = path.dirname(testPath);
+            for (const f of fs.readdirSync(dir)) {
+                if (f.endsWith("_FIXTURE.js"))
+                    fs.copyFileSync(path.join(dir, f), path.join(tmp, f));
+            }
+        }
         const exe = path.join(tmp, "test.exe");
         const env = { ...process.env, TMPDIR: tmp, NO_COLOR: "1", TZ: "UTC" };
         delete env.FORCE_COLOR;
 
-        const comp = await run("./ejs", ["--srcdir", "-q", "-o", exe, srcFile], { cwd: cfg.ejsRoot, env }, cfg.compileTimeoutMs);
-        const negParse = meta.negative && (meta.negative.phase === "parse" || meta.negative.phase === "early");
+        // unflagged tests run with script-goal semantics (the probe's
+        // sloppy-only simplification); module-flagged tests use the
+        // compiler's module-goal default
+        const goalArgs = isModule ? [] : ["--script"];
+        const comp = await run("./ejs", ["--srcdir", "-q", ...goalArgs, "-o", exe, srcFile], { cwd: cfg.ejsRoot, env }, cfg.compileTimeoutMs);
+        // resolution-phase failures surface at compile time in an AOT
+        // world, same as parse/early
+        const negParse = meta.negative && (meta.negative.phase === "parse" || meta.negative.phase === "early" || meta.negative.phase === "resolution");
         if (comp.timedOut) return { ...base, status: "compile-timeout" };
         if (comp.code !== 0 || !fs.existsSync(exe)) {
             if (negParse) return { ...base, status: "pass" };

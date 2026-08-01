@@ -43,4 +43,9 @@ export interface CompilerOptions {
     // "acorn" (default) or "esprima" (the retained fork, kept for
     // bisection during the parser transition)
     parser: string;
+    // script-goal semantics: sloppy toplevel (strict only under a
+    // "use strict" directive) and toplevel `this` = globalThis.  The
+    // default is the Module goal: every toplevel is strict and `this`
+    // is undefined.  Parsing uses the module grammar either way.
+    script: boolean;
 }

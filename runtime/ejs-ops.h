@@ -60,6 +60,7 @@ ejsval _ejs_op_void (ejsval exp);
 ejsval _ejs_op_typeof (ejsval exp);
 ejsval _ejs_op_delete (ejsval obj, ejsval prop);
 ejsval _ejs_op_delete_strict (ejsval obj, ejsval prop);
+ejsval _ejs_sloppy_this (ejsval thisArg);
 ejsval _ejs_op_bitwise_xor (ejsval lhs, ejsval rhs);
 ejsval _ejs_op_bitwise_not (ejsval val);
 ejsval _ejs_op_bitwise_and (ejsval lhs, ejsval rhs);

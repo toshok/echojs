@@ -817,6 +817,17 @@ _ejs_op_delete (ejsval obj, ejsval prop)
     return BOOLEAN_TO_EJSVAL(delete_rv);
 }
 
+// 9.2.1.2 OrdinaryCallBindThis for sloppy-mode callees: a null/undefined
+// receiver becomes the global object (primitives stay unwrapped — the
+// ToObject boxing half is not implemented)
+ejsval
+_ejs_sloppy_this (ejsval thisArg)
+{
+    if (EJSVAL_IS_NULL(thisArg) || EJSVAL_IS_UNDEFINED(thisArg))
+        return _ejs_global;
+    return thisArg;
+}
+
 // strict-mode delete: 13.5.1.2 step 5.c, an unsuccessful delete throws
 ejsval
 _ejs_op_delete_strict (ejsval obj, ejsval prop)
