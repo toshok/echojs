@@ -1,0 +1,19 @@
+c 0
+c 1
+c 2
+d a
+d b
+d deleg:lret
+d 10
+d 20
+d last
+a b lret true
+1
+caught:boom
+open
+cleanup
+sent true
+t 101
+t 102
+o objm
+true
