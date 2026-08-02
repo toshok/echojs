@@ -337,12 +337,18 @@ async function cmdRun(opts) {
         tmpRoot: fs.mkdtempSync(path.join(os.tmpdir(), "test262-probe-")),
     };
     if (!fs.existsSync(path.join(cfg.ejsRoot, "ejs"))) throw new Error(`no ./ejs in ${cfg.ejsRoot}`);
-    let tests = collectTests(
-        cfg.suite,
-        parseInt(opts["cap-builtins"] || "3", 10),
-        parseInt(opts["stride-language"] || "1", 10)
-    );
+    // --cap-builtins all runs every built-ins test (the full suite);
+    // an integer keeps the curated per-leaf-dir cap
+    const cap = opts["cap-builtins"] === "all" ? Infinity : parseInt(opts["cap-builtins"] || "3", 10);
+    let tests = collectTests(cfg.suite, cap, parseInt(opts["stride-language"] || "1", 10));
     if (opts.filter) tests = tests.filter((t) => t.includes(opts.filter));
+    // --shard K/N runs slice K of N: the list is sorted so every shard
+    // agrees on the partition regardless of machine or run
+    if (opts.shard) {
+        const [k, n] = String(opts.shard).split("/").map((x) => parseInt(x, 10));
+        if (!(n > 0) || !(k >= 0 && k < n)) throw new Error(`bad --shard ${opts.shard} (want K/N, 0 <= K < N)`);
+        tests = tests.slice().sort().filter((_t, i) => i % n === k);
+    }
     const outPath = opts.out || "results.jsonl";
     const out = fs.createWriteStream(outPath);
     console.log(`${tests.length} tests, ${cfg.jobs} jobs -> ${outPath}`);

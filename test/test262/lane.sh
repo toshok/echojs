@@ -13,7 +13,6 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-REPO="$(cd "$HERE/../.." && pwd)"
 
 # the lane's curated selection: every 6th language test (proportional
 # across every directory), 2 tests per built-ins leaf directory, all of
@@ -48,18 +47,9 @@ fi
 
 CLEANUP=""
 if [ -z "$EJS_ROOT" ]; then
-    OUTS="$(cd "$REPO" && buck2 build //:srcdir-tree //lib:generated //:ejs.exe.stage1 --show-full-output 2>/dev/null)"
-    TREE="$(echo "$OUTS" | awk '$1 == "root//:srcdir-tree" {print $2}')"
-    GENERATED="$(echo "$OUTS" | awk '$1 == "root//lib:generated" {print $2}')"
-    STAGE_EXE="$(echo "$OUTS" | awk '$1 == "root//:ejs.exe.stage1" {print $2}')"
     EJS_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/t262-lane-XXXXXX")"
     CLEANUP="$EJS_ROOT"
-    cp -RL "$TREE"/. "$EJS_ROOT/"
-    chmod -R u+w "$EJS_ROOT"
-    mkdir -p "$EJS_ROOT/lib/generated"
-    cp -RL "$GENERATED"/. "$EJS_ROOT/lib/generated/"
-    cp "$STAGE_EXE" "$EJS_ROOT/ejs"
-    chmod +x "$EJS_ROOT/ejs"
+    "$HERE/assemble-workroot.sh" "$EJS_ROOT"
 fi
 
 RESULTS="${RESULTS:-$(mktemp "${TMPDIR:-/tmp}/t262-results-XXXXXX.jsonl")}"

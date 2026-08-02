@@ -11,7 +11,8 @@ emitted roots, hidden-class ("shape") tracking with guarded fast
 paths, allocation sinking, and a compiler that is itself an EchoJS
 program: the release binaries are the compiler compiled by itself,
 proven by a byte-identity bootstrap on every CI run (macOS arm64,
-Linux arm64/x86_64).
+Linux arm64/x86_64).  The language is modern ECMAScript, its
+conformance tracked against test262.
 
 Install
 -------
@@ -84,29 +85,36 @@ ECHOJS
 ```
 
 `@node-compat/*` modules (path, fs, process, ...) are a small
-node-flavored standard library that ships with the toolchain.  On
-macOS the final link prints `ld: warning: ... built for newer 'macOS'
-version` — harmless, being fixed.
+node-flavored standard library that ships with the toolchain.
 
-Language support, honestly
---------------------------
+Language support
+----------------
 
-The ES2015 core is solid: classes, generators, iterators,
-destructuring, template strings, arrow functions, modules,
-spread/rest, Map/Set/WeakMap, symbols, typed arrays, Proxy/Reflect,
-Promises.  It is exercised by a 400+-program suite whose expected
-output comes from node, and by the compiler compiling itself (~50k
-lines of tsc-generated JS).
-
-JavaScript did not stand still, and the post-2015 catch-up is planned
-but not landed ([docs/language-plan.md](docs/language-plan.md) is the
-tracker).  Notably **missing** today: `async`/`await`, optional
+EchoJS targets modern ECMAScript.  Programs compile under the module
+goal by default — strict toplevel, `this` is `undefined`; `--script`
+selects the sloppy script goal.  Working: classes (fields, private
+members, static blocks), `async`/`await`, async generators, generators
+and iterators, top-level await, destructuring, spread/rest, optional
 chaining (`?.`), nullish coalescing (`??`), exponentiation (`**`),
-class fields, object spread/rest, BigInt, and newer stdlib
-(`padStart`, `flat`, `Object.entries`, `globalThis`).  A few known
-divergences from node are deliberate pins (Annex B block-function
-hoisting, `toLocaleString` ICU rounding, `Date.prototype` being a
-Date instance).  test262 adoption is on the roadmap.
+logical assignment, template strings, arrow functions, modules
+(`import`/`export`, `export * as ns`), BigInt, Map/Set/WeakMap/WeakRef,
+symbols, typed arrays (including BigInt64), Proxy and Reflect,
+Promises, and the current standard library (`Object.entries`,
+`Array.prototype.flat`/`toSorted`, `String.prototype.replaceAll`,
+iterator helpers, `globalThis`, ...).
+
+Conformance is measured against
+[test262](https://github.com/tc39/test262): a curated CI lane passes
+~75%, with [docs/language-plan.md](docs/language-plan.md) tracking the
+remainder.  Out of scope for an ahead-of-time compiler: `eval` and
+`new Function` (no runtime code generation), and cross-realm host
+objects (`ShadowRealm`).  A few divergences from node are pinned on
+purpose (Annex B block-function hoisting, `toLocaleString` ICU
+rounding).
+
+Two suites guard all of this: a 460+-program suite whose expected
+output comes from node, and the compiler compiling itself (~50k lines
+of tsc-generated JS) to a byte-identical fixed point.
 
 Flags and knobs
 ---------------
