@@ -226,7 +226,9 @@ _ejs_bigint_from_literal (ejsval str)
     const jschar* s = flat->data.flat;
     int len = flat->length;
     // strip '_' separators into a scratch copy
-    jschar* buf = (jschar*)malloc((size_t)len * sizeof(jschar));
+    if (len < 0)
+        return _ejs_undefined;
+    jschar* buf = (jschar*)calloc((size_t)len, sizeof(jschar));
     int n = 0;
     for (int i = 0; i < len; i++)
         if (s[i] != '_') buf[n++] = s[i];
@@ -389,10 +391,11 @@ _ejs_bigint_neg (ejsval xv)
 {
     EJSBigInt* x = EJSVAL_TO_BIGINT(xv);
     if (x->length == 0) return xv;
-    EJSBigInt* z = bigint_alloc(x->length);
+    int saved_length = x->length;
+    EJSBigInt* z = bigint_alloc(saved_length);
     x = EJSVAL_TO_BIGINT(xv);
-    memcpy(z->digits, x->digits, (size_t)x->length * sizeof(uint64_t));
-    z->length = x->length;
+    memcpy(z->digits, x->digits, (size_t)saved_length * sizeof(uint64_t));
+    z->length = saved_length;
     z->sign = x->sign ? 0 : 1;
     return BIGINT_TO_EJSVAL(z);
 }
