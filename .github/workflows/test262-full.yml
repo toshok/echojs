@@ -1,17 +1,21 @@
-# The full test262 suite, sharded across parallel runners.  Distinct
-# from the curated lane in bootstrap.yml: the lane is a fast per-PR gate
-# (a strided selection checked against expectations.txt); this runs
-# every language/ + built-ins/ + harness/ test and reports a pass-rate
-# summary — comprehensive coverage, not a gate.
+# The full test262 suite, sharded across parallel Linux runners.
+# Distinct from the curated lane in bootstrap.yml: the lane is a fast
+# macOS gate (a strided selection checked against expectations.txt);
+# this runs every language/ + built-ins/ + harness/ test and reports a
+# pass-rate summary — comprehensive coverage, report-only (it does not
+# block merges).  JS semantics don't vary by platform, so one Linux
+# arch suffices, and Linux runners bill at 1x (the fan-out is cheap).
 #
 # One build job assembles the stage1 workroot and uploads it; N shard
 # jobs each run their slice against that same workroot (the compiler is
-# built once, not N times); a collect job concatenates the shard results
-# and posts the report to the run summary.  macOS only — JS semantics
-# don't vary by platform (the bootstrap matrix covers the parts that do).
+# built once, not N times); a collect job concatenates the shard
+# results and posts the report to the run summary.
 name: test262-full
 
 on:
+  push:
+    branches: [main]
+  pull_request:
   schedule:
     - cron: "0 8 * * *" # nightly, 08:00 UTC
   workflow_dispatch:
@@ -22,7 +26,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -30,7 +34,7 @@ permissions:
 jobs:
   build:
     name: build workroot
-    runs-on: macos-15 # arm64
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     outputs:
       shards: ${{ steps.cfg.outputs.shards }}
@@ -40,8 +44,17 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install llvm
-        run: brew install llvm
+      - name: Install packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential cmake libunwind-dev libuv1-dev
+
+      - name: Install llvm 22
+        run: |
+          curl -sSf https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh
+          chmod +x /tmp/llvm.sh
+          sudo /tmp/llvm.sh 22
+          echo "/usr/lib/llvm-22/bin" >> "$GITHUB_PATH"
 
       - uses: dtolnay/install-buck2@latest
 
@@ -53,14 +66,15 @@ jobs:
         run: npm ci
 
       - name: Build the node-llvm addon
-        run: ./node-llvm/build-addon.sh "$(brew --prefix llvm)"
+        run: ./node-llvm/build-addon.sh /usr/lib/llvm-22
 
       # the workroot the shard jobs run against: srcdir-tree +
       # lib/generated + the stage1 compiler, tarred whole (cp -RL has
       # already dereferenced the buck-out symlinks)
       - name: assemble workroot
         run: |
-          ./test/test262/assemble-workroot.sh "$RUNNER_TEMP/workroot"
+          ./test/test262/assemble-workroot.sh "$RUNNER_TEMP/workroot" \
+            --config llvm.prefix=/usr/lib/llvm-22
           tar -C "$RUNNER_TEMP/workroot" -czf workroot.tar.gz .
 
       - uses: actions/upload-artifact@v4
@@ -80,7 +94,7 @@ jobs:
   shard:
     name: shard ${{ matrix.shard }}
     needs: build
-    runs-on: macos-15
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -91,8 +105,16 @@ jobs:
       # compiler is prebuilt in the workroot artifact)
       - uses: actions/checkout@v4
 
-      - name: Install llvm
-        run: brew install llvm # the compiler shells out to opt/llc/clang++
+      # the compiler shells out to opt/llc/clang++ and links compiled
+      # programs against libuv/libunwind
+      - name: Install packages + llvm 22
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential libunwind-dev libuv1-dev
+          curl -sSf https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh
+          chmod +x /tmp/llvm.sh
+          sudo /tmp/llvm.sh 22
+          echo "/usr/lib/llvm-22/bin" >> "$GITHUB_PATH"
 
       - uses: actions/setup-node@v4
         with:
@@ -114,8 +136,6 @@ jobs:
             https://github.com/tc39/test262.git "$(cat test/test262/suite.sha)"
           git -C "$RUNNER_TEMP/test262" checkout -q FETCH_HEAD
 
-      # LLVM is left to the driver's own discovery (baked major + brew),
-      # exactly as the bootstrap job's lane step relies on
       - name: run shard
         run: |
           node test/test262/run-test262.mjs run \
@@ -136,7 +156,7 @@ jobs:
     name: collect + report
     needs: shard
     if: always() && needs.shard.result != 'cancelled'
-    runs-on: macos-15
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
