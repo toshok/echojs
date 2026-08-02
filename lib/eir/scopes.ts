@@ -31,6 +31,7 @@ export const compound_assign_ops = {
     "*=": "*",
     "/=": "/",
     "%=": "%",
+    "**=": "**",
     "&=": "&",
     "|=": "|",
     "^=": "^",
@@ -82,13 +83,39 @@ export class FnInfo {
     argumentsBinding: Binding | null = null;
     usesArguments = false;
     thisBinding: Binding | null = null;
+    // some ThisExpression resolves to this function (directly or through
+    // arrows) — drives the sloppy-mode this coercion at entry
+    usesThis = false;
     isToplevel = false;
+    // strict-mode code: inherited from the enclosing function or declared
+    // by a "use strict" directive prologue in this body
+    strict = false;
 
     constructor(node: e.Function, name: string, parent: FnInfo | null) {
         this.node = node;
         this.name = name;
         this.parent = parent;
         if (parent) parent.children.push(this);
+        this.strict =
+            (parent ? parent.strict : false) ||
+            (node as unknown as Record<string, unknown>)["ejs_strict"] === true ||
+            FnInfo.hasUseStrict(node);
+    }
+
+    private static hasUseStrict(node: e.Function): boolean {
+        const body = (node as unknown as Record<string, unknown>)["body"] as e.Node | undefined;
+        if (!body || body.type !== "BlockStatement") return false;
+        for (const stmt of (body as e.BlockStatement).body) {
+            // scope analysis runs post-desugar: HoistFuncDecls moves
+            // function declarations ABOVE the directive prologue — skip
+            // them
+            if (stmt.type === "FunctionDeclaration") continue;
+            if (stmt.type !== "ExpressionStatement") break;
+            const expr = (stmt as e.ExpressionStatement).expression;
+            if (expr.type !== "Literal" || typeof (expr as e.Literal).value !== "string") break;
+            if ((expr as e.Literal).value === "use strict") return true;
+        }
+        return false;
     }
 }
 
@@ -324,10 +351,19 @@ export class ScopeAnalysis {
     // bindings named in moduleSlotNames get no local binding (their
     // declarations lower as slot stores, their references as slot loads);
     // everything else is an ordinary toplevel local.
-    analyzeToplevel(fnNode: e.FunctionDeclaration, name: string, moduleSlotNames: Set<string>): FnInfo {
+    analyzeToplevel(
+        fnNode: e.FunctionDeclaration,
+        name: string,
+        moduleSlotNames: Set<string>,
+        // module goal: the toplevel is unconditionally strict, and every
+        // nested function inherits it (set before the body walk so child
+        // FnInfos see it)
+        strict = false
+    ): FnInfo {
         this.moduleSlotNames = moduleSlotNames;
         let info = this.enterFunction(fnNode, name);
         info.isToplevel = true;
+        if (strict) info.strict = true;
         this.rootInfo = info;
         this.walkFnBody(fnNode.body);
         this.leaveFunction();
@@ -667,7 +703,12 @@ export class ScopeAnalysis {
                 return;
             }
             case "ExportAllDeclaration":
-                throw LowerNotSupported("export *", n.loc);
+                // both forms name only the SOURCE module's exports —
+                // nothing local to resolve (lowering validates them
+                // against the source's export table)
+                if (this.moduleSlotNames === null || this.curFn !== this.rootInfo)
+                    throw LowerNotSupported("export declaration", n.loc);
+                return;
             case "ExpressionStatement":
                 this.walkExpr(n.expression);
                 return;
@@ -842,6 +883,8 @@ export class ScopeAnalysis {
             while (!scope.isFnTop) scope = scope.parent!;
         }
         for (const prop of (d.id as e.ObjectPattern).properties) {
+            if (prop.type === "RestElement")
+                throw LowerNotSupported("rest property in declaration pattern", declStmt.loc);
             if (prop.computed)
                 throw LowerNotSupported("computed key in declaration pattern", declStmt.loc);
             if (prop.key.type !== "Identifier" && prop.key.type !== "Literal")
@@ -885,7 +928,7 @@ export class ScopeAnalysis {
                 return;
             case "BinaryExpression":
             case "LogicalExpression":
-                this.walkExpr(n.left);
+                this.walkExpr(n.left as e.Expression);
                 this.walkExpr(n.right);
                 return;
             case "UnaryExpression":
@@ -943,7 +986,7 @@ export class ScopeAnalysis {
                 return;
             case "MemberExpression":
                 this.walkExpr(n.object);
-                if (n.computed) this.walkExpr(n.property);
+                if (n.computed) this.walkExpr(n.property as e.Expression);
                 return;
             case "ConditionalExpression":
                 this.walkExpr(n.test);
@@ -974,6 +1017,10 @@ export class ScopeAnalysis {
                 // shape as the `arguments` machinery above)
                 let f = this.curFn;
                 while (f && f.node.type === "ArrowFunctionExpression") f = f.parent;
+                // sloppy-mode functions coerce a null/undefined `this` to
+                // the global object at entry; record the use so lowering
+                // only pays for it where `this` is actually read
+                if (f) f.usesThis = true;
                 // a candidate whose root IS an arrow has no owner here;
                 // its lexical `this` is the module toplevel's — fall back
                 if (!f) throw LowerNotSupported("lexical `this` in a toplevel arrow", n.loc);
@@ -1000,6 +1047,10 @@ export class ScopeAnalysis {
                 return;
             case "ObjectExpression":
                 for (const p of n.properties) {
+                    if (p.type === "SpreadElement") {
+                        this.walkExpr(p.argument);
+                        continue;
+                    }
                     if (p.computed) this.walkExpr(p.key);
                     this.walkExpr(p.value as e.Expression);
                 }

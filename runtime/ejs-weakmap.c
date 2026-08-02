@@ -10,6 +10,7 @@
 #include "ejs-function.h"
 #include "ejs-proxy.h"
 #include "ejs-ops.h"
+#include "ejs-string.h"
 #include "ejs-symbol.h"
 
 
@@ -17,6 +18,27 @@
 #define EJSVAL_TO_WEAKMAP(v)     ((EJSMap*)EJSVAL_TO_OBJECT(v))
 
 static ejsval _ejs_WeakMapData_symbol EJSVAL_ALIGNMENT;
+static ejsval _ejs_WeakMapSymbolData_symbol EJSVAL_ALIGNMENT;
+
+// symbols-as-weakmap-keys: symbols carry no property storage, so the
+// inverted rep can't hang the entry off the key.  Symbol-keyed entries
+// live in a hidden Map (symbol -> value) on the WeakMap itself,
+// under a symbol distinct from the inverted-rep slot (the WeakMap can
+// itself be a key in another WeakMap).
+static ejsval
+weakmap_symbol_entries (ejsval M, EJSBool create)
+{
+    ejsval smap = _ejs_object_getprop (M, _ejs_WeakMapSymbolData_symbol);
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(smap)) {
+        if (!create)
+            return _ejs_undefined;
+        smap = _ejs_map_new();
+        // hidden: enumeration/spread must not see the slot
+        _ejs_object_define_value_property (M, _ejs_WeakMapSymbolData_symbol, smap,
+                                           EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
+    }
+    return smap;
+}
 
 ejsval
 _ejs_weakmap_new ()
@@ -47,7 +69,14 @@ static EJS_NATIVE_FUNC(_ejs_WeakMap_prototype_delete) {
 
     // 4. Let entries be the List that is the value of M’s [[WeakMapData]] internal slot.
     // 5. If entries is undefined, then throw a TypeError exception.
-    // 6. If Type(key) is not Object, then return false.
+    if (EJSVAL_IS_SYMBOL(key)) {
+        ejsval smap = weakmap_symbol_entries (M, EJS_FALSE);
+        if (EJSVAL_IS_UNDEFINED(smap))
+            return _ejs_false;
+        return _ejs_map_delete (smap, key);
+    }
+
+    // 6. If CanBeHeldWeakly(key) is false, return false.
     if (!EJSVAL_IS_OBJECT(key))
         return _ejs_false;
 
@@ -60,7 +89,7 @@ static EJS_NATIVE_FUNC(_ejs_WeakMap_prototype_delete) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "[[WeakMapData]] internal error");
 
     return _ejs_map_delete (imap, M);
-#else    
+#else
     // 7. Repeat for each Record {[[key]], [[value]]} p that is an element of entries,
     //    a. If p.[[key]] is not empty and SameValue(p.[[key]], key) is true, then
     //       i. Set p.[[key]] to empty.
@@ -90,7 +119,14 @@ static EJS_NATIVE_FUNC(_ejs_WeakMap_prototype_get) {
 
     // 4. Let entries be the List that is the value of M’s [[WeakMapData]] internal slot.
     // 5. If entries is undefined, then throw a TypeError exception.
-    // 6. If Type(key) is not Object, then return undefined.
+    if (EJSVAL_IS_SYMBOL(key)) {
+        ejsval smap = weakmap_symbol_entries (M, EJS_FALSE);
+        if (EJSVAL_IS_UNDEFINED(smap))
+            return _ejs_undefined;
+        return _ejs_map_get (smap, key);
+    }
+
+    // 6. If CanBeHeldWeakly(key) is false, return undefined.
     if (!EJSVAL_IS_OBJECT(key))
         return _ejs_undefined;
 
@@ -129,7 +165,14 @@ static EJS_NATIVE_FUNC(_ejs_WeakMap_prototype_has) {
 
     // 4. Let entries be the List that is the value of M’s [[WeakMapData]] internal slot.
     // 5. If entries is undefined, then throw a TypeError exception.
-    // 6. If Type(key) is not Object, then return false.
+    if (EJSVAL_IS_SYMBOL(key)) {
+        ejsval smap = weakmap_symbol_entries (M, EJS_FALSE);
+        if (EJSVAL_IS_UNDEFINED(smap))
+            return _ejs_false;
+        return _ejs_map_has (smap, key);
+    }
+
+    // 6. If CanBeHeldWeakly(key) is false, return false.
     if (!EJSVAL_IS_OBJECT(key))
         return _ejs_false;
 
@@ -171,16 +214,24 @@ static EJS_NATIVE_FUNC(_ejs_WeakMap_prototype_set) {
 
     // 4. Let entries be the List that is the value of M’s [[WeakMapData]] internal slot.
     // 5. If entries is undefined, then throw a TypeError exception.
-    // 6. If Type(key) is not Object, then return false.
+    if (EJSVAL_IS_SYMBOL(key)) {
+        ejsval smap = weakmap_symbol_entries (M, EJS_TRUE);
+        _ejs_map_set (smap, key, value);
+        return M;
+    }
+
+    // 6. If CanBeHeldWeakly(key) is false, throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(key))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "set called with non-Object key.");
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "set called with a key that cannot be held weakly.");
 
 
 #if WEAK_COLLECTIONS_USE_INVERTED_REP
     ejsval imap = _ejs_object_getprop(key, _ejs_WeakMapData_symbol);
     if (EJSVAL_IS_NULL_OR_UNDEFINED(imap)) {
         imap = _ejs_map_new();
-        _ejs_object_setprop(key, _ejs_WeakMapData_symbol, imap);
+        // hidden: enumeration/spread must not see the inverted-rep slot
+        _ejs_object_define_value_property (key, _ejs_WeakMapData_symbol, imap,
+                                           EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
     }
 
     if (!EJSVAL_IS_MAP(imap))
@@ -197,6 +248,113 @@ static EJS_NATIVE_FUNC(_ejs_WeakMap_prototype_set) {
     // 9. Append p as the last element of entries.
     // 10. Return M.
 #endif
+}
+
+// entry lookup/insert shared by the upsert methods; key is already
+// validated as object or symbol
+static EJSBool
+weakmap_lookup (ejsval M, ejsval key, ejsval* value_out)
+{
+    ejsval entries;
+    ejsval lookup_key;
+    if (EJSVAL_IS_SYMBOL(key)) {
+        entries = weakmap_symbol_entries (M, EJS_FALSE);
+        lookup_key = key;
+    }
+    else {
+        entries = _ejs_object_getprop (key, _ejs_WeakMapData_symbol);
+        lookup_key = M;
+    }
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(entries))
+        return EJS_FALSE;
+    if (!EJSVAL_TO_BOOLEAN(_ejs_map_has (entries, lookup_key)))
+        return EJS_FALSE;
+    *value_out = _ejs_map_get (entries, lookup_key);
+    return EJS_TRUE;
+}
+
+static void
+weakmap_insert (ejsval M, ejsval key, ejsval value)
+{
+    if (EJSVAL_IS_SYMBOL(key)) {
+        _ejs_map_set (weakmap_symbol_entries (M, EJS_TRUE), key, value);
+        return;
+    }
+    ejsval imap = _ejs_object_getprop (key, _ejs_WeakMapData_symbol);
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(imap)) {
+        imap = _ejs_map_new();
+        // hidden: enumeration/spread must not see the inverted-rep slot
+        _ejs_object_define_value_property (key, _ejs_WeakMapData_symbol, imap,
+                                           EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
+    }
+    _ejs_map_set (imap, M, value);
+}
+
+// upsert proposal
+// WeakMap.prototype.getOrInsert ( key, value )
+static EJS_NATIVE_FUNC(_ejs_WeakMap_prototype_getOrInsert) {
+    ejsval key = _ejs_undefined;
+    ejsval value = _ejs_undefined;
+    if (argc > 0) key = args[0];
+    if (argc > 1) value = args[1];
+
+    // 1-2. RequireInternalSlot(M, [[WeakMapData]])
+    ejsval M = *_this;
+    if (!EJSVAL_IS_OBJECT(M))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "getOrInsert called with non-object this.");
+    if (!EJSVAL_IS_WEAKMAP(M))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "getOrInsert called with non-WeakMap this.");
+
+    // 3. If CanBeHeldWeakly(key) is false, throw a TypeError exception.
+    if (!EJSVAL_IS_OBJECT(key) && !EJSVAL_IS_SYMBOL(key))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "getOrInsert called with a key that cannot be held weakly.");
+
+    // 4. If an entry for key exists, return its value.
+    ejsval existing;
+    if (weakmap_lookup (M, key, &existing))
+        return existing;
+
+    // 5-6. Insert { key, value } and return value.
+    weakmap_insert (M, key, value);
+    return value;
+}
+
+// upsert proposal
+// WeakMap.prototype.getOrInsertComputed ( key, callbackfn )
+static EJS_NATIVE_FUNC(_ejs_WeakMap_prototype_getOrInsertComputed) {
+    ejsval key = _ejs_undefined;
+    ejsval callbackfn = _ejs_undefined;
+    if (argc > 0) key = args[0];
+    if (argc > 1) callbackfn = args[1];
+
+    // 1-2. RequireInternalSlot(M, [[WeakMapData]])
+    ejsval M = *_this;
+    if (!EJSVAL_IS_OBJECT(M))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "getOrInsertComputed called with non-object this.");
+    if (!EJSVAL_IS_WEAKMAP(M))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "getOrInsertComputed called with non-WeakMap this.");
+
+    // 3. If IsCallable(callbackfn) is false, throw a TypeError exception.
+    if (!IsCallable(callbackfn))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "getOrInsertComputed callbackfn isn't a function.");
+
+    // 4. If CanBeHeldWeakly(key) is false, throw a TypeError exception.
+    if (!EJSVAL_IS_OBJECT(key) && !EJSVAL_IS_SYMBOL(key))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "getOrInsertComputed called with a key that cannot be held weakly.");
+
+    // 5. If an entry for key exists, return its value.
+    ejsval existing;
+    if (weakmap_lookup (M, key, &existing))
+        return existing;
+
+    // 6. Let value be ? Call(callbackfn, undefined, « key »).
+    ejsval undef_this = _ejs_undefined;
+    ejsval cb_args[1] = { key };
+    ejsval value = _ejs_invoke_closure (callbackfn, &undef_this, 1, cb_args, _ejs_undefined);
+
+    // 7-8. Insert (or overwrite an entry the callback added) and return value.
+    weakmap_insert (M, key, value);
+    return value;
 }
 
 // ES2015, June 2015
@@ -294,20 +452,27 @@ _ejs_weakmap_init(ejsval global)
     _ejs_gc_add_root (&_ejs_WeakMapData_symbol);
     _ejs_WeakMapData_symbol = _ejs_symbol_new(_ejs_atom_WeakMapData);
 
+    _ejs_gc_add_root (&_ejs_WeakMapSymbolData_symbol);
+    _ejs_WeakMapSymbolData_symbol = _ejs_symbol_new(_ejs_atom_WeakMapSymbolData);
+
     _ejs_WeakMap = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_WeakMap, _ejs_WeakMap_impl);
     _ejs_object_setprop (global, _ejs_atom_WeakMap, _ejs_WeakMap);
 
     _ejs_gc_add_root (&_ejs_WeakMap_prototype);
     _ejs_WeakMap_prototype = _ejs_object_new (_ejs_Object_prototype, &_ejs_Object_specops);
-    _ejs_object_setprop (_ejs_WeakMap,       _ejs_atom_prototype,  _ejs_WeakMap_prototype);
+    _ejs_object_define_value_property (_ejs_WeakMap, _ejs_atom_prototype, _ejs_WeakMap_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_WeakMap, x, _ejs_WeakMap_##x)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_WeakMap_prototype, x, _ejs_WeakMap_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 #define PROTO_GETTER(x) EJS_INSTALL_ATOM_GETTER(_ejs_WeakMap_prototype, x, _ejs_WeakMap_prototype_get_##x)
 
-    // XXX (ES6 23.3.3.1) WeakMap.prototype.constructor
+    _ejs_object_define_value_property (_ejs_WeakMap_prototype, _ejs_atom_constructor, _ejs_WeakMap,
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+
     PROTO_METHOD(delete);
     PROTO_METHOD(get);
+    PROTO_METHOD(getOrInsert);
+    PROTO_METHOD(getOrInsertComputed);
     PROTO_METHOD(has);
     PROTO_METHOD(set);
 
@@ -317,6 +482,93 @@ _ejs_weakmap_init(ejsval global)
 #undef PROTO_METHOD
 }
 
+
+// ---- class private-name storage ---------------------------------------
+//
+// each #name desugars to a compiler-created weakmap; obj's entry existing
+// IS the "object has this private member / brand" fact.  all of these
+// take the inverted-rep fast path directly — the maps are engine-created,
+// never user-visible.
+
+static ejsval
+private_imap (ejsval obj)
+{
+    if (!EJSVAL_IS_OBJECT(obj))
+        return _ejs_undefined;
+    return _ejs_object_getprop (obj, _ejs_WeakMapData_symbol);
+}
+
+static void _ejs_throw_private_error (ejsval name, const char* what) __attribute__ ((noreturn));
+static void
+_ejs_throw_private_error (ejsval name, const char* what)
+{
+    char msgbuf[256];
+    char* name_utf8 = EJSVAL_IS_STRING(name) ? _ejs_string_to_utf8(_ejs_string_flatten(name)) : NULL;
+    snprintf (msgbuf, sizeof(msgbuf), "Cannot %s private member %s from an object whose class did not declare it",
+              what, name_utf8 ? name_utf8 : "#?");
+    if (name_utf8) free (name_utf8);
+    _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, msgbuf);
+}
+
+ejsval
+_ejs_private_field_get (ejsval map, ejsval obj, ejsval name)
+{
+    ejsval imap = private_imap (obj);
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(imap) || !EJSVAL_TO_BOOLEAN(_ejs_map_has (imap, map)))
+        _ejs_throw_private_error (name, "read");
+    return _ejs_map_get (imap, map);
+}
+
+ejsval
+_ejs_private_field_set (ejsval map, ejsval obj, ejsval name, ejsval value)
+{
+    ejsval imap = private_imap (obj);
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(imap) || !EJSVAL_TO_BOOLEAN(_ejs_map_has (imap, map)))
+        _ejs_throw_private_error (name, "write");
+    _ejs_map_set (imap, map, value);
+    return value;
+}
+
+ejsval
+_ejs_private_field_init (ejsval map, ejsval obj, ejsval value)
+{
+    ejsval imap = private_imap (obj);
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(imap)) {
+        imap = _ejs_map_new();
+        // hidden: enumeration/spread must not see the inverted-rep slot
+        _ejs_object_define_value_property (obj, _ejs_WeakMapData_symbol, imap,
+                                           EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
+    }
+    _ejs_map_set (imap, map, value);
+    return _ejs_undefined;
+}
+
+ejsval
+_ejs_private_brand_check (ejsval map, ejsval obj, ejsval name)
+{
+    ejsval imap = private_imap (obj);
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(imap) || !EJSVAL_TO_BOOLEAN(_ejs_map_has (imap, map)))
+        _ejs_throw_private_error (name, "access");
+    return obj;
+}
+
+// assignment to a private method / read-only private accessor: always a
+// TypeError, but only when the write actually executes (logical
+// assignment can short-circuit past it)
+ejsval
+_ejs_private_write_error (ejsval name)
+{
+    _ejs_throw_private_error (name, "write");
+}
+
+ejsval
+_ejs_private_has (ejsval map, ejsval obj)
+{
+    ejsval imap = private_imap (obj);
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(imap))
+        return _ejs_false;
+    return _ejs_map_has (imap, map);
+}
 
 static EJSObject*
 _ejs_weakmap_specop_allocate()

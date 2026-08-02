@@ -15,7 +15,15 @@ safer with types underneath it.
 
 ## Phases
 
-- [ ] **language-P1 — Gap inventory.**  An initial 34-probe census
+- [x] **language-P1 — Gap inventory.**  DONE 2026-07-31 —
+      docs/language-p1-results.md (26,820-test test262 probe via
+      test/test262/run-test262.mjs: 35% pass; the parser is the
+      quantified long pole at 44% of the language area failing to
+      parse; new beyond the census: builtin property attributes wrong
+      everywhere, 589 JS-reachable runtime aborts, `super`-in-object-
+      literal lowering error, 352 early-error gaps mostly regexp
+      validation; prioritized feature list for language-P3 recorded
+      there).  The original census: an initial 34-probe census
       lives in `test/modernization/` (see its README).  Headline: 13
       parser gaps (optional chaining, `??`, class fields, async/await,
       `**`, object spread/rest, BigInt, ...), 4 stdlib gaps
@@ -24,29 +32,52 @@ safer with types underneath it.
       hazard: `async m()` object methods parse but silently
       miscompile).  Remaining work: a test262 subset probe for
       exhaustiveness, and a prioritized feature list from it.
-- [ ] **language-P2 — Parser replacement.**  Keep the slot
-      interface-shaped (the compiler consumes ESTree; parser behind one
-      module) with **@babel/parser + its estree plugin as the default**
-      — it's where stage proposals land first (decorators, pipeline,
-      pattern matching as enableable plugins); it's zero-dependency and
-      bundles flat for vendoring.  Acorn remains the cheap-swap
-      alternative.  The MAAM analysis framework consumes ESTree and has
-      no dependency on any particular parser — the compiler/analysis
-      contract is the ESTree shape of the post-desugar tree, so the
-      parser choice is free on both sides.  Self-hosting wrinkle:
-      either parser's own source is newer JS than echojs parses, so
-      vendor a mechanically-regenerable transpiled build (babel to the
-      supported subset), shrinking the transpile step as modernization
-      features land.
-- [ ] **language-P3 — Feature implementation, payoff-ordered.**  Wire
-      probes into CI as they green.  Syntax-only features (optional
-      chaining, `??`, `**`, spread/rest in objects) are desugar
-      candidates; async/await and class fields need runtime + emitter
-      work; BigInt needs a value-representation decision (NaN-boxing
-      has no spare tag appetite — likely heap-boxed).
-- [ ] **language-P4 — test262 lane.**  Stand up a curated test262
-      subset as a CI lane (the kangax harness stays until parity);
-      grow toward the full suite as features land.
+- [x] **language-P2 — Parser replacement.**  DONE 2026-07-31 —
+      docs/language-p2-results.md.  The slot is interface-shaped as
+      planned (`lib/parser.ts`; the compiler consumes the ESTree
+      dialect), but the probe inverted the pencil-in: **acorn 8.18.0 is
+      the default**, not @babel/parser — acorn self-hosts byte-
+      identically today (537-file corpus proof), while babel's bundle
+      needs stdlib echojs lacks (`Array.prototype.at`, ...) plus 4× the
+      compile time, for stage-proposal coverage nothing on the P8.3
+      list needs.  The seam keeps the babel swap cheap if that changes.
+      Vendored as a mechanically-regenerable ES5 transpiled build
+      (external-deps/acorn/regen.sh) exactly as planned; `--parser
+      esprima` is the bisection fallback.  Syntax acorn parses but the
+      backend can't lower gates at the seam with a located error
+      (removed feature-by-feature in language-P3).
+- [x] **language-P3 — Feature implementation, payoff-ordered.**  DONE
+      2026-07-31 — docs/language-p3-results.md.  The payoff list landed:
+      `**`/`**=` (real generic binop + spec-correct exponentiate shared
+      with Math.pow), `??` (native EIR lowering), logical assignment +
+      optional chaining (DesugarModernOps), object spread/rest
+      (CopyDataProperties runtime helpers), bare `catch`, class fields +
+      private members (#fields/#methods/accessors via per-class weakmaps
+      + brand checks) + static blocks (DesugarClasses), and async/await
+      + `for await` on the coroutine generators + promises
+      (DesugarAsyncFunctions; Symbol.asyncIterator added).  Eight
+      pre-existing bugs flushed out and fixed (super.other()
+      mis-dispatch, generator-desugar mapping pop, Promise.all stub,
+      array/string OwnPropertyKeys/descriptors, array freeze clobber,
+      ToEJSBool symbol/NaN, String(symbol), class member attributes).
+      Still gated with located errors: async generator functions,
+      BigInt (value-representation decision pending, likely heap-boxed),
+      dynamic `import()`/`import.meta` (AOT module-story design).
+      (Async generators subsequently landed in the language-P4.1
+      conformance pass — docs/language-p4.1-results.md — and BigInt in
+      the P4.2 pass — docs/bigint-plan.md, buy-vs-build + landing
+      record; dynamic import remains gated.)
+- [x] **language-P4 — test262 lane.**  DONE 2026-07-31 —
+      docs/language-p4-results.md.  `test/test262/lane.sh` runs the
+      curated selection (every 6th language test, 2 per built-ins leaf
+      dir, all of harness) against the suite SHA pinned in
+      `test/test262/suite.sha`, checked against
+      `test/test262/expectations.txt` — CI fails on regressions
+      (expected-pass failing) and stale expectations (expected-fail
+      passing), so the file shrinks as a conformance ratchet.  Runs in
+      the macOS bootstrap job (expectations are generated on
+      macos-arm64).  Grow by shrinking the language stride toward 1 as
+      features land; the kangax harness stays until parity.
 - [ ] **language-P5 — Un-fork the JS external-deps.**
       esprima/escodegen/estraverse/esutils live in `external-deps/` as
       lightly-patched copies (build-system compatibility).  Move to

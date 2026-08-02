@@ -10,7 +10,7 @@
 
 EJSHeapContext _ejs_heap; // exported: the per-isolate context (the emitter seam)
 
-EJSBool nursery_enabled; // EJS_GC_NURSERY=off selects the old collector
+EJSBool nursery_enabled; // EJS_GC_NURSERY=off selects the single-generation collector
 EJSBool in_minor_gc;     // the shared mark helpers dispatch on this
 
 EJSHeapPriv heap_priv; // the private half of the (single) isolate's context
@@ -104,8 +104,8 @@ minor_wl_push(GCObjectPtr p)
 }
 
 // After memcpy'ing a cell, SELF-INTERIOR pointers still aim at the old
-// cell (found the hard way: every inline-buffer flat string's data
-// pointed at poison after promotion).  The two classes in the runtime:
+// cell (an inline-buffer flat string's data would point at the swept
+// original after promotion).  The two classes in the runtime:
 // flat strings without an out-of-line buffer (data.flat = self+hdr) and
 // small EJSArguments (args = self+sizeof).  Anything new that embeds a
 // self-pointer must be added here — the planned trace-bitmap redesign
@@ -130,8 +130,8 @@ minor_fixup_evacuated(GCObjectPtr from, GCObjectPtr to, size_t cell_size)
             if (d >= (char*)from && d < (char*)from + cell_size)
                 a->args = (ejsval*)((char*)to + (d - (char*)from));
         }
-        // shaped ordinary objects with EMBEDDED slot storage (gc-P5
-        // single-cell allocation): the slots ejsval points into the
+        // shaped ordinary objects with EMBEDDED slot storage (single-cell
+        // allocation): the slots ejsval points into the
         // cell.  Shape bits are only ever set on ordinary objects, so
         // the header test suffices; dictionary mode (shape 0) keeps
         // the map pointer in the union and must not be touched.
@@ -659,8 +659,8 @@ young_normalize_for_full_gc(void)
 void
 nursery_init(void)
 {
-    // nursery ON by default (gate decision 2026-07-25);
-    // EJS_GC_NURSERY=off (or =0) selects the old collector for A/B.
+    // nursery ON by default; EJS_GC_NURSERY=off (or =0) selects the
+    // single-generation collector for A/B.
     {
         char* e = getenv("EJS_GC_NURSERY");
         nursery_enabled = !(e && (strcmp(e, "off") == 0 || strcmp(e, "0") == 0));

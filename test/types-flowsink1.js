@@ -1,4 +1,4 @@
-// sinking-P3 probe: flow-sensitive field writes + partial-escape
+// flow-sensitive field writes + partial-escape probe
 // materialization (docs/sinking-plan.md).  Every line must match node
 // exactly, with and without --types, under EJS_SHAPES=off, gc-stress,
 // and -fno-flow-sink.

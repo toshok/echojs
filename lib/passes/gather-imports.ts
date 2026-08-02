@@ -18,7 +18,7 @@ import { TreeVisitor, VisitResult } from "../node-visitor";
 import { is_string_literal, underline } from "../echo-util";
 import { JSModuleInfo, NativeModuleInfo, ModuleInfo } from "../module-info";
 import * as b from "../ast-builder";
-import * as esprima from "../../external-deps/esprima/esprima-es6";
+import * as parser from "../parser";
 import type * as e from "../estree";
 import type { CompilerOptions, ImportVariable } from "../options";
 import { passes } from "../pass-config";
@@ -74,6 +74,12 @@ class GatherImports extends TreeVisitor {
 
             if (source_path.indexOf(process.cwd()) === 0)
                 source_path = path.relative(process.cwd(), source_path);
+
+            // module paths are suffix-free everywhere (the constructor
+            // strips this module's own .js the same way), so a
+            // `./foo.js` specifier must key the same module as `./foo`
+            if (path.extname(source_path) === ".js")
+                source_path = source_path.substring(0, source_path.length - 3);
         }
 
         if (this.importList.indexOf(source_path) === -1) this.importList.push(source_path);
@@ -139,8 +145,121 @@ class GatherImports extends TreeVisitor {
     }
 
     override visitExportAllDeclaration(n: e.ExportAllDeclaration): VisitResult {
-        throw new Error("GatherImports#visitExportAllDeclaration unimplemented");
+        this.addSource(n);
+        if (n.exported) {
+            // `export * as ns from "m"`: a single named export whose
+            // value is the source module's namespace object
+            this.addExportIdentifier(n.exported.name);
+        } else {
+            // `export * from "m"`: the re-exported names aren't known
+            // until every module is gathered (the source may be gathered
+            // after this module, and star re-exports chain), so record
+            // the node for the post-gather expansion
+            let nodes = starExportNodes.get(this.moduleInfo);
+            if (!nodes) {
+                nodes = [];
+                starExportNodes.set(this.moduleInfo, nodes);
+            }
+            nodes.push(n);
+        }
+        return n;
     }
+}
+
+// the plain `export * from "m"` nodes of each gathered module, expanded
+// to concrete export names by expandStarReexports once gathering is done
+const starExportNodes = new Map<JSModuleInfo, e.ExportAllDeclaration[]>();
+
+// Expand `export * from "m"` into concrete exports.  Names only appear
+// once the whole graph is gathered, and star re-exports chain, so this
+// iterates to a fixpoint.  Per spec: `default` never re-exports through
+// a star, explicit local exports shadow star names, and a name reaching
+// a module through two stars is exported only when both resolve to the
+// same original export (otherwise it is ambiguous and dropped, with a
+// warning).  Each node is annotated with the names it contributes so
+// lowering can emit the slot copies.
+function expandStarReexports(): void {
+    // per module: star-added name -> ultimate origin ("path#name"),
+    // or null for a name found ambiguous (never re-added)
+    const starOrigins = new Map<JSModuleInfo, Map<string, string | null>>();
+    const originOf = (info: ModuleInfo, name: string): string | null => {
+        const origins = info instanceof JSModuleInfo ? starOrigins.get(info) : undefined;
+        const known = origins ? origins.get(name) : undefined;
+        if (known !== undefined) return known;
+        return `${info.path}#${name}`;
+    };
+
+    let changed = true;
+    while (changed) {
+        changed = false;
+        starExportNodes.forEach((nodes, info) => {
+            let origins = starOrigins.get(info);
+            if (!origins) {
+                origins = new Map();
+                starOrigins.set(info, origins);
+            }
+            for (const n of nodes) {
+                const source = n.source_path!.value;
+                const source_info = allModules.get(source);
+                if (!source_info)
+                    throw new Error(
+                        `module ${source} not found (export * from '${String(n.source.value)}')`
+                    );
+                source_info.exports.forEach((einfo, name) => {
+                    if (name === "default" || einfo.promoted) return;
+                    const origin = originOf(source_info, name);
+                    if (origin === null) return; // ambiguous at the source; can't propagate
+                    if (origins.has(name)) {
+                        if (origins.get(name) === origin) return; // same original export
+                        // two stars, two different originals: ambiguous
+                        console.warn(
+                            `warning: '${name}' is re-exported into ${info.path} by multiple ` +
+                                `\`export *\` declarations with different origins; not exported`
+                        );
+                        origins.set(name, null);
+                        info.exports.delete(name);
+                        changed = true;
+                        return;
+                    }
+                    const existing = info.exports.get(name);
+                    if (existing) {
+                        // an explicit local export shadows the star name;
+                        // a promoted (non-exported) module var colliding
+                        // with one is a genuine conflict — the slot table
+                        // can hold only one of them
+                        if (existing.promoted)
+                            console.warn(
+                                `warning: ${info.path}: module-level '${name}' collides with a ` +
+                                    `same-named \`export *\` re-export; '${name}' is not exported`
+                            );
+                        return;
+                    }
+                    origins.set(name, origin);
+                    info.addExport(name);
+                    changed = true;
+                });
+            }
+        });
+    }
+
+    // annotate each star node with the names it contributes
+    starExportNodes.forEach((nodes, info) => {
+        const origins = starOrigins.get(info);
+        for (const n of nodes) {
+            const source_info = allModules.get(n.source_path!.value)!;
+            const names: string[] = [];
+            info.exports.forEach((einfo, name) => {
+                if (einfo.promoted) return;
+                if (!origins || origins.get(name) == null) return; // explicit or ambiguous
+                const source_export = source_info.exports.get(name);
+                if (!source_export || source_export.promoted || name === "default") return;
+                if (originOf(source_info, name) !== origins.get(name)) return;
+                names.push(name);
+            });
+            n.star_export_names = names;
+        }
+    });
+    starExportNodes.clear();
 }
 
 export function getAllModules(): Map<string, ModuleInfo> {
@@ -270,10 +389,13 @@ function parseFile(filename: string, content: string, options: CompilerOptions):
         // silently miscompile (e.g. `async m() {}` object methods
         // compiled to nonsense).  a program that doesn't parse must fail
         // loudly here.  sourceType "module" is what makes import/export
-        // parse at all (tolerant mode used to recover past the spurious
-        // script-mode error on every import) and, per spec, makes the
-        // parse strict.
-        return esprima.parse(content, { loc: true, raw: true, sourceType: "module" });
+        // parse at all and, per spec, makes the parse strict.
+        return parser.parse(content, {
+            loc: true,
+            raw: true,
+            sourceType: "module",
+            parser: options.parser,
+        });
     } catch (err) {
         console.warn(`${filename}: ${String(err)}:`);
         return process.exit(-1);
@@ -465,6 +587,8 @@ export function gatherAllModules(
             }
         }
     }
+
+    expandStarReexports();
 
     return files;
 }

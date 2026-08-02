@@ -51,12 +51,12 @@ root_registry_shutdown(void)
     root_registry_count = root_registry_capacity = 0;
 }
 
-// gc-P4: the compacting major (EJS_GC_COMPACT=off for A/B) and THE
+// The compacting major (EJS_GC_COMPACT=off for A/B) and THE
 // full-collection growth knob — a full GC triggers when old-gen growth
 // since the last one exceeds gc_growth_pct percent of the post-sweep
 // footprint (floor: two arenas, so small programs keep a sane cadence).
-// The knob replaces the old fixed 60MB constant; with compaction
-// shrinking the heap, the trigger now adapts in BOTH directions.
+// With compaction shrinking the heap, the trigger adapts in BOTH
+// directions.
 EJSBool compact_enabled;
 static int gc_growth_pct = 50;
 
@@ -235,7 +235,7 @@ _ejs_gc_init()
         compact_enabled = !(e && (strcmp(e, "off") == 0 || strcmp(e, "0") == 0));
     }
 
-    // THE growth knob (gc-P4 knob census = 1): a full collection
+    // THE growth knob (knob census = 1): a full collection
     // triggers when old-gen growth exceeds EJS_GC_GROWTH percent of the
     // post-sweep footprint
     {
@@ -263,8 +263,8 @@ _ejs_gc_init()
 
     _ejs_gc_worklist_init();
 
-    // the generational nursery (EJS_GC_NURSERY=off selects
-    // the old single-generation collector for A/B and differential runs)
+    // the generational nursery (EJS_GC_NURSERY=off selects the
+    // single-generation collector for A/B and differential runs)
     nursery_init();
 }
 
@@ -282,6 +282,7 @@ static int num_object_allocs = 0;
 static int num_closureenv_allocs = 0;
 static int num_primstr_allocs = 0;
 static int num_primsym_allocs = 0;
+static int num_bigint_allocs = 0;
 
 int total_allocs = 0;
 
@@ -336,6 +337,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     case EJS_SCAN_TYPE_PRIMSYM: num_primsym_allocs ++; break;
     case EJS_SCAN_TYPE_OBJECT: num_object_allocs ++; break;
     case EJS_SCAN_TYPE_CLOSUREENV: num_closureenv_allocs ++; break;
+    case EJS_SCAN_TYPE_BIGINT: num_bigint_allocs ++; break;
     }
 
     int bucket;

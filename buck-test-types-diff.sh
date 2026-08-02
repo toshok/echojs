@@ -20,12 +20,22 @@
 # the whole suite is a CI-lane decision, not a default build step).  Run
 # from the repo root after `buck2 build //lib:generated //:srcdir-tree`:
 #
-#   ./buck-test-types-diff.sh <work-tree> <log-dir> [concurrency]
+#   ./buck-test-types-diff.sh <work-tree> <log-dir> [concurrency] [stage1-exe]
 #
 # where <work-tree> is a stage0-style tree (srcdir-tree + lib/generated +
 # test/) — the caller assembles it so this script never mixes trees
 # (franken-tree lesson).  Writes per-file logs + results.jsonl to
 # <log-dir> and prints the summary table.
+#
+# With a fourth argument (a stage1+ executable, copied into the tree by
+# the caller or given as a path), the lane runs HOST-vs-HOST instead
+# (plans P11.1 gate): every file is compiled with --types --types-dump by
+# BOTH the node-hosted stage0 and the self-hosted binary; the analysis
+# output (the --types/--types-dump stderr lines, wall time normalized
+# out) must be byte-identical, and so must the two executables' run
+# stdout.  The node-hosted and self-hosted oracles are the same maam —
+# any divergence is an echojs runtime/compile bug, not an analysis
+# choice.
 set -euo pipefail
 
 # Absolutize both paths up front: a relative <work-tree> once resolved
@@ -38,6 +48,10 @@ WORK="$(cd "$1" && pwd)"
 mkdir -p "$2"
 LOGDIR="$(cd "$2" && pwd)"
 CONC="${3:-4}"
+STAGE1_EXE="${4:-}"
+if [ -n "$STAGE1_EXE" ]; then
+    STAGE1_EXE="$(cd "$(dirname "$STAGE1_EXE")" && pwd)/$(basename "$STAGE1_EXE")"
+fi
 
 export NODE_PATH="/Users/toshok/src/echojs/echojs/node_modules:/Users/toshok/src/echojs/echojs/node-llvm/build/Release"
 export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
@@ -47,7 +61,7 @@ fi
 export NO_COLOR=1
 unset FORCE_COLOR
 
-WORK="$WORK" LOGDIR="$LOGDIR" CONC="$CONC" exec node --input-type=module -e '
+WORK="$WORK" LOGDIR="$LOGDIR" CONC="$CONC" STAGE1_EXE="$STAGE1_EXE" exec node --input-type=module -e '
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -55,6 +69,7 @@ import * as path from "node:path";
 const WORK = process.env.WORK;
 const LOGDIR = process.env.LOGDIR;
 const CONC = Number(process.env.CONC || 4);
+const STAGE1 = process.env.STAGE1_EXE || null;
 const TIMEOUT_MS = 120000;
 const testDir = path.join(WORK, "test");
 
@@ -89,6 +104,41 @@ async function worker(wid) {
         const base = file.replace(/\.js$/, "");
         const exe = path.join(testDir, file + ".exe");
         const r = { file, status: "?", diamonds: 0, queries: 0, unknown: 0 };
+
+        if (STAGE1) {
+            // host-vs-host (plans P11.1): stage0 --types vs stage1 --types —
+            // normalized analysis stderr and run stdout must both match
+            const dumpLines = (buf) =>
+                String(buf).split("\n").filter((l) => l.startsWith("--types")).map((l) => l.replace(/wall=\d+ms/, "wall=Xms")).join("\n");
+            const s0c = await run("node", [path.join(WORK, "lib/generated/ejs-es6.js"), ...EJS, "--types", "--types-dump", file], { cwd: testDir, env }, TIMEOUT_MS);
+            if (s0c.timedout) { r.status = "TIMEOUT-compile-stage0"; results.push(r); continue; }
+            if (s0c.code !== 0) { r.status = "N/A"; results.push(r); continue; }
+            const s0r = await run(exe, [], { cwd: testDir, env }, TIMEOUT_MS);
+            if (s0r.failed || s0r.timedout) { r.status = "RUN-STAGE0-FAIL"; results.push(r); continue; }
+            const s1c = await run(STAGE1, [...EJS, "--types", "--types-dump", file], { cwd: testDir, env }, TIMEOUT_MS);
+            if (s1c.timedout) { r.status = "TIMEOUT-compile-stage1"; results.push(r); continue; }
+            if (s1c.code !== 0) { r.status = "STAGE1-COMPILE-FAIL"; results.push(r); continue; }
+            const s1r = await run(exe, [], { cwd: testDir, env }, TIMEOUT_MS);
+            if (s1r.failed || s1r.timedout) { r.status = "RUN-STAGE1-FAIL"; results.push(r); continue; }
+            const m = dumpLines(s0c.err).match(/diamonds=(\d+) oracleQueries=(\d+) oracleUnknown=(\d+)/);
+            if (m) { r.diamonds = +m[1]; r.queries = +m[2]; r.unknown = +m[3]; }
+            const typedSame = dumpLines(s0c.err) === dumpLines(s1c.err);
+            const runSame = Buffer.compare(s0r.out, s1r.out) === 0 && s0r.code === s1r.code;
+            if (typedSame && runSame) {
+                r.status = "IDENTICAL";
+            } else {
+                r.status = "DIVERGENT";
+                fs.writeFileSync(path.join(LOGDIR, base + ".stage0.types"), dumpLines(s0c.err));
+                fs.writeFileSync(path.join(LOGDIR, base + ".stage1.types"), dumpLines(s1c.err));
+                if (!runSame) {
+                    fs.writeFileSync(path.join(LOGDIR, base + ".stage0.out"), s0r.out);
+                    fs.writeFileSync(path.join(LOGDIR, base + ".stage1.out"), s1r.out);
+                }
+            }
+            results.push(r);
+            process.stdout.write(`${file} ${r.status} diamonds=${r.diamonds}\n`);
+            continue;
+        }
 
         // flag-off compile + run
         const c0 = await run("node", [path.join(WORK, "lib/generated/ejs-es6.js"), ...EJS, file], { cwd: testDir, env }, TIMEOUT_MS);

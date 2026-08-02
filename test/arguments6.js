@@ -1,6 +1,5 @@
 // the arguments object is iterable (@@iterator = %ArrayProto_values%),
-// and its specops must not ToNumber symbol keys — spreading `arguments`
-// used to throw a TypeError from the @@iterator lookup.  the
+// and its specops must not ToNumber symbol keys.  the
 // `super(...arguments)` shape is what tsc synthesizes for field-bearing
 // subclasses without explicit constructors.
 

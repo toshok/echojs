@@ -273,7 +273,7 @@ FromPropertyDescriptor(EJSPropertyDesc* Desc)
     }
 
     // 8. If Desc has a [[Set]] field, then
-    if (_ejs_property_desc_has_getter(Desc)) {
+    if (_ejs_property_desc_has_setter(Desc)) {
         //    a. Call OrdinaryDefineOwnProperty with arguments obj, "set", and PropertyDescriptor{[[Value]]: Desc.[[Set]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}. 
         EJSPropertyDesc set_desc = { .value= _ejs_property_desc_get_setter(Desc), .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
         OP(obj_, DefineOwnProperty)(obj, _ejs_atom_set, &set_desc, EJS_FALSE);
@@ -593,7 +593,7 @@ shaped_slots (EJSObject* obj)
 }
 
 // is the slot storage embedded in the object's own cell (single-cell
-// born-with-shape allocation, gc-P5)?  Pointer identity is the mode
+// born-with-shape allocation)?  Pointer identity is the mode
 // test — no header bit to keep coherent through evacuation's memcpy.
 static EJSBool
 shaped_slots_are_embedded (EJSObject* obj)
@@ -608,8 +608,8 @@ shaped_slots_are_embedded (EJSObject* obj)
 // live and will still visit its slots.  Queue the retiree for one
 // precise scan: the next minor rewrites its young refs (live right
 // now, via the surviving copies) to their promoted addresses, after
-// which the cell is inert until swept.  (Found by the P6.3 stress
-// lanes: the promoted env of a young rooted object, orphaned by
+// which the cell is inert until swept.  (Found by the collector-refactor
+// stress lanes: the promoted env of a young rooted object, orphaned by
 // capacity growth during _ejs_init, kept pre-promotion slot values
 // that only ACCIDENTAL conservative pins of stale stack copies had
 // been rescuing — the file split's codegen shift removed the luck.)
@@ -760,7 +760,7 @@ try_fill_shaped (ejsval objval, uint32_t argc, const ejsval* names, ejsval* valu
     return EJS_TRUE;
 }
 
-// single-cell born-with-shape allocation (gc-P5): object + embedded
+// single-cell born-with-shape allocation: object + embedded
 // slot storage in one GC cell — obj header | ops | proto | slots ejsval
 // pointing at obj+32 | embedded env header | slot values.  The embedded
 // region is a real EJSClosureEnv layout, so every slots consumer
@@ -954,6 +954,10 @@ collect_keys (ejsval objval, int *num, int *alloc, ejsval **keys)
         ejsval names[256];
         _ejs_shape_fields (shape, names);
         for (uint32_t i = 0; i < nfields; i ++) {
+            // for..in enumerates string keys only (symbol-named fields
+            // like the weak-collection inverted-rep slot stay hidden)
+            if (!EJSVAL_IS_STRING(names[i]))
+                continue;
             if (!name_in_keys (names[i], *keys, *num)) {
                 if (*num == *alloc-1) {
                     (*alloc) += 10;
@@ -967,6 +971,9 @@ collect_keys (ejsval objval, int *num, int *alloc, ejsval **keys)
     }
 
     for (_EJSPropertyMapEntry *s = obj->map->head_insert; s; s = s->next_insert) {
+        // string keys only, as above
+        if (!EJSVAL_IS_STRING(s->name))
+            continue;
         if (_ejs_property_desc_is_enumerable (s->desc) && !name_in_keys (s->name, *keys, *num)) {
             if (*num == *alloc-1) {
                 // we need to reallocate
@@ -1143,12 +1150,33 @@ _ejs_number_new (double value)
 ejsval
 _ejs_object_setprop (ejsval val, ejsval key, ejsval value)
 {
+    if (EJSVAL_IS_NULL(val) || EJSVAL_IS_UNDEFINED(val))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Cannot set property of null or undefined");
     if (EJSVAL_IS_PRIMITIVE(val)) {
-        _ejs_log ("setprop on primitive.  ignoring\n");
-        EJS_NOT_IMPLEMENTED();
+        // 9.1.9: assignment to a property of a primitive base is a
+        // sloppy-mode no-op (the strict variant below throws)
+        return value;
     }
 
     OP(EJSVAL_TO_OBJECT(val),Set)(val, key, value, val);
+
+    return value;
+}
+
+// 6.2.4.2 PutValue in strict code: a failed [[Set]] (non-writable
+// property, primitive base, accessor without setter) throws TypeError
+ejsval
+_ejs_object_setprop_strict (ejsval val, ejsval key, ejsval value)
+{
+    if (EJSVAL_IS_NULL(val) || EJSVAL_IS_UNDEFINED(val))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Cannot set property of null or undefined");
+    if (EJSVAL_IS_PRIMITIVE(val))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Cannot create property on a primitive value in strict mode");
+
+    if (!OP(EJSVAL_TO_OBJECT(val),Set)(val, key, value, val)) {
+        ejsval msg = _ejs_string_concat (_ejs_string_new_utf8 ("Cannot assign to read only property "), ToString(key));
+        _ejs_throw_nativeerror (EJS_TYPE_ERROR, msg);
+    }
 
     return value;
 }
@@ -1198,9 +1226,40 @@ _ejs_global_setprop (ejsval key, ejsval value)
     return _ejs_object_setprop(_ejs_global, key, value);
 }
 
+// strict-mode variant: 6.2.4.2 PutValue on an unresolvable reference in
+// strict code throws ReferenceError instead of creating the global, and
+// a failed [[Set]] (non-writable property) throws TypeError
+ejsval
+_ejs_global_setprop_strict (ejsval key, ejsval value)
+{
+    if (!OP(EJSVAL_TO_OBJECT(_ejs_global),HasProperty)(_ejs_global, key)) {
+        ejsval msg = _ejs_string_concat (ToString(key), _ejs_string_new_utf8 (" is not defined"));
+        _ejs_throw_nativeerror (EJS_REFERENCE_ERROR, msg);
+    }
+    if (!OP(EJSVAL_TO_OBJECT(_ejs_global),Set)(_ejs_global, key, value, _ejs_global)) {
+        ejsval msg = _ejs_string_concat (_ejs_string_new_utf8 ("Cannot assign to read only property "), ToString(key));
+        _ejs_throw_nativeerror (EJS_TYPE_ERROR, msg);
+    }
+    return value;
+}
+
 ejsval
 _ejs_global_getprop (ejsval key)
 {
+    return _ejs_object_getprop(_ejs_global, key);
+}
+
+// the plain-read variant of the above: per 6.2.4.1 GetValue, reading an
+// unresolvable reference throws ReferenceError.  `typeof x` compiles to
+// _ejs_global_getprop instead (typeof of an unresolvable name is
+// "undefined", never a throw).
+ejsval
+_ejs_global_getprop_checked (ejsval key)
+{
+    if (!OP(EJSVAL_TO_OBJECT(_ejs_global),HasProperty)(_ejs_global, key)) {
+        ejsval msg = _ejs_string_concat (ToString(key), _ejs_string_new_utf8 (" is not defined"));
+        _ejs_throw_nativeerror (EJS_REFERENCE_ERROR, msg);
+    }
     return _ejs_object_getprop(_ejs_global, key);
 }
 
@@ -1236,13 +1295,11 @@ _ejs_object_define_accessor_property_desc (ejsval obj, ejsval key, ejsval get, e
 ejsval
 _ejs_object_setprop_utf8 (ejsval val, const char *key, ejsval value)
 {
-    if (EJSVAL_IS_NULL(val) || EJSVAL_IS_UNDEFINED(val)) {
-        _ejs_log ("throw ReferenceError\n");
-        abort();
-    }
+    if (EJSVAL_IS_NULL(val) || EJSVAL_IS_UNDEFINED(val))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Cannot set property of null or undefined");
 
     if (EJSVAL_IS_PRIMITIVE(val)) {
-        _ejs_log ("setprop on primitive.  ignoring\n");
+        // sloppy-mode no-op (see _ejs_object_setprop)
         return value;
     }
 
@@ -1253,8 +1310,9 @@ ejsval
 _ejs_object_getprop_utf8 (ejsval obj, const char *key)
 {
     if (EJSVAL_IS_NULL(obj) || EJSVAL_IS_UNDEFINED(obj)) {
-        _ejs_log ("throw TypeError, key is %s\n", key);
-        EJS_NOT_IMPLEMENTED();
+        char msg[256];
+        snprintf (msg, sizeof(msg), "Cannot read property '%s' of null or undefined", key);
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, msg);
     }
 
     if (EJSVAL_IS_PRIMITIVE(obj)) {
@@ -1349,13 +1407,11 @@ static EJS_NATIVE_FUNC(_ejs_Object_setPrototypeOf) {
     // 1. Let O be CheckObjectCoercible(O).
     // 2. ReturnIfAbrupt(O).
     if (!EJSVAL_IS_OBJECT(O) && !EJSVAL_IS_NULL(O)) {
-        _ejs_log ("throw TypeError\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypeError");
     }
     // 3. If Type(proto) is neither Object nor Null, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(proto) && !EJSVAL_IS_NULL(proto)) {
-        _ejs_log ("throw TypeError\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypeError");
     }
 
     // 4. If Type(O) is not Object, then return O.
@@ -1366,8 +1422,7 @@ static EJS_NATIVE_FUNC(_ejs_Object_setPrototypeOf) {
     EJSBool status = OP(EJSVAL_TO_OBJECT(O),SetPrototypeOf)(O,proto);
     // 7. If status is false, then throw a TypeError exception.
     if (!status) {
-        _ejs_log ("throw TypeError\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypeError");
     }
     // 8. Return O.
     return O;
@@ -1489,8 +1544,7 @@ static EJS_NATIVE_FUNC(_ejs_Object_getOwnPropertySymbols) {
 
     /* 1. If Type(O) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
-        _ejs_log ("throw TypeError, _this isn't an Object\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypeError: _this isn't an Object");
     }
     EJSObject* O_ = EJSVAL_TO_OBJECT(O);
 
@@ -1615,6 +1669,101 @@ static EJS_NATIVE_FUNC(_ejs_Object_assign) {
     return to;
 }
 
+// ECMA262 7.2.1 RequireObjectCoercible — object destructuring's guard:
+// even an empty pattern ({} = rhs) must TypeError on null/undefined
+ejsval
+_ejs_require_object_coercible (ejsval value)
+{
+    if (EJSVAL_IS_NULL(value) || EJSVAL_IS_UNDEFINED(value))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Cannot destructure null or undefined");
+    return value;
+}
+
+// ECMA262 7.3.25 CopyDataProperties (target, source, excludedItems) — the
+// runtime half of object spread ({...source}) and object rest
+// ({a, ...rest} = o).  target is a fresh ordinary object from the desugar;
+// excluded is a dense array of already-evaluated property keys (or
+// undefined).  own enumerable keys of source are read via Get and defined
+// as enumerable/writable/configurable data properties.  Returns target.
+ejsval
+_ejs_copy_data_properties (ejsval target, ejsval source, ejsval excluded)
+{
+    // spread/rest of null/undefined is a no-op
+    if (EJSVAL_IS_NULL(source) || EJSVAL_IS_UNDEFINED(source))
+        return target;
+
+    ejsval from = ToObject(source);
+    EJSObject* from_ = EJSVAL_TO_OBJECT(from);
+
+    uint32_t nex = 0;
+    ejsval* ex = NULL;
+    if (!EJSVAL_IS_UNDEFINED(excluded)) {
+        nex = ToUint32(Get(excluded, _ejs_atom_length));
+        if (nex > 0) {
+            ex = alloca(sizeof(ejsval) * nex);
+            for (uint32_t i = 0; i < nex; i ++)
+                // the desugar passes computed keys through raw; key them
+                // the way the property reads did
+                ex[i] = ToPropertyKey(Get(excluded, ToString(NUMBER_TO_EJSVAL(i))));
+        }
+    }
+
+    ejsval keysArray = OP(from_,OwnPropertyKeys)(from);
+    uint32_t n = ToUint32(Get(keysArray, _ejs_atom_length));
+    for (uint32_t i = 0; i < n; i ++) {
+        ejsval key = Get(keysArray, ToString(NUMBER_TO_EJSVAL(i)));
+
+        EJSBool skip = EJS_FALSE;
+        for (uint32_t j = 0; j < nex && !skip; j ++)
+            if (SameValue(key, ex[j])) skip = EJS_TRUE;
+        if (skip) continue;
+
+        ejsval exc = _ejs_undefined;
+        EJSPropertyDesc* desc = OP(from_,GetOwnProperty)(from, key, &exc);
+        if (desc && _ejs_property_desc_is_enumerable(desc)) {
+            ejsval propValue = OP(from_,Get)(from, key, from);
+            _ejs_object_define_value_property (target, key, propValue,
+                                               EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+        }
+    }
+
+    return target;
+}
+
+// class field definition: CreateDataPropertyOrThrow with
+// the standard field attributes.  a plain Put would fight non-writable
+// inherited props (`name`/`length` for static fields on the class
+// function) and setters on the prototype.
+ejsval
+_ejs_define_field (ejsval obj, ejsval key, ejsval value)
+{
+    _ejs_object_define_value_property (obj, ToPropertyKey(key), value,
+                                       EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+    return _ejs_undefined;
+}
+
+// the other half of object spread: fold a post-spread literal chunk into
+// the accumulating object BY DESCRIPTOR, so accessor properties transfer
+// as accessors instead of being read.  chunk is always a literal the
+// desugar just built (all own props enumerable).  Returns target.
+ejsval
+_ejs_object_spread_merge (ejsval target, ejsval chunk)
+{
+    EJSObject* chunk_ = EJSVAL_TO_OBJECT(chunk);
+
+    ejsval keysArray = OP(chunk_,OwnPropertyKeys)(chunk);
+    uint32_t n = ToUint32(Get(keysArray, _ejs_atom_length));
+    for (uint32_t i = 0; i < n; i ++) {
+        ejsval key = Get(keysArray, ToString(NUMBER_TO_EJSVAL(i)));
+        ejsval exc = _ejs_undefined;
+        EJSPropertyDesc* desc = OP(chunk_,GetOwnProperty)(chunk, key, &exc);
+        if (!desc) continue;
+        DefinePropertyOrThrow (target, key, desc, &exc);
+    }
+
+    return target;
+}
+
 static EJS_NATIVE_FUNC(_ejs_Object_defineProperties);
 
 
@@ -1628,8 +1777,7 @@ static EJS_NATIVE_FUNC(_ejs_Object_create) {
 
     /* 1. If Type(O) is not Object or Null throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT_OR_NULL(O)) {
-        _ejs_log ("throw TypeError, O isn't an Object or null\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypeError: O isn't an Object or null");
     }
 
     /* 2. Let obj be the result of creating a new object as if by the expression new Object() where Object is the  */
@@ -1715,8 +1863,7 @@ static EJS_NATIVE_FUNC(_ejs_Object_defineProperties) {
 
     /* 1. If Type(O) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
-        _ejs_log ("throw TypeError, _this isn't an Object\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypeError: _this isn't an Object");
     }
     EJSObject *obj = EJSVAL_TO_OBJECT(O);
 
@@ -2123,6 +2270,119 @@ static EJS_NATIVE_FUNC(_ejs_Object_keys) {
     return EnumerableOwnNames(obj);
 }
 
+// ECMA262: 20.1.2.5 Object.entries ( O )
+static EJS_NATIVE_FUNC(_ejs_Object_entries) {
+    ejsval O = _ejs_undefined;
+    if (argc > 0) O = args[0];
+
+    // 1. Let obj be ? ToObject(O).
+    ejsval obj = ToObject(O);
+
+    // 2. Let entryList be ? EnumerableOwnPropertyNames(obj, key+value).
+    // 3. Return CreateArrayFromList(entryList).
+    ejsval names = EnumerableOwnNames(obj);
+    EJSArray* names_ = (EJSArray*)EJSVAL_TO_OBJECT(names);
+
+    ejsval entryList = _ejs_array_new(0, EJS_FALSE);
+    for (int i = 0; i < EJSARRAY_LEN(names_); i ++) {
+        ejsval key = EJSDENSEARRAY_ELEMENTS(names_)[i];
+        ejsval entry_elements[2] = { key, Get(obj, key) };
+        ejsval entry = _ejs_array_new(0, EJS_FALSE);
+        _ejs_array_push_dense(entry, 2, entry_elements);
+        _ejs_array_push_dense(entryList, 1, &entry);
+    }
+    return entryList;
+}
+
+// ECMA262: 20.1.2.22 Object.values ( O )
+static EJS_NATIVE_FUNC(_ejs_Object_values) {
+    ejsval O = _ejs_undefined;
+    if (argc > 0) O = args[0];
+
+    // 1. Let obj be ? ToObject(O).
+    ejsval obj = ToObject(O);
+
+    // 2. Let valueList be ? EnumerableOwnPropertyNames(obj, value).
+    // 3. Return CreateArrayFromList(valueList).
+    ejsval names = EnumerableOwnNames(obj);
+    EJSArray* names_ = (EJSArray*)EJSVAL_TO_OBJECT(names);
+
+    ejsval valueList = _ejs_array_new(0, EJS_FALSE);
+    for (int i = 0; i < EJSARRAY_LEN(names_); i ++) {
+        ejsval key = EJSDENSEARRAY_ELEMENTS(names_)[i];
+        ejsval value = Get(obj, key);
+        _ejs_array_push_dense(valueList, 1, &value);
+    }
+    return valueList;
+}
+
+// ECMA262: 20.1.2.7 Object.fromEntries ( iterable )
+static EJS_NATIVE_FUNC(_ejs_Object_fromEntries) {
+    ejsval iterable = _ejs_undefined;
+    if (argc > 0) iterable = args[0];
+
+    // 1. Perform ? RequireObjectCoercible(iterable).
+    if (EJSVAL_IS_NULL(iterable) || EJSVAL_IS_UNDEFINED(iterable))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Object.fromEntries requires an iterable argument");
+
+    // 2. Let obj be OrdinaryObjectCreate(%Object.prototype%).
+    ejsval obj = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
+
+    // 3. Assert: obj is an extensible ordinary object with no own properties.
+    // 4. Let closure be a new Abstract Closure ... (the adder below)
+    // 5. Return ? AddEntriesFromIterable(obj, iterable, adder).
+
+    // ECMA262: 24.1.1.2 AddEntriesFromIterable ( target, iterable, adder )
+    ejsval iter = GetIterator(iterable, _ejs_undefined);
+
+    for (;;) {
+        // a. Let next be ? IteratorStep(iteratorRecord).
+        ejsval next = IteratorStep (iter);
+
+        // b. If next is false, return target.
+        if (!EJSVAL_TO_BOOLEAN(next))
+            return obj;
+
+        // c. Let nextItem be ? IteratorValue(next).
+        ejsval nextItem = IteratorValue (next);
+
+        // d. If Type(nextItem) is not Object, then
+        if (!EJSVAL_IS_OBJECT(nextItem)) {
+            // i. Let error be ThrowCompletion(a newly created TypeError object).
+            ejsval error = _ejs_nativeerror_new_utf8(EJS_TYPE_ERROR, "iterator value is not an entry object");
+
+            // ii. Return ? IteratorClose(iteratorRecord, error).
+            return IteratorClose(iter, error, EJS_TRUE);
+        }
+
+        // e. Let k be Get(nextItem, "0").
+        ejsval k = Get(nextItem, _ejs_atom_0); // XXX call IteratorClose here on exception
+
+        // f. Let v be Get(nextItem, "1").
+        ejsval v = Get(nextItem, _ejs_atom_1); // XXX call IteratorClose here on exception
+
+        // g. (the adder) Let propertyKey be ? ToPropertyKey(k), then CreateDataPropertyOrThrow(obj, propertyKey, v).
+        _ejs_object_define_value_property (obj, ToPropertyKey(k), v, EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+    }
+}
+
+// ECMA262: 20.1.2.13 Object.hasOwn ( O, P )
+static EJS_NATIVE_FUNC(_ejs_Object_hasOwn) {
+    ejsval O = _ejs_undefined;
+    ejsval P = _ejs_undefined;
+    if (argc > 0) O = args[0];
+    if (argc > 1) P = args[1];
+
+    // 1. Let obj be ? ToObject(O).
+    ejsval obj = ToObject(O);
+
+    // 2. Let key be ? ToPropertyKey(P).
+    ejsval key = ToPropertyKey(P);
+
+    // 3. Return ? HasOwnProperty(obj, key).
+    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(obj),GetOwnProperty)(obj, key, NULL) != NULL);
+}
+
 // ECMA262: 19.1.3.6
 EJS_NATIVE_FUNC(_ejs_Object_prototype_toString) {
     // 1. If the this value is undefined, return "[object Undefined]". 
@@ -2242,7 +2502,10 @@ static EJS_NATIVE_FUNC(_ejs_Object_prototype_hasOwnProperty) {
     if (EJS_UNLIKELY(argc > 0))
         needle = args[0];
 
-    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(*_this),GetOwnProperty)(*_this, needle, NULL) != NULL);
+    // ToObject(this) — a null/undefined receiver is a TypeError, and
+    // primitives get their wrapper's properties
+    ejsval O = ToObject(*_this);
+    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(O),GetOwnProperty)(O, needle, NULL) != NULL);
 }
 
 // ECMA262: 15.2.4.6
@@ -2327,6 +2590,7 @@ _ejs_object_init (ejsval global)
                                        EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Object, x, _ejs_Object_##x, EJS_PROP_NOT_ENUMERABLE)
+#define OBJ_METHOD_LEN(x,l) EJS_INSTALL_ATOM_FUNCTION_LEN_FLAGS(_ejs_Object, x, _ejs_Object_##x, l, EJS_PROP_NOT_ENUMERABLE)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Object_prototype, x, _ejs_Object_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 
     OBJ_METHOD(assign);
@@ -2346,6 +2610,10 @@ _ejs_object_init (ejsval global)
     OBJ_METHOD(isFrozen);
     OBJ_METHOD(isExtensible);
     OBJ_METHOD(keys);
+    OBJ_METHOD_LEN(entries, 1);
+    OBJ_METHOD_LEN(values, 1);
+    OBJ_METHOD_LEN(fromEntries, 1);
+    OBJ_METHOD_LEN(hasOwn, 2);
 
     PROTO_METHOD(toString);
     PROTO_METHOD(toLocaleString);
@@ -2355,6 +2623,7 @@ _ejs_object_init (ejsval global)
     PROTO_METHOD(propertyIsEnumerable);
 
 #undef PROTO_METHOD
+#undef OBJ_METHOD_LEN
 #undef OBJ_METHOD
 }
 
@@ -2376,8 +2645,7 @@ _ejs_object_specop_set_prototype_of (ejsval O, ejsval V)
 
     // 1. Assert: Either Type(V) is Object or Type(V) is Null.
     if (!EJSVAL_IS_OBJECT(V) && !EJSVAL_IS_NULL(V)) {
-        _ejs_log ("throw TypeError\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypeError");
     }
         
     // 2. Let extensible be the value of the [[Extensible]] internal slot of O.
@@ -2792,31 +3060,21 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
             /*       i. Create an own data property named P of object O whose [[Value]], [[Writable]],  */
             /*          [[Enumerable]] and [[Configurable]] attribute values are described by Desc. If the value of */
             /*          an attribute field of Desc is absent, the attribute of the newly created property is set to its  */
-            /*          default value. */
-            if (_ejs_property_desc_has_value (Desc))
-                _ejs_property_desc_set_value (dest, _ejs_property_desc_get_value (Desc));
-            if (_ejs_property_desc_has_configurable (Desc))
-                _ejs_property_desc_set_configurable (dest, _ejs_property_desc_is_configurable (Desc));
-            if (_ejs_property_desc_has_enumerable (Desc))
-                _ejs_property_desc_set_enumerable (dest, _ejs_property_desc_is_enumerable (Desc));
-            if (_ejs_property_desc_has_writable (Desc))
-                _ejs_property_desc_set_writable (dest, _ejs_property_desc_is_writable (Desc));
+            /*          default value (undefined/false) — the stored property is always complete. */
+            _ejs_property_desc_set_value (dest, _ejs_property_desc_get_value (Desc));
+            _ejs_property_desc_set_writable (dest, _ejs_property_desc_has_writable (Desc) && _ejs_property_desc_is_writable (Desc));
         }
         /*    b. Else, Desc must be an accessor Property Descriptor so, */
         else {
             /*       i. Create an own accessor property named P of object O whose [[Get]], [[Set]],  */
             /*          [[Enumerable]] and [[Configurable]] attribute values are described by Desc. If the value of  */
             /*          an attribute field of Desc is absent, the attribute of the newly created property is set to its  */
-            /*          default value. */
-            if (_ejs_property_desc_has_getter (Desc))
-                _ejs_property_desc_set_getter (dest, _ejs_property_desc_get_getter (Desc));
-            if (_ejs_property_desc_has_setter (Desc))
-                _ejs_property_desc_set_setter (dest, _ejs_property_desc_get_setter (Desc));
-            if (_ejs_property_desc_has_configurable (Desc))
-                _ejs_property_desc_set_configurable (dest, _ejs_property_desc_is_configurable (Desc));
-            if (_ejs_property_desc_has_enumerable (Desc))
-                _ejs_property_desc_set_enumerable (dest, _ejs_property_desc_is_enumerable (Desc));
+            /*          default value (undefined) — the stored property is always complete. */
+            _ejs_property_desc_set_getter (dest, _ejs_property_desc_get_getter (Desc));
+            _ejs_property_desc_set_setter (dest, _ejs_property_desc_get_setter (Desc));
         }
+        _ejs_property_desc_set_configurable (dest, _ejs_property_desc_has_configurable (Desc) && _ejs_property_desc_is_configurable (Desc));
+        _ejs_property_desc_set_enumerable (dest, _ejs_property_desc_has_enumerable (Desc) && _ejs_property_desc_is_enumerable (Desc));
         _ejs_propertymap_insert (obj->map, P, dest);
 
         /*    c. Return true. */
@@ -2956,8 +3214,8 @@ _ejs_object_specop_finalize(EJSObject* obj)
 }
 
 // walk the entries directly so every scanned slot is the
-// REAL storage location (the old foreach_property shim passed the name
-// by value — a moved name's rewrite would have landed in a local copy).
+// REAL storage location — a name passed by value would strand the
+// mover's rewrite in a local copy.
 // Property names are content-hashed, so a moving name never invalidates
 // the buckets; descs are malloc'd and stay put.
 static void
@@ -2989,7 +3247,7 @@ _ejs_object_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     if (obj_shape != EJS_SHAPE_DICT) {
         if (!EJSVAL_IS_NULL(obj->slots)) {
             EJSClosureEnv* env = shaped_env(obj);
-            // the shape's trace bitmap (gc-P5): f64-repr slots hold raw
+            // the shape's trace bitmap: f64-repr slots hold raw
             // doubles — never references — so the walk skips them.
             // Slots past field_count (hint slack) are undefined, whose
             // mask bits are 0, so they scan as the no-ops they are.

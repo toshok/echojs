@@ -247,7 +247,7 @@ export function literal(val: string | number | boolean | null): e.Literal {
 
 export function logicalExpression(
     l: e.Expression,
-    op: "||" | "&&",
+    op: e.LogicalExpression["operator"],
     r: e.Expression
 ): e.LogicalExpression {
     return { type: LogicalExpression, left: l, right: r, operator: op };

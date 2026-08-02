@@ -50,15 +50,13 @@ typedef enum {
 /* hard ceiling on shaped field count (and EJS_SHAPE_CAP): a full
    OUT-OF-LINE slot array must fit a page cell without waste — 16-byte
    EJSClosureEnv header + 14 * 8-byte slots = 128 exactly — and the
-   single-cell embedded form fits the 256-byte class (32+16+112 = 160;
-   the class was LOS-routed by an ffs off-by-one until gc-P5 enabled
-   it on top of gc-P4's LOS bsearch + direct arena map).  Objects with
-   more fields drop to dictionary mode — the original map world. */
+   single-cell embedded form fits the 256-byte class (32+16+112 = 160).
+   Objects with more fields drop to dictionary mode — the map world. */
 #define EJS_SHAPE_FIELD_CAP_MAX 14
 
 /* single-cell (embedded-slots) allocation cap: object header (32) +
    embedded env header (16) + 8 * fields.  With the 256-byte size class
-   enabled (gc-P5), every cap-14 shape fits a page cell (32+16+112 =
+   enabled, every cap-14 shape fits a page cell (32+16+112 =
    160 -> 256), so the embed cap IS the field cap. */
 #define EJS_SHAPE_EMBED_FIELD_MAX EJS_SHAPE_FIELD_CAP_MAX
 
@@ -105,7 +103,7 @@ typedef struct {
                              this shape; monomorphic construction sites hit
                              it every time and skip the hash entirely */
     uint32_t deaths;      /* census: objects finalized bearing this shape */
-    uint32_t f64_mask;    /* the shape's trace bitmap (gc-P5): bit i set =
+    uint32_t f64_mask;    /* the shape's trace bitmap: bit i set =
                              field i is EJS_SHAPE_REPR_F64, i.e. a raw
                              double the collector can skip.  Built
                              incrementally (parent's mask | this edge) so

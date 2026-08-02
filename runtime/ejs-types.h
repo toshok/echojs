@@ -31,7 +31,7 @@ typedef uint16_t jschar;
 // (written once — see docs/gc-plan.md "Object header, forwarding, and
 // shapes" and docs/shapes-plan.md "Object layout, in two steps"):
 //
-//   bits  0-31  the pre-existing 32-bit header: EJSScanType in the low
+//   bits  0-31  the base 32-bit header: EJSScanType in the low
 //               bits, user flags at EJS_GC_USER_FLAGS_SHIFT (unchanged)
 //   bits 32-55  shape index (0 = dictionary mode / untracked)
 //   bit  56     shaped-storage mode bit
@@ -127,6 +127,7 @@ EJS_BEGIN_DECLS
 
 extern jschar* ucs2_strdup (const jschar *str);
 extern int32_t ucs2_strcmp (const jschar *s1, const jschar *s2);
+extern int32_t ucs2_strcmp_len (const jschar *s1, int32_t len1, const jschar *s2, int32_t len2);
 extern int32_t ucs2_strlen (const jschar *str);
 extern jschar* ucs2_strstr (const jschar *haystack, const jschar *needle);
 extern char* ucs2_to_utf8 (const jschar *str);

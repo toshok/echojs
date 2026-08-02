@@ -11,6 +11,13 @@ EJS_BEGIN_DECLS
 ejsval NumberToString(double d, int base);
 ejsval ToString(ejsval exp);
 ejsval ToNumber(ejsval exp);
+typedef enum {
+    TO_PRIM_HINT_DEFAULT,
+    TO_PRIM_HINT_STRING,
+    TO_PRIM_HINT_NUMBER
+} ToPrimitiveHint;
+ejsval ToPrimitive(ejsval inputargument, ToPrimitiveHint PreferredType);
+
 double ToDouble(ejsval exp);
 int64_t ToInteger(ejsval exp);
 int64_t ToLength(ejsval exp);
@@ -41,6 +48,7 @@ ejsval _ejs_op_typeof_is_object(ejsval exp);
 ejsval _ejs_op_typeof_is_function(ejsval exp);
 ejsval _ejs_op_typeof_is_string(ejsval exp);
 ejsval _ejs_op_typeof_is_symbol(ejsval exp);
+ejsval _ejs_op_typeof_is_bigint(ejsval exp);
 ejsval _ejs_op_typeof_is_number(ejsval exp);
 ejsval _ejs_op_typeof_is_undefined(ejsval exp);
 ejsval _ejs_op_typeof_is_null(ejsval exp);
@@ -51,6 +59,8 @@ ejsval _ejs_op_not (ejsval exp);
 ejsval _ejs_op_void (ejsval exp);
 ejsval _ejs_op_typeof (ejsval exp);
 ejsval _ejs_op_delete (ejsval obj, ejsval prop);
+ejsval _ejs_op_delete_strict (ejsval obj, ejsval prop);
+ejsval _ejs_sloppy_this (ejsval thisArg);
 ejsval _ejs_op_bitwise_xor (ejsval lhs, ejsval rhs);
 ejsval _ejs_op_bitwise_not (ejsval val);
 ejsval _ejs_op_bitwise_and (ejsval lhs, ejsval rhs);
@@ -61,7 +71,12 @@ ejsval _ejs_op_lsh (ejsval lhs, ejsval rhs);
 ejsval _ejs_op_ulsh (ejsval lhs, ejsval rhs);
 ejsval _ejs_op_mod (ejsval lhs, ejsval rhs);
 ejsval _ejs_op_add (ejsval lhs, ejsval rhs);
+ejsval _ejs_op_to_numeric (ejsval exp);
+ejsval _ejs_op_add_update (ejsval lhs, ejsval rhs);
+ejsval _ejs_op_sub_update (ejsval lhs, ejsval rhs);
 ejsval _ejs_op_mult (ejsval lhs, ejsval rhs);
+ejsval _ejs_op_exp (ejsval lhs, ejsval rhs);
+double _ejs_number_exponentiate (double base, double exponent);
 ejsval _ejs_op_lt (ejsval lhs, ejsval rhs);
 EJSBool _ejs_op_lt_ejsbool (ejsval lhs, ejsval rhs);
 ejsval _ejs_op_le (ejsval lhs, ejsval rhs);

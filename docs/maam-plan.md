@@ -266,6 +266,21 @@ one-file fix). Promotion to self-hosted `--types` waits until either the
 babel-vendored build (a) or the TS port + parser modernization make it moot.
 Until promotion, `--types` in a stage1+ compiler is a no-op with a warning.
 
+**DECIDED 2026-07-31: promotion is sequenced AFTER the language
+modernization milestone (plans P8), as maam-P5 below.**  Option (a)'s
+babel framing is stale — babel left the repo at compiler-P2; the
+mechanical fallback would now be a second tsc build at `target:
+ES2016`.  But an audit of `dist/cjs` (22 files, ~315KB) showed the
+gap is small and shrinking: **zero external requires** (the analysis
+is pure computation — no node APIs at all), no async/BigInt/class
+fields; what the ES2022 target leaves in the output is exactly the
+language-P3 payoff list (`?.` ×19, `??` ×37, object spread ×32, `**`)
+plus six stdlib call sites (`Object.entries`/`fromEntries`,
+`padStart` ×4).  Once those land as language features, promotion
+needs no downleveling at all — just an ESM build flavor and the
+import seam.  Doing language first turns maam-P5 from
+"vendored-transpile maintenance" into "build config + wiring."
+
 ## Validation strategy
 
 - **Bootstrap matrix, every phase:** `//:test-eir`, `//:test-eir-lowtier`
@@ -572,3 +587,17 @@ messages/results docs).
       with gc-plan P1, and the P4.1–P4.6 implementation checklist with
       gates — that checklist lives in shapes-plan.md, which owns the
       phase from here.
+- [x] **maam-P5** self-hosted oracle: `--types` in the stage1+/shipped
+      compiler (plans P11.1).  DONE 2026-07-31 —
+      docs/maam-p5-results.md.  The seam: oracle.ts statically imports
+      `$maam` (ambient lib/maam.d.ts); the self-compile resolves it
+      with `-I maam=<tree>/external-deps/echojs-maam/dist/src/index`
+      to the ESM build (compiled in by gather-imports), the stage0
+      CJS conversion seds it to the CJS build staged into the
+      generated tree.  Both builds are emit-only tsc genrules
+      (`//external-deps:maam-esm`/`:maam-cjs`) over the submodule
+      src.  Gates passed: buck-test-types-diff.sh host-vs-host mode
+      (identical typed output stage0-vs-stage1), full matrix, README
+      caveat deleted.  The maam repo merge stays a follow-on.
+      Downstream (unchanged): call-site inlining under oracle
+      evidence, and a typed bootstrap lane.

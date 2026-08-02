@@ -227,13 +227,26 @@ RegExpInitialize(ejsval obj, ejsval pattern, ejsval flags) {
     const char *pcre_error;
     int pcre_erroffset;
 
-    int pcre_options = PCRE_UTF16 | PCRE_NO_UTF16_CHECK;
+    // JAVASCRIPT_COMPAT: \uXXXX escapes, lone ] as a literal, and
+    // friends - without it pcre rejects patterns containing them (e.g.
+    // the \u2028 in acorn's lineBreak regex).
+    int pcre_options = PCRE_JAVASCRIPT_COMPAT;
+    // UTF-16 interpretation only under the /u flag: without it JS
+    // regexes match per code unit, and patterns legitimately contain
+    // lone surrogates (parser identifier tables) that PCRE_UTF16
+    // rejects as invalid code points.
+    if (re->unicode)    pcre_options |= PCRE_UTF16 | PCRE_NO_UTF16_CHECK;
     if (re->ignoreCase) pcre_options |= PCRE_CASELESS;
     if (re->multiline)  pcre_options |= PCRE_MULTILINE;
     re->compiled_pattern = pcre16_compile(chars,
                                           pcre_options,
                                           &pcre_error, &pcre_erroffset,
                                           pcre16_tables);
+    if (re->compiled_pattern == NULL) {
+        _ejs_log ("pcre rejected /%s/: %s (offset %d)\n",
+                  ucs2_to_utf8(chars), pcre_error, pcre_erroffset);
+        _ejs_throw_nativeerror_utf8 (EJS_SYNTAX_ERROR, "Invalid regular expression");
+    }
 
 
     // 14. Let setStatus be Set(obj, "lastIndex", 0, true).
@@ -1166,7 +1179,7 @@ _ejs_regexp_init(ejsval global)
     re_proto->pattern = _ejs_string_new_utf8("(?:)");
     re_proto->flags = _ejs_atom_empty;
 
-    _ejs_object_setprop (_ejs_RegExp,       _ejs_atom_prototype,  _ejs_RegExp_prototype);
+    _ejs_object_define_value_property (_ejs_RegExp, _ejs_atom_prototype, _ejs_RegExp_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_RegExp, x, _ejs_RegExp_##x)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_RegExp_prototype, x, _ejs_RegExp_prototype_##x)

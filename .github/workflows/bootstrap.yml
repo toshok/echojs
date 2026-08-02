@@ -13,8 +13,9 @@
 #   test-stage2  suite against stage1's self-compile
 #   test-stage3  suite + the stage2/stage3 byte-identity fixed point
 #
-# then the dist tarball + its smoke tests (release-P1) and the package
-# smokes (release-P2), uploading echojs-dist-<platform> artifacts.
+# then (macOS) the test262 lane (language-P4), and the dist tarball +
+# its smoke tests (release-P1) and the package smokes (release-P2),
+# uploading echojs-dist-<platform> artifacts.
 name: bootstrap
 
 on:
@@ -69,6 +70,18 @@ jobs:
             //:test-stage1 \
             //:test-stage2 \
             //:test-stage3
+
+      # the test262 lane (language-P4): the curated selection against
+      # the pinned suite SHA, checked against expectations.txt.  macOS
+      # only — expectations are generated on macos-arm64 (the dev
+      # platform), and the stage1 executable is already built above.
+      - name: test262 lane
+        run: |
+          git init -q "$RUNNER_TEMP/test262"
+          git -C "$RUNNER_TEMP/test262" fetch -q --depth 1 \
+            https://github.com/tc39/test262.git "$(cat test/test262/suite.sha)"
+          git -C "$RUNNER_TEMP/test262" checkout -q FETCH_HEAD
+          ./test/test262/lane.sh --suite "$RUNNER_TEMP/test262" --jobs 6
 
       # the relocatable dist artifact + its installed-layout smoke test
       # (release-P1); the stage builds above are shared, so this only

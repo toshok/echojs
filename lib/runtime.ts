@@ -122,12 +122,37 @@ const runtime_interface = {
         );
     },
 
-    make_closure: function (this: RuntimeContext) {
-        return this.abi.createExternalFunction(this.module, "_ejs_function_new", ty.EjsValue, [
+    bigint_from_literal: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_bigint_from_literal", ty.EjsValue, [
             ty.EjsValue,
-            ty.EjsValue,
-            ty.getEjsClosureFunc(this.abi),
         ]);
+    },
+
+    op_to_numeric: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_op_to_numeric", ty.EjsValue, [
+            ty.EjsValue,
+        ]);
+    },
+    op_add_update: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_op_add_update", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+        ]);
+    },
+    op_sub_update: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_op_sub_update", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+        ]);
+    },
+
+    make_closure: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(
+            this.module,
+            "_ejs_function_new_closure",
+            ty.EjsValue,
+            [ty.EjsValue, ty.EjsValue, ty.getEjsClosureFunc(this.abi), ty.Int32]
+        );
     },
     make_closure_noenv: function (this: RuntimeContext) {
         return this.abi.createExternalFunction(
@@ -205,6 +230,85 @@ const runtime_interface = {
         ]);
     },
 
+    define_field: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_define_field", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+            ty.EjsValue,
+        ]);
+    },
+    make_private_map: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_weakmap_new", ty.EjsValue, []);
+    },
+    private_field_get: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_private_field_get", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+            ty.EjsValue,
+        ]);
+    },
+    private_field_set: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_private_field_set", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+            ty.EjsValue,
+            ty.EjsValue,
+        ]);
+    },
+    private_field_init: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(
+            this.module,
+            "_ejs_private_field_init",
+            ty.EjsValue,
+            [ty.EjsValue, ty.EjsValue, ty.EjsValue]
+        );
+    },
+    private_brand_check: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(
+            this.module,
+            "_ejs_private_brand_check",
+            ty.EjsValue,
+            [ty.EjsValue, ty.EjsValue, ty.EjsValue]
+        );
+    },
+    private_has: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_private_has", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+        ]);
+    },
+    private_write_error: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(
+            this.module,
+            "_ejs_private_write_error",
+            ty.EjsValue,
+            [ty.EjsValue]
+        );
+    },
+    copy_data_properties: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(
+            this.module,
+            "_ejs_copy_data_properties",
+            ty.EjsValue,
+            [ty.EjsValue, ty.EjsValue, ty.EjsValue]
+        );
+    },
+    require_object_coercible: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(
+            this.module,
+            "_ejs_require_object_coercible",
+            ty.EjsValue,
+            [ty.EjsValue]
+        );
+    },
+    object_spread_merge: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(
+            this.module,
+            "_ejs_object_spread_merge",
+            ty.EjsValue,
+            [ty.EjsValue, ty.EjsValue]
+        );
+    },
     object_create: function (this: RuntimeContext) {
         return this.abi.createExternalFunction(this.module, "_ejs_object_create", ty.EjsValue, [
             ty.EjsValue,
@@ -317,12 +421,46 @@ const runtime_interface = {
             ty.EjsValue,
         ]);
     },
+    sloppy_this: function (this: RuntimeContext) {
+        return only_reads_memory(
+            this.abi.createExternalFunction(this.module, "_ejs_sloppy_this", ty.EjsValue, [
+                ty.EjsValue,
+            ])
+        );
+    },
+    mark_async_generator: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_mark_async_generator", ty.EjsValue, [
+            ty.EjsValue,
+        ]);
+    },
+    // strict-mode member store: throws TypeError on a failed [[Set]]
+    object_setprop_strict: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_object_setprop_strict", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+            ty.EjsValue,
+        ]);
+    },
+    // strict-mode assignment to an unresolvable name throws ReferenceError
+    global_setprop_strict: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_global_setprop_strict", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+        ]);
+    },
     global_getprop: function (this: RuntimeContext) {
         return only_reads_memory(
             this.abi.createExternalFunction(this.module, "_ejs_global_getprop", ty.EjsValue, [
                 ty.EjsValue,
             ])
         );
+    },
+    // plain reads: throws ReferenceError on an unresolvable name, so no
+    // only_reads_memory attribute
+    global_getprop_checked: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_global_getprop_checked", ty.EjsValue, [
+            ty.EjsValue,
+        ]);
     },
 
     object_define_accessor_prop: function (this: RuntimeContext) {
@@ -621,6 +759,12 @@ const runtime_interface = {
             ty.EjsValue,
         ]);
     }, // this is a unop, but ours only works for memberexpressions
+    unopdelete_strict: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_op_delete_strict", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+        ]);
+    },
     unopvoid: function (this: RuntimeContext) {
         return this.abi.createExternalFunction(this.module, "_ejs_op_void", ty.EjsValue, [
             ty.EjsValue,
@@ -693,6 +837,7 @@ export function createBinopsInterface(
         ">>>": { get: () => createBinop("_ejs_op_ursh") },
         "<<<": { get: () => createBinop("_ejs_op_ulsh") },
         "%": { get: () => createBinop("_ejs_op_mod") },
+        "**": { get: () => createBinop("_ejs_op_exp") },
         "+": { get: () => createBinop("_ejs_op_add") },
         "*": { get: () => createBinop("_ejs_op_mult") },
         "/": { get: () => createBinop("_ejs_op_div") },

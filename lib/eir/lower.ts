@@ -85,6 +85,9 @@ export interface ModCtx {
     };
     // --types-dump: per-site shape census lines
     shape_dump?: boolean;
+    // script-goal semantics (--script): toplevel `this` is globalThis
+    // instead of the module goal's undefined
+    script?: boolean;
 }
 
 // clone-lowering mode (specialize.ts).  The clone gets an
@@ -95,7 +98,7 @@ export interface ModCtx {
 //     line: oracle claims become facts, backed by the differential
 //     harness and by the escape analysis that restricts trusted clones
 //     to functions whose every runtime call the analysis covered.
-//   - untrusted (the export-boundary wrapper's clone, runtime-P2): the
+//   - untrusted (the export-boundary wrapper's clone): the
 //     body keeps the ordinary guarded diamonds — the oracle is never
 //     consumed as fact, because the clone is entered from escaping
 //     entry points whose callers the analysis did NOT see (maam's
@@ -158,6 +161,7 @@ const binops: Record<string, string | undefined> = {
     "*": "mul",
     "/": "div",
     "%": "mod",
+    "**": "exp",
     "<": "lt",
     "<=": "le",
     ">": "gt",
@@ -180,7 +184,27 @@ const binops: Record<string, string | undefined> = {
 // the function\'s own id, or "" for anonymous functions — never the
 // scope-qualified EIR name
 function displayNameOf(childInfo: FnInfo): string {
+    // ejs_display_name carries the spec .name when it differs from the
+    // id (class methods' ids are qualified LLVM names, NamedEvaluation
+    // names anonymous functions after their binding/property)
+    const display = (childInfo.node as unknown as Record<string, unknown>)["ejs_display_name"];
+    if (typeof display === "string") return display;
     return (childInfo.node.id && childInfo.node.id.name) || "";
+}
+
+// the function's spec .length.  The parser records it before the desugar
+// passes rewrite param lists (`ejs_fn_length`); synthesized functions
+// (and the esprima fallback) get the count of leading no-default,
+// non-rest formals as seen here.
+function specFnLength(n: e.Function): number {
+    const recorded = (n as unknown as Record<string, unknown>)["ejs_fn_length"];
+    if (typeof recorded === "number") return recorded;
+    let count = 0;
+    for (let i = 0; i < n.params.length; i++) {
+        if (n.params[i]!.type === "RestElement" || (n.defaults && n.defaults[i]) != null) break;
+        count++;
+    }
+    return count;
 }
 
 class LowerFunction {
@@ -306,10 +330,28 @@ class LowerFunction {
             this.writeBinding(info.argumentsBinding!, a);
         }
 
+        // 9.2.1.2 OrdinaryCallBindThis: sloppy-mode functions replace a
+        // null/undefined `this` with the global object.  Only functions
+        // that actually read `this` pay for the check, and strict code
+        // (all module-goal code) emits nothing.
+        if (!this.isToplevel && !info.strict && info.usesThis && !this.spec) {
+            const coerced = this.b.emit("sloppy_this", [this.thisParam], {});
+            this.b.writeVariable("%this", this.b.fn.entry!, coerced);
+            this.thisParam = coerced;
+        }
+
         // an arrow below captures our `this`: store it in the env (kept
-        // in sync by intrinsicCall when super() rebinds this)
-        if (info.thisBinding && info.thisBinding.captured)
-            this.writeBinding(info.thisBinding, this.thisParam);
+        // in sync by intrinsicCall when super() rebinds this).  the
+        // toplevel's `this` is undefined under the module goal,
+        // globalThis under --script.
+        if (info.thisBinding && info.thisBinding.captured) {
+            const this_val = this.isToplevel
+                ? this.mod_ctx.script
+                    ? this.b.emit("get_global", [], { atom: "globalThis", for_typeof: 1 })
+                    : this.b.constUndefined()
+                : this.thisParam;
+            this.writeBinding(info.thisBinding, this_val);
+        }
 
         // the rest parameter materializes from the trailing arguments
         if (info.restBinding) {
@@ -349,6 +391,7 @@ class LowerFunction {
                 let closure = this.b.emit("make_closure", [this.curEnv], {
                     fn: childInfo.name,
                     name: displayNameOf(childInfo),
+                    len: specFnLength(childInfo.node),
                 });
                 this.writeBinding(binding, closure);
             }
@@ -514,6 +557,13 @@ class LowerFunction {
                 // owner's captured this, read through the env chain)
                 let binding = this.analysis.resolve(n);
                 if (binding) return this.readBinding(binding);
+                // toplevel `this`: undefined under the module goal,
+                // globalThis under --script
+                if (this.isToplevel) {
+                    if (this.mod_ctx.script)
+                        return this.b.emit("get_global", [], { atom: "globalThis", for_typeof: 1 });
+                    return this.b.constUndefined();
+                }
                 return this.b.readVariable("%this", this.b.cur);
             }
             case "BinaryExpression":
@@ -572,16 +622,21 @@ class LowerFunction {
                 });
             }
             case "ObjectExpression": {
-                let hasAccessors = n.properties.some((p) => p.kind && p.kind !== "init");
+                // SpreadElement properties were desugared by DesugarSpread
+                for (const p of n.properties)
+                    if (p.type === "SpreadElement")
+                        throw LowerNotSupported("object spread survived desugaring", n.loc);
+                const props = n.properties as e.Property[];
+                let hasAccessors = props.some((p) => p.kind && p.kind !== "init");
                 if (hasAccessors) return this.objectWithAccessors(n);
-                let hasComputed = n.properties.some(
+                let hasComputed = props.some(
                     (p) => p.computed || (p.key.type !== "Identifier" && p.key.type !== "Literal")
                 );
-                let hasProto = n.properties.some((p) => this.isProtoProp(p));
+                let hasProto = props.some((p) => this.isProtoProp(p));
                 if (!hasComputed && !hasProto) {
                     const keys: string[] = [];
                     const values: Inst[] = [];
-                    for (const p of n.properties) {
+                    for (const p of props) {
                         keys.push(
                             p.key.type === "Identifier"
                                 ? p.key.name
@@ -594,7 +649,7 @@ class LowerFunction {
                     // static truth, no oracle fact needed (the runtime
                     // derives true reprs from the actual values and falls
                     // back to sequential sets off the shaped fast path).
-                    // NOT --types-gated (gc-P5): without the oracle the
+                    // NOT --types-gated: without the oracle the
                     // static reprs are simply all-boxed; the runtime's
                     // birth derivation supplies the true ones, and the
                     // single-cell embedded allocation applies to flag-off
@@ -606,7 +661,7 @@ class LowerFunction {
                         new Set(keys).size === keys.length &&
                         keys.every((k) => !/^[0-9]/.test(k))
                     ) {
-                        const fields: ShapeField[] = n.properties.map((p, i) => ({
+                        const fields: ShapeField[] = props.map((p, i) => ({
                             name: keys[i]!,
                             repr: this.operandIsNumber(p.value as e.Expression)
                                 ? ("f64" as const)
@@ -623,7 +678,7 @@ class LowerFunction {
                 // + per-property stores in source order (key evaluates
                 // before value, per spec)
                 let obj = this.b.emit("make_object", [], { keys: [] });
-                for (let p of n.properties) {
+                for (let p of props) {
                     if (this.isProtoProp(p)) {
                         const v = this.expr(p.value as e.Expression);
                         this.b.emit("call_runtime", [obj, v], {
@@ -665,10 +720,13 @@ class LowerFunction {
     // order (their keys are distinct evaluations); the runtime merges
     // the partial descriptors.
     objectWithAccessors(n: e.ObjectExpression): Inst {
+        // only reached from the ObjectExpression case, after the
+        // no-SpreadElement assert
+        const props = n.properties as e.Property[];
         let obj = this.b.emit("make_object", [], { keys: [] });
         const done = new Set<string>();
-        for (let i = 0; i < n.properties.length; i++) {
-            const p = n.properties[i]!;
+        for (let i = 0; i < props.length; i++) {
+            const p = props[i]!;
             if (p.computed) {
                 let key = this.expr(p.key);
                 if (p.kind && p.kind !== "init") {
@@ -695,8 +753,8 @@ class LowerFunction {
                 done.add(name);
                 let getter: Inst | null = null;
                 let setter: Inst | null = null;
-                for (let j = i; j < n.properties.length; j++) {
-                    const q = n.properties[j]!;
+                for (let j = i; j < props.length; j++) {
+                    const q = props[j]!;
                     if (q.kind === "init" || q.computed) continue;
                     const qname = q.key.type === "Identifier" ? q.key.name : String((q.key as e.Literal).value);
                     if (qname !== name) continue;
@@ -776,13 +834,14 @@ class LowerFunction {
         return this.b.emit("make_closure", [this.curEnvValue()], {
             fn: childInfo.name,
             name: displayNameOf(childInfo),
+            len: specFnLength(childInfo.node),
         });
     }
 
     binary(n: e.BinaryExpression): Inst {
         let op = binops[n.operator];
         if (!op) throw LowerNotSupported(`binary operator ${n.operator}`, n.loc);
-        let l = this.expr(n.left);
+        let l = this.expr(n.left as e.Expression);
         let r = this.expr(n.right);
         // born-typed guarded arithmetic.  When the oracle types
         // BOTH operands as exactly {number}, split the same diamond shape
@@ -791,7 +850,7 @@ class LowerFunction {
         // consumption is correct even when the oracle is wrong — the
         // has_tag guards decide at runtime; only code size/speed change.
         const f64op = f64ops[n.operator];
-        if (f64op && this.operandIsNumber(n.left) && this.operandIsNumber(n.right)) {
+        if (f64op && this.operandIsNumber(n.left as e.Expression) && this.operandIsNumber(n.right)) {
             // trusted-clone bodies consume the oracle UNGUARDED: no
             // diamond, no slow path — unbox, compute, re-box.  Everywhere
             // else the guarded diamond stands.
@@ -808,7 +867,7 @@ class LowerFunction {
             f64op &&
             this.spec &&
             !this.spec.trusted &&
-            this.operandPlausiblyNumber(n.left) &&
+            this.operandPlausiblyNumber(n.left as e.Expression) &&
             this.operandPlausiblyNumber(n.right)
         )
             return this.numericDiamond(f64op, op, l, r);
@@ -1076,9 +1135,11 @@ class LowerFunction {
     // field repr — f64 fields take numbers fast, boxed fields take
     // non-numbers fast, everything else goes generic.
     propSet(objNode: e.Expression | null, obj: Inst, atom: string, v: Inst): void {
+        // 6.2.4.2 PutValue: strict-mode member stores throw on failure
+        const imms = this.info.strict ? { atom: atom, strict: 1 } : { atom: atom };
         const facts = this.shapeFactFor(objNode, atom);
         if (!facts) {
-            this.b.emit("set_prop_atom", [obj, v], { atom: atom });
+            this.b.emit("set_prop_atom", [obj, v], imms);
             return;
         }
 
@@ -1127,7 +1188,7 @@ class LowerFunction {
         }
 
         this.b.setInsertPoint(slow_bb);
-        this.b.emit("set_prop_atom", [obj, v], { atom: atom });
+        this.b.emit("set_prop_atom", [obj, v], imms);
         this.b.br(join_bb, []);
         this.b.sealBlock(join_bb);
 
@@ -1252,15 +1313,23 @@ class LowerFunction {
 
     logical(n: e.LogicalExpression): Inst {
         let l = this.expr(n.left);
-        let lbool = this.b.emit("to_boolean", [l], {});
 
         let rhs_bb = this.b.newBlock("logical_rhs");
         let join_bb = this.b.newBlock("logical_join");
         let result = join_bb.addParam("logical");
 
-        if (n.operator === "&&") this.b.condBr(lbool, rhs_bb, [], join_bb, [l]);
-        else if (n.operator === "||") this.b.condBr(lbool, join_bb, [l], rhs_bb, []);
-        else throw LowerNotSupported(`logical operator ${n.operator}`, n.loc);
+        if (n.operator === "??") {
+            // nullish: evaluate the rhs only when the lhs is null or
+            // undefined — exactly what `== null` tests (no valueOf hooks)
+            let isnullish = this.b.emit("loose_eq", [l, this.b.constNull()], {});
+            let lbool = this.b.emit("to_boolean", [isnullish], {});
+            this.b.condBr(lbool, rhs_bb, [], join_bb, [l]);
+        } else {
+            let lbool = this.b.emit("to_boolean", [l], {});
+            if (n.operator === "&&") this.b.condBr(lbool, rhs_bb, [], join_bb, [l]);
+            else if (n.operator === "||") this.b.condBr(lbool, join_bb, [l], rhs_bb, []);
+            else throw LowerNotSupported(`logical operator ${n.operator}`, n.loc);
+        }
         this.b.sealBlock(rhs_bb);
 
         this.b.setInsertPoint(rhs_bb);
@@ -1287,9 +1356,24 @@ class LowerFunction {
             case "~":
                 arg = this.expr(n.argument);
                 return this.b.emit("bitnot", [arg], {});
-            case "typeof":
+            case "typeof": {
+                // typeof of an unresolvable name is "undefined", never a
+                // ReferenceError — mark the global load so it skips the
+                // checked (throwing) read
+                if (n.argument.type === "Identifier") {
+                    const idn = n.argument as e.Identifier;
+                    if (
+                        idn.name !== "undefined" &&
+                        !this.analysis.resolve(idn) &&
+                        !this.mod_ctx.refs.get(idn.name)
+                    ) {
+                        arg = this.b.emit("get_global", [], { atom: idn.name, for_typeof: 1 });
+                        return this.b.emit("typeof", [arg], {});
+                    }
+                }
                 arg = this.expr(n.argument);
                 return this.b.emit("typeof", [arg], {});
+            }
             case "void":
                 // evaluate for side effects, produce undefined (the
                 // desugar passes' undefinedLit() emits `void 0`)
@@ -1302,8 +1386,12 @@ class LowerFunction {
                 const key =
                     !m.computed && m.property.type === "Identifier"
                         ? this.b.constAtom(m.property.name)
-                        : this.expr(m.property);
-                return this.b.emit("delete_prop", [obj, key], {});
+                        : this.expr(m.property as e.Expression);
+                return this.b.emit(
+                    "delete_prop",
+                    [obj, key],
+                    this.info.strict ? { strict: 1 } : {}
+                );
             }
             default:
                 throw LowerNotSupported(`unary operator ${n.operator}`, n.loc);
@@ -1353,7 +1441,11 @@ class LowerFunction {
                 });
                 return;
             }
-            this.b.emit("set_global", [value], { atom: idNode.name });
+            this.b.emit(
+                "set_global",
+                [value],
+                this.info.strict ? { atom: idNode.name, strict: 1 } : { atom: idNode.name }
+            );
             return;
         }
         this.writeBinding(binding, value);
@@ -1384,7 +1476,7 @@ class LowerFunction {
             let key: Inst | null = null;
             if (!n.left.computed && n.left.property.type === "Identifier")
                 atom = n.left.property.name;
-            else key = this.expr(n.left.property);
+            else key = this.expr(n.left.property as e.Expression);
             let v: Inst;
             if (binop) {
                 const cur =
@@ -1397,20 +1489,26 @@ class LowerFunction {
                 v = this.expr(n.right);
             }
             if (atom !== null) this.propSet(objNode, obj, atom, v);
-            else this.b.emit("set_prop", [obj, key!, v], {});
+            else
+                this.b.emit(
+                    "set_prop",
+                    [obj, key!, v],
+                    this.info.strict ? { strict: 1 } : {}
+                );
             return v;
         }
         throw LowerNotSupported(`assignment target ${n.left.type}`, n.loc);
     }
 
-    // ++/--: ToNumber(old value) via unary_plus, then add/sub 1
+    // ++/--: ToNumeric(old value), then add/sub 1 (the `update` imm
+    // keeps BigInt increments off the mixed-operand TypeError)
     update(n: e.UpdateExpression): Inst {
         let one = this.b.constNumber(1);
         let op = n.operator === "++" ? "add" : "sub";
         if (n.argument.type === "Identifier") {
             let cur = this.identifier(n.argument);
-            let old = this.b.emit("unary_plus", [cur], {});
-            let nv = this.b.emit(op, [old, one], {});
+            let old = this.b.emit("to_numeric", [cur], {});
+            let nv = this.b.emit(op, [old, one], { update: 1 });
             this.writeIdentifier(n.argument, nv);
             return n.prefix ? nv : old;
         }
@@ -1421,15 +1519,20 @@ class LowerFunction {
             let atom: string | null = null;
             let key: Inst | null = null;
             if (!m.computed && m.property.type === "Identifier") atom = m.property.name;
-            else key = this.expr(m.property);
+            else key = this.expr(m.property as e.Expression);
             const cur =
                 atom !== null
                     ? this.propGet(objNode, obj, atom)
                     : this.b.emit("get_prop", [obj, key!], {});
-            const old = this.b.emit("unary_plus", [cur], {});
-            const nv = this.b.emit(op, [old, one], {});
+            const old = this.b.emit("to_numeric", [cur], {});
+            const nv = this.b.emit(op, [old, one], { update: 1 });
             if (atom !== null) this.propSet(objNode, obj, atom, nv);
-            else this.b.emit("set_prop", [obj, key!, nv], {});
+            else
+                this.b.emit(
+                    "set_prop",
+                    [obj, key!, nv],
+                    this.info.strict ? { strict: 1 } : {}
+                );
             return n.prefix ? nv : old;
         }
         throw LowerNotSupported(`update of ${n.argument.type}`, n.loc);
@@ -1471,7 +1574,7 @@ class LowerFunction {
             if (!n.tag.computed && n.tag.property.type === "Identifier")
                 callee = this.b.emit("get_prop_atom", [thisArg], { atom: n.tag.property.name });
             else {
-                let key = this.expr(n.tag.property);
+                let key = this.expr(n.tag.property as e.Expression);
                 callee = this.b.emit("get_prop", [thisArg, key], {});
             }
         } else {
@@ -1515,7 +1618,7 @@ class LowerFunction {
         let obj = this.expr(n.object);
         if (!n.computed && n.property.type === "Identifier")
             return this.propGet(n.object as e.Expression, obj, n.property.name);
-        let key = this.expr(n.property);
+        let key = this.expr(n.property as e.Expression);
         return this.b.emit("get_prop", [obj, key], {});
     }
 
@@ -1547,7 +1650,7 @@ class LowerFunction {
                     n.callee.property.name
                 );
             else {
-                let key = this.expr(n.callee.property);
+                let key = this.expr(n.callee.property as e.Expression);
                 callee = this.b.emit("get_prop", [thisArg, key], {});
             }
         } else {
@@ -1673,6 +1776,7 @@ class LowerFunction {
                     let closure = this.b.emit("make_closure", [this.curEnvValue()], {
                         fn: childInfo.name,
                         name: displayNameOf(childInfo),
+                        len: specFnLength(childInfo.node),
                     });
                     this.writeModuleSlotInit(n.id, closure);
                     return;
@@ -1722,6 +1826,37 @@ class LowerFunction {
                 for (let spec of n.specifiers) {
                     let v = this.identifier(spec.local);
                     this.storeExportSlot(spec.exported.name, v, n.loc);
+                }
+                return;
+            }
+            case "ExportAllDeclaration": {
+                if (!this.isToplevel) throw LowerNotSupported("export declaration", n.loc);
+                const source = n.source_path!.value;
+                const source_info =
+                    this.mod_ctx.module_infos && this.mod_ctx.module_infos.get(source);
+                if (!source_info || source_info.isNative())
+                    throw LowerNotSupported(`re-export from '${source}'`, n.loc);
+                if (n.exported) {
+                    // export * as ns from "m": bind the source module's
+                    // namespace object to our `ns` slot.  member reads on
+                    // it resolve at runtime through the module object's
+                    // export accessors.
+                    const ns = this.b.emit("module_get_exotic", [], { module: source });
+                    this.storeExportSlot(n.exported.name, ns, n.loc);
+                    return;
+                }
+                // export * from "m": copy the source module's slots into
+                // the same-named slots of ours at init time (a snapshot,
+                // exactly like `export { a } from "m"`).  The name list
+                // was computed by gather-imports' star expansion.
+                for (const name of n.star_export_names ?? []) {
+                    const export_info = source_info.exports.get(name);
+                    if (!export_info || export_info.promoted) continue;
+                    const v = this.b.emit("module_slot_load", [], {
+                        module: source,
+                        slot: export_info.slot_num,
+                    });
+                    this.storeExportSlot(name, v, n.loc);
                 }
                 return;
             }
@@ -2006,6 +2141,8 @@ class LowerFunction {
     lowerObjectPatternDecl(d: e.VariableDeclarator): void {
         const src = d.init ? this.expr(d.init) : this.b.constUndefined();
         for (const prop of (d.id as e.ObjectPattern).properties) {
+            if (prop.type === "RestElement")
+                throw LowerNotSupported("rest property in declaration pattern", d.loc);
             const keyName =
                 prop.key.type === "Identifier"
                     ? prop.key.name

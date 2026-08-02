@@ -81,12 +81,48 @@ static EJS_NATIVE_FUNC(_ejs_Reflect_construct) {
     return Construct(target, _newTarget, EJS_ARRAY_LEN(argumentsList), EJS_DENSE_ARRAY_ELEMENTS(argumentsList));
 }
 
+// ECMA262: 26.1.3 Reflect.defineProperty ( target, propertyKey, attributes )
 static EJS_NATIVE_FUNC(_ejs_Reflect_defineProperty) {
-    EJS_NOT_IMPLEMENTED();
+    ejsval target = _ejs_undefined;
+    ejsval propertyKey = _ejs_undefined;
+    ejsval attributes = _ejs_undefined;
+
+    if (argc > 0) target      = args[0];
+    if (argc > 1) propertyKey = args[1];
+    if (argc > 2) attributes  = args[2];
+
+    // 1. If Type(target) is not Object, throw a TypeError exception.
+    if (!EJSVAL_IS_OBJECT(target))
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "target is not an object");
+
+    // 2. Let key be ToPropertyKey(propertyKey).
+    ejsval key = ToPropertyKey(propertyKey);
+
+    // 3. Let desc be ToPropertyDescriptor(attributes).
+    EJSPropertyDesc desc;
+    ToPropertyDescriptor(attributes, &desc);
+
+    // 4. Return target.[[DefineOwnProperty]](key, desc).
+    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(target),DefineOwnProperty)(target, key, &desc, EJS_FALSE));
 }
 
+// ECMA262: 26.1.4 Reflect.deleteProperty ( target, propertyKey )
 static EJS_NATIVE_FUNC(_ejs_Reflect_deleteProperty) {
-    EJS_NOT_IMPLEMENTED();
+    ejsval target = _ejs_undefined;
+    ejsval propertyKey = _ejs_undefined;
+
+    if (argc > 0) target      = args[0];
+    if (argc > 1) propertyKey = args[1];
+
+    // 1. If Type(target) is not Object, throw a TypeError exception.
+    if (!EJSVAL_IS_OBJECT(target))
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "target is not an object");
+
+    // 2. Let key be ToPropertyKey(propertyKey).
+    ejsval key = ToPropertyKey(propertyKey);
+
+    // 3. Return target.[[Delete]](key).
+    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(target),Delete)(target, key, EJS_FALSE));
 }
 
 static EJS_NATIVE_FUNC(_ejs_Reflect_enumerate) {

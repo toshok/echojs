@@ -2,7 +2,7 @@
  * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
 
-// compiler-P1 "optimizer residue": the classic SSA cleanups and the
+// The "optimizer residue": the classic SSA cleanups and the
 // type lattice.
 //
 //   (a) a trust-free TYPE LATTICE over the boxed `any` values —
@@ -34,8 +34,7 @@
 //       guard-region soundness inventory's argument), so it lowers to
 //       unbox/f64_*/box with no guard at all.  lt/gt lower to f64_lt
 //       when their only consumer is a same-block to_boolean + cond_br.
-//   (f) MODULE-SLOT LOAD CSE (the toplevel-receiver reload noted at
-//       shapes-P3):
+//   (f) MODULE-SLOT LOAD CSE (the toplevel-receiver reload):
 //         - block-local availability, killed at CALL-effect
 //           instructions (arbitrary JS may re-enter this module's
 //           stores) unless the slot is single-store (below), with
@@ -86,23 +85,31 @@ export type LatticeTag =
 
 export type Lattice = (LatticeTag | undefined)[];
 
-// generic ops whose result is always a Number (ES: they apply
-// ToNumber/ToInt32/ToUint32 and produce a Number or throw;
-// runtime/ejs-ops.c agrees — only NUMBER_TO_EJSVAL returns)
+// generic ops whose result is always a Number (ES: they apply ToNumber/
+// ToInt32/ToUint32 and produce a Number or throw).  Since BigInt, most
+// arithmetic/bitwise ops can also return bigints — those moved to
+// NUMERIC_RESULT below and only type as "number" when their operands do.
+// unary_plus (ToNumber proper) and ushr both throw on bigints, so they
+// stay unconditionally Number.
 const NUMBER_RESULT = new Set([
+    "unary_plus",
+    "ushr",
+]);
+
+// number in, number out; bigint in, bigint out
+const NUMERIC_RESULT = new Set([
     "sub",
     "mul",
     "div",
     "mod",
     "neg",
-    "unary_plus",
     "bitand",
     "bitor",
     "bitxor",
     "shl",
     "shr",
-    "ushr",
     "bitnot",
+    "to_numeric",
 ]);
 
 // generic ops whose result is always a Boolean
@@ -162,6 +169,19 @@ function instTag(inst: Inst, tags: Lattice): LatticeTag | undefined {
     if (op === "const") return constTag(inst);
     if (op === "box_f64") return "number";
     if (NUMBER_RESULT.has(op)) return "number";
+    if (NUMERIC_RESULT.has(op)) {
+        // ONE proven-number operand suffices: mixing BigInt with
+        // anything else throws, so a completing op with a number
+        // operand can only have produced a number.  With no number
+        // operand the result may be a bigint.
+        let any_unknown = false;
+        for (const o of inst.operands) {
+            const t = tags[o.id];
+            if (t === "number") return "number";
+            if (t === undefined) any_unknown = true;
+        }
+        return any_unknown ? undefined : "top";
+    }
     if (BOOLEAN_RESULT.has(op)) return "boolean";
     if (OBJECT_RESULT.has(op)) return "object";
     if (op === "make_closure") return "function";
@@ -327,6 +347,7 @@ function evalUnop(op: string, x: any): unknown {
         case "neg":
             return -x;
         case "unary_plus":
+        case "to_numeric":
             return +x;
         case "bitnot":
             return ~x;
@@ -387,7 +408,7 @@ function foldConstants(fn: Func, tags: Lattice, stats: OptStats): boolean {
             }
             return;
         }
-        if (op === "neg" || op === "unary_plus" || op === "bitnot" || op === "logical_not") {
+        if (op === "neg" || op === "unary_plus" || op === "to_numeric" || op === "bitnot" || op === "logical_not") {
             const a = inst.operands[0]!;
             if (a.op !== "const") return;
             if (op !== "logical_not" && a.imms["kind"] !== "number") return;
@@ -644,8 +665,8 @@ function latticeLowerArith(fn: Func, tags: Lattice, stats: OptStats): boolean {
             continue;
         }
 
-        if (op === "unary_plus" && tags[inst.operands[0]!.id] === "number") {
-            // +x for a number x is x
+        if ((op === "unary_plus" || op === "to_numeric") && tags[inst.operands[0]!.id] === "number") {
+            // +x / ToNumeric(x) for a number x is x
             replaceAllUses(fn, inst, inst.operands[0]!);
             removeFromBlock(inst);
             stats.lattice_arith++;

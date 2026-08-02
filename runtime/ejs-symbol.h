@@ -42,9 +42,13 @@ extern ejsval _ejs_Symbol_hasInstance;
 extern ejsval _ejs_Symbol_isConcatSpreadable;
 extern ejsval _ejs_Symbol_species;
 extern ejsval _ejs_Symbol_iterator;
+extern ejsval _ejs_Symbol_asyncIterator;
 extern ejsval _ejs_Symbol_toPrimitive;
 extern ejsval _ejs_Symbol_toStringTag;
 extern ejsval _ejs_Symbol_unscopables;
+
+extern ejsval _ejs_Symbol_dispose;
+extern ejsval _ejs_Symbol_asyncDispose;
 
 extern ejsval _ejs_Symbol_match;
 extern ejsval _ejs_Symbol_replace;

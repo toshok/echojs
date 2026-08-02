@@ -4,6 +4,7 @@
 
 #include <string.h>
 #include <math.h>
+#include <ctype.h>
 
 #include "ejs-ops.h"
 #include "ejs-value.h"
@@ -15,9 +16,156 @@
 #include "ejs-string.h"
 #include "ejs-boolean.h"
 #include "ejs-symbol.h"
+#include "ejs-bigint.h"
+#include "ejs-error.h"
+#include "ejs-gc.h"
 #include "external-deps/parson/parson.h"
 
 ejsval _ejs_JSON EJSVAL_ALIGNMENT;
+
+// hidden marker standing in for the [[IsRawJSON]] internal slot on
+// objects returned by JSON.rawJSON
+static ejsval _ejs_RawJSON_symbol EJSVAL_ALIGNMENT;
+
+// ---- strict JSON grammar validator -------------------------------------
+//
+// parson is laxer than the ES JSON grammar (isspace() whitespace, and
+// json_parse_string ignores trailing tokens), so JSON.parse validates
+// the text against the real grammar first.
+
+#define EJS_JSON_MAX_NESTING 2048
+
+static EJSBool ejs_json_validate_value (const char** p, int depth);
+
+// JSONWhitespace is exactly tab, LF, CR, space
+static void
+ejs_json_skip_ws (const char** p)
+{
+    while (**p == '\t' || **p == '\n' || **p == '\r' || **p == ' ')
+        (*p) ++;
+}
+
+static EJSBool
+ejs_json_validate_string (const char** p)
+{
+    if (**p != '"') return EJS_FALSE;
+    (*p) ++;
+    for (;;) {
+        unsigned char c = (unsigned char)**p;
+        if (c == '"') { (*p) ++; return EJS_TRUE; }
+        if (c < 0x20) return EJS_FALSE; // unescaped control char (or NUL terminator)
+        if (c == '\\') {
+            (*p) ++;
+            char e = **p;
+            if (e == '"' || e == '\\' || e == '/' || e == 'b' || e == 'f' || e == 'n' || e == 'r' || e == 't') {
+                (*p) ++;
+            }
+            else if (e == 'u') {
+                (*p) ++;
+                for (int i = 0; i < 4; i ++, (*p) ++)
+                    if (!isxdigit((unsigned char)**p)) return EJS_FALSE;
+            }
+            else {
+                return EJS_FALSE;
+            }
+        }
+        else {
+            (*p) ++;
+        }
+    }
+}
+
+static EJSBool
+ejs_json_validate_number (const char** p)
+{
+    if (**p == '-') (*p) ++;
+    if (**p == '0') {
+        (*p) ++;
+    }
+    else if (**p >= '1' && **p <= '9') {
+        while (isdigit((unsigned char)**p)) (*p) ++;
+    }
+    else {
+        return EJS_FALSE;
+    }
+    if (**p == '.') {
+        (*p) ++;
+        if (!isdigit((unsigned char)**p)) return EJS_FALSE;
+        while (isdigit((unsigned char)**p)) (*p) ++;
+    }
+    if (**p == 'e' || **p == 'E') {
+        (*p) ++;
+        if (**p == '+' || **p == '-') (*p) ++;
+        if (!isdigit((unsigned char)**p)) return EJS_FALSE;
+        while (isdigit((unsigned char)**p)) (*p) ++;
+    }
+    return EJS_TRUE;
+}
+
+static EJSBool
+ejs_json_validate_value (const char** p, int depth)
+{
+    if (depth > EJS_JSON_MAX_NESTING) return EJS_FALSE;
+
+    char c = **p;
+    if (c == '"')
+        return ejs_json_validate_string (p);
+    if (c == '-' || (c >= '0' && c <= '9'))
+        return ejs_json_validate_number (p);
+    if (c == 't') {
+        if (strncmp (*p, "true", 4) != 0) return EJS_FALSE;
+        *p += 4; return EJS_TRUE;
+    }
+    if (c == 'f') {
+        if (strncmp (*p, "false", 5) != 0) return EJS_FALSE;
+        *p += 5; return EJS_TRUE;
+    }
+    if (c == 'n') {
+        if (strncmp (*p, "null", 4) != 0) return EJS_FALSE;
+        *p += 4; return EJS_TRUE;
+    }
+    if (c == '[') {
+        (*p) ++;
+        ejs_json_skip_ws (p);
+        if (**p == ']') { (*p) ++; return EJS_TRUE; }
+        for (;;) {
+            if (!ejs_json_validate_value (p, depth + 1)) return EJS_FALSE;
+            ejs_json_skip_ws (p);
+            if (**p == ',') { (*p) ++; ejs_json_skip_ws (p); continue; }
+            if (**p == ']') { (*p) ++; return EJS_TRUE; }
+            return EJS_FALSE;
+        }
+    }
+    if (c == '{') {
+        (*p) ++;
+        ejs_json_skip_ws (p);
+        if (**p == '}') { (*p) ++; return EJS_TRUE; }
+        for (;;) {
+            if (!ejs_json_validate_string (p)) return EJS_FALSE;
+            ejs_json_skip_ws (p);
+            if (**p != ':') return EJS_FALSE;
+            (*p) ++;
+            ejs_json_skip_ws (p);
+            if (!ejs_json_validate_value (p, depth + 1)) return EJS_FALSE;
+            ejs_json_skip_ws (p);
+            if (**p == ',') { (*p) ++; ejs_json_skip_ws (p); continue; }
+            if (**p == '}') { (*p) ++; return EJS_TRUE; }
+            return EJS_FALSE;
+        }
+    }
+    return EJS_FALSE;
+}
+
+// whole text must be a single JSON value surrounded only by JSONWhitespace
+static EJSBool
+ejs_json_validate_text (const char* text)
+{
+    const char* p = text;
+    ejs_json_skip_ws (&p);
+    if (!ejs_json_validate_value (&p, 0)) return EJS_FALSE;
+    ejs_json_skip_ws (&p);
+    return *p == '\0';
+}
 
 static EJSBool
 json_value_to_ejsval(JSON_Value *v, ejsval *rv)
@@ -90,22 +238,25 @@ static EJS_NATIVE_FUNC(_ejs_JSON_parse) {
     /* 1. Let JText be ToString(text). */
     ejsval jtext = ToString(text);
 
-    /* 2. Parse JText using the grammars in 15.12.1. Throw a SyntaxError exception if JText did not conform to the 
+    /* 2. Parse JText using the grammars in 15.12.1. Throw a SyntaxError exception if JText did not conform to the
        JSON grammar for the goal symbol JSONText.  */
     char *flattened_jtext =  ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(jtext));
 
-    /* 3. Let unfiltered be the result of parsing and evaluating JText as if it was the source text of an ECMAScript 
-       Program but using JSONString in place of StringLiteral. Note that since JText conforms to the JSON 
-       grammar this result will be either a primitive value or an object that is defined by either an ArrayLiteral or 
+    if (!ejs_json_validate_text (flattened_jtext)) {
+        free (flattened_jtext);
+        _ejs_throw_nativeerror_utf8 (EJS_SYNTAX_ERROR, "Unexpected token in JSON");
+    }
+
+    /* 3. Let unfiltered be the result of parsing and evaluating JText as if it was the source text of an ECMAScript
+       Program but using JSONString in place of StringLiteral. Note that since JText conforms to the JSON
+       grammar this result will be either a primitive value or an object that is defined by either an ArrayLiteral or
        an ObjectLiteral. */
     JSON_Value* root_val = json_parse_string(flattened_jtext);
 
     free(flattened_jtext);
 
-    if (root_val == NULL) {
-        printf ("SyntaxError\n");
-        EJS_NOT_IMPLEMENTED();
-    }
+    if (root_val == NULL)
+        _ejs_throw_nativeerror_utf8 (EJS_SYNTAX_ERROR, "Unexpected token in JSON");
 
     ejsval unfiltered;
     if (!json_value_to_ejsval(root_val, &unfiltered)) {
@@ -133,6 +284,69 @@ static EJS_NATIVE_FUNC(_ejs_JSON_parse) {
         /*    a. Return unfiltered. */
         return unfiltered;
     }
+}
+
+static EJSBool
+is_raw_json (ejsval v)
+{
+    if (!EJSVAL_IS_OBJECT(v))
+        return EJS_FALSE;
+    // the marker symbol is engine-private, so a truthy value can only
+    // have come from JSON.rawJSON
+    ejsval marker = _ejs_object_getprop (v, _ejs_RawJSON_symbol);
+    return EJSVAL_IS_BOOLEAN(marker) && EJSVAL_TO_BOOLEAN(marker);
+}
+
+// json-parse-with-source proposal: JSON.rawJSON ( text )
+static EJS_NATIVE_FUNC(_ejs_JSON_rawJSON) {
+    ejsval text = _ejs_undefined;
+    if (argc > 0) text = args[0];
+
+    // 1. Let jsonString be ? ToString(text).
+    ejsval jsonString = ToString(text);
+
+    // 2. Throw a SyntaxError if jsonString is empty, starts or ends with
+    //    JSON whitespace, or is not a single non-composite JSON value.
+    char* utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(jsonString));
+    size_t len = strlen (utf8);
+    EJSBool ok = len > 0;
+    if (ok) {
+        char first = utf8[0];
+        char last = utf8[len-1];
+        if (first == '\t' || first == '\n' || first == '\r' || first == ' ' ||
+            last  == '\t' || last  == '\n' || last  == '\r' || last  == ' ' ||
+            first == '{' || first == '[')
+            ok = EJS_FALSE;
+    }
+    if (ok)
+        ok = ejs_json_validate_text (utf8);
+    free (utf8);
+    if (!ok)
+        _ejs_throw_nativeerror_utf8 (EJS_SYNTAX_ERROR, "Invalid rawJSON value");
+
+    // 4-5. Let obj be OrdinaryObjectCreate(null, « [[IsRawJSON]] »).
+    ejsval obj = _ejs_object_new (_ejs_null, &_ejs_Object_specops);
+    _ejs_object_define_value_property (obj, _ejs_RawJSON_symbol, _ejs_true,
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+
+    // 6. Perform ! CreateDataPropertyOrThrow(obj, "rawJSON", jsonString).
+    // 7. Perform ! SetIntegrityLevel(obj, frozen).
+    _ejs_object_define_value_property (obj, _ejs_atom_rawJSON, jsonString,
+                                       EJS_PROP_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    OP(EJSVAL_TO_OBJECT(obj),PreventExtensions)(obj);
+
+    // 8. Return obj.
+    return obj;
+}
+
+// json-parse-with-source proposal: JSON.isRawJSON ( O )
+static EJS_NATIVE_FUNC(_ejs_JSON_isRawJSON) {
+    ejsval O = _ejs_undefined;
+    if (argc > 0) O = args[0];
+
+    // 1. If O is an Object with an [[IsRawJSON]] internal slot, return true.
+    // 2. Return false.
+    return BOOLEAN_TO_EJSVAL(is_raw_json (O));
 }
 
 // all state for JSON.stringify that isn't pass as parameters.  stack allocated at the beginning of
@@ -206,7 +420,7 @@ QuoteJSONString(StringifyState* state, ejsval value) {
             product[pi++] = 'u';
 
             // iii. Let hex be the string result of converting the numeric code unit value of C to a String of four hexadecimal digits. Alphabetic hexadecimal digits are presented as lowercase Latin letters.
-            static char* hexdigits = "012356789abcdef";
+            static char* hexdigits = "0123456789abcdef";
 
             // iv. Let product be the concatenation of product and hex.
             product[pi++] = '0';
@@ -485,6 +699,9 @@ SerializeJSONProperty(StringifyState* state, ejsval key, ejsval holder) {
     }
     // 5. If Type(value) is Object, then
     if (EJSVAL_IS_OBJECT(value)) {
+        // json-parse-with-source: a rawJSON object serializes as its raw text
+        if (is_raw_json (value))
+            return Get (value, _ejs_atom_rawJSON);
         // a. If value has a [[NumberData]] internal slot, then
         if (EJSVAL_IS_NUMBER_OBJECT(value)) {
             // i. Let value be ToNumber(value).
@@ -524,6 +741,9 @@ SerializeJSONProperty(StringifyState* state, ejsval key, ejsval holder) {
         else
             return _ejs_atom_null;
     }
+    // ES2020: BigInts have no JSON representation
+    if (EJSVAL_IS_BIGINT(value))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Do not know how to serialize a BigInt");
     // 11. If Type(value) is Object, and IsCallable(value) is false, then
     if (EJSVAL_IS_OBJECT(value) && !IsCallable(value)) {
         // a. Let isArray be IsArray(value).
@@ -687,10 +907,15 @@ _ejs_json_init(ejsval global)
 
     _ejs_object_define_value_property (_ejs_JSON, _ejs_Symbol_toStringTag, _ejs_atom_JSON, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 
+    _ejs_gc_add_root (&_ejs_RawJSON_symbol);
+    _ejs_RawJSON_symbol = _ejs_symbol_new(_ejs_atom_rawJSON);
+
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_JSON, x, _ejs_JSON_##x)
 
     OBJ_METHOD(parse);
     OBJ_METHOD(stringify);
+    OBJ_METHOD(rawJSON);
+    OBJ_METHOD(isRawJSON);
 
 #undef OBJ_METHOD
 }

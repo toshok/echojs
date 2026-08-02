@@ -2,7 +2,7 @@
  * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
 
-// Pass configuration (compiler-P5): the clang-style -O/-f surface.
+// Pass configuration: the clang-style -O/-f surface.
 //
 // One registry table maps each canonical pass name to its PassConfig
 // field, its default at each -O level, and its help text; the driver's
@@ -45,7 +45,7 @@ export interface PassConfig {
     bornShaped: boolean;
     promote: boolean;
     // -fno-promote=<substr,...>: decline promotion only for module paths
-    // containing one of the substrings (the old EJS_NO_PROMOTE list)
+    // containing one of the substrings
     promoteExclude: string[];
     // emission controls (emit.ts)
     gcFrames: boolean;

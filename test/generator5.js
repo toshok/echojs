@@ -1,7 +1,7 @@
 // generator: esm
-// xfail: generator support isn't 100%
 
-// "sending" from kangax
+// "sending" from kangax: yield value-sending, array literals around
+// the yields
 
 var sent;
 function* generator() {

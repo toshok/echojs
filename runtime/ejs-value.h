@@ -10,7 +10,7 @@
 
 typedef double EJSPrimNumber;
 
-#define EJSVAL_IS_PRIMITIVE(v) (EJSVAL_IS_NUMBER(v) || EJSVAL_IS_STRING(v) || EJSVAL_IS_BOOLEAN(v) || EJSVAL_IS_UNDEFINED(v) || EJSVAL_IS_SYMBOL(v))
+#define EJSVAL_IS_PRIMITIVE(v) (EJSVAL_IS_NUMBER(v) || EJSVAL_IS_STRING(v) || EJSVAL_IS_BOOLEAN(v) || EJSVAL_IS_UNDEFINED(v) || EJSVAL_IS_SYMBOL(v) || EJSVAL_IS_BIGINT(v))
 
 #define EJSVAL_IS_OBJECT(v)    EJSVAL_IS_OBJECT_IMPL(v)
 #define EJSVAL_IS_ARRAY(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Array_specops || EJSVAL_TO_OBJECT(v)->ops == &_ejs_sparsearray_specops))
@@ -23,6 +23,7 @@ typedef double EJSPrimNumber;
 #define EJSVAL_IS_NUMBER(v)    EJSVAL_IS_DOUBLE_IMPL(v)
 #define EJSVAL_IS_STRING(v)    EJSVAL_IS_STRING_IMPL(v)
 #define EJSVAL_IS_SYMBOL(v)    EJSVAL_IS_SYMBOL_IMPL(v)
+#define EJSVAL_IS_BIGINT(v)    EJSVAL_IS_BIGINT_IMPL(v)
 #define EJSVAL_IS_CLOSUREENV(v) EJSVAL_IS_CLOSUREENV_IMPL(v)
 #define EJSVAL_IS_BOOLEAN(v)   EJSVAL_IS_BOOLEAN_IMPL(v)
 #define EJSVAL_IS_UNDEFINED(v) EJSVAL_IS_UNDEFINED_IMPL(v)
@@ -38,6 +39,7 @@ typedef double EJSPrimNumber;
 #define EJSVAL_TO_NUMBER(v)       v.asDouble
 #define EJSVAL_TO_BOOLEAN(v)      EJSVAL_TO_BOOLEAN_IMPL(v)
 #define EJSVAL_TO_SYMBOL(v)       EJSVAL_TO_SYMBOL_IMPL(v)
+#define EJSVAL_TO_BIGINT(v)       EJSVAL_TO_BIGINT_IMPL(v)
 #define EJSVAL_TO_FUNC(v)         ((EJSFunction*)EJSVAL_TO_OBJECT_IMPL(v))->func
 #define EJSVAL_TO_ENV(v)          ((EJSFunction*)EJSVAL_TO_OBJECT_IMPL(v))->env
 
@@ -46,6 +48,7 @@ typedef double EJSPrimNumber;
 #define NUMBER_TO_EJSVAL(v)       DOUBLE_TO_EJSVAL_IMPL(v)
 #define STRING_TO_EJSVAL(v)       STRING_TO_EJSVAL_IMPL(v)
 #define SYMBOL_TO_EJSVAL(v)       SYMBOL_TO_EJSVAL_IMPL(v)
+#define BIGINT_TO_EJSVAL(v)       BIGINT_TO_EJSVAL_IMPL(v)
 
 #define EJSVAL_EQ(v1,v2)          ((v1).asBits == (v2).asBits)
 
@@ -61,7 +64,7 @@ void _ejs_value_finalize(ejsval val);
 
 // scan callbacks take the SLOT, not the value — the mover
 // rewrites *slot when the referent is evacuated.  Non-moving consumers
-// (the old mark path) simply read through it.
+// (the mark path) simply read through it.
 typedef void (*EJSValueFunc)(ejsval* slot);
 
 EJS_END_DECLS

@@ -2,6 +2,8 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
+#include <math.h>
+
 #include "ejs-set.h"
 #include "ejs-array.h"
 #include "ejs-gc.h"
@@ -313,6 +315,401 @@ static EJS_NATIVE_FUNC(_ejs_Set_prototype_values) {
     return _ejs_set_iterator_new (S, EJS_SET_ITER_KIND_VALUE);
 }
 
+// the [[Set]]/[[Size]]/[[Has]]/[[Keys]] fields of a Set Record
+// (ES2025 24.2.1.1).  size is a double so +Infinity survives the
+// size comparisons.
+typedef struct {
+    ejsval set;
+    double size;
+    ejsval has;
+    ejsval keys;
+} EJSSetRecord;
+
+// counts the non-empty entries of S's [[SetData]]
+static double
+set_data_size (ejsval S)
+{
+    double count = 0;
+    for (EJSSetValueEntry* e = EJSVAL_TO_SET(S)->head_insert; e; e = e->next_insert) {
+        if (!EJSVAL_IS_NO_ITER_VALUE_MAGIC(e->value))
+            count++;
+    }
+    return count;
+}
+
+// ES2025 24.2.1.2 GetSetRecord ( obj )
+static EJSSetRecord
+GetSetRecord (ejsval obj)
+{
+    // 1. If obj is not an Object, throw a TypeError exception.
+    if (!EJSVAL_IS_OBJECT(obj))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument must be an object");
+
+    // 2. Let rawSize be ? Get(obj, "size").
+    ejsval rawSize = Get (obj, _ejs_atom_size);
+
+    // 3. Let numSize be ? ToNumber(rawSize).
+    double numSize = ToDouble (ToNumber (rawSize));
+
+    // 4. If numSize is NaN, throw a TypeError exception.
+    if (isnan(numSize))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "size is NaN");
+
+    // 5. Let intSize be ! ToIntegerOrInfinity(numSize).
+    double intSize = trunc(numSize);
+
+    // 6. If intSize < 0, throw a RangeError exception.
+    if (intSize < 0)
+        _ejs_throw_nativeerror_utf8 (EJS_RANGE_ERROR, "size is negative");
+
+    // 7. Let has be ? Get(obj, "has").
+    ejsval has = Get (obj, _ejs_atom_has);
+
+    // 8. If IsCallable(has) is false, throw a TypeError exception.
+    if (!IsCallable(has))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "has is not callable");
+
+    // 9. Let keys be ? Get(obj, "keys").
+    ejsval keys = Get (obj, _ejs_atom_keys);
+
+    // 10. If IsCallable(keys) is false, throw a TypeError exception.
+    if (!IsCallable(keys))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "keys is not callable");
+
+    // 11. Return a new Set Record.
+    EJSSetRecord rec;
+    rec.set = obj;
+    rec.size = intSize;
+    rec.has = has;
+    rec.keys = keys;
+    return rec;
+}
+
+// ES2025 24.2.1.6 GetKeysIterator ( setRec ), inlined GetIteratorDirect:
+// the iterator's next method is looked up per step by IteratorStep
+static ejsval
+GetKeysIterator (EJSSetRecord* setRec)
+{
+    // 1. Let keysIter be ? Call(setRec.[[Keys]], setRec.[[Set]]).
+    ejsval thisArg = setRec->set;
+    ejsval keysIter = _ejs_invoke_closure (setRec->keys, &thisArg, 0, NULL, _ejs_undefined);
+
+    // 2. If keysIter is not an Object, throw a TypeError exception.
+    if (!EJSVAL_IS_OBJECT(keysIter))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "keys() did not return an object");
+
+    return keysIter;
+}
+
+// calls setRec.[[Has]] on setRec.[[Set]] with value, returning
+// ToBoolean of the result
+static EJSBool
+set_record_has (EJSSetRecord* setRec, ejsval value)
+{
+    ejsval thisArg = setRec->set;
+    ejsval rv = _ejs_invoke_closure (setRec->has, &thisArg, 1, &value, _ejs_undefined);
+    return EJSVAL_TO_BOOLEAN(ToBoolean(rv));
+}
+
+// a new Set whose [[SetData]] is a copy of S's
+static ejsval
+set_copy (ejsval S)
+{
+    ejsval rv = _ejs_set_new();
+    for (EJSSetValueEntry* e = EJSVAL_TO_SET(S)->head_insert; e; e = e->next_insert) {
+        if (!EJSVAL_IS_NO_ITER_VALUE_MAGIC(e->value))
+            _ejs_set_add (rv, e->value);
+    }
+    return rv;
+}
+
+static void
+validate_set_this (ejsval S, const char* method)
+{
+    if (!EJSVAL_IS_OBJECT(S))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, method);
+    if (!EJSVAL_IS_SET(S))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, method);
+}
+
+// ES2025 24.2.4.16 Set.prototype.union ( other )
+static EJS_NATIVE_FUNC(_ejs_Set_prototype_union) {
+    ejsval other = _ejs_undefined;
+    if (argc > 0) other = args[0];
+
+    // 1-2. Let O be the this value; perform RequireInternalSlot(O, [[SetData]]).
+    ejsval S = *_this;
+    validate_set_this (S, "Set.prototype.union called with non-Set this");
+
+    // 3. Let otherRec be ? GetSetRecord(other).
+    EJSSetRecord otherRec = GetSetRecord (other);
+
+    // 4. Let keysIter be ? GetKeysIterator(otherRec).
+    ejsval keysIter = GetKeysIterator (&otherRec);
+
+    // 5. Let resultSetData be a copy of O.[[SetData]].
+    ejsval result = set_copy (S);
+
+    // 6. Repeat over the keys iterator,
+    for (;;) {
+        ejsval next = IteratorStep (keysIter);
+        if (!EJSVAL_TO_BOOLEAN(next))
+            break;
+        ejsval nextValue = IteratorValue (next);
+        // b.ii-iv. canonicalize -0 and append if not already present
+        // (_ejs_set_add does both)
+        _ejs_set_add (result, nextValue);
+    }
+
+    // 7-9. Return a new Set whose [[SetData]] is resultSetData.
+    return result;
+}
+
+// ES2025 24.2.4.9 Set.prototype.intersection ( other )
+static EJS_NATIVE_FUNC(_ejs_Set_prototype_intersection) {
+    ejsval other = _ejs_undefined;
+    if (argc > 0) other = args[0];
+
+    ejsval S = *_this;
+    validate_set_this (S, "Set.prototype.intersection called with non-Set this");
+
+    // 3. Let otherRec be ? GetSetRecord(other).
+    EJSSetRecord otherRec = GetSetRecord (other);
+
+    // 4. Let resultSetData be a new empty List.
+    ejsval result = _ejs_set_new();
+
+    // 5. If SetDataSize(O.[[SetData]]) <= otherRec.[[Size]], then
+    if (set_data_size(S) <= otherRec.size) {
+        // a-b. for each element e of O.[[SetData]]: entries appended
+        // by the has calls are visited too, matching the spec's
+        // index-based walk of a growing list
+        for (EJSSetValueEntry* e = EJSVAL_TO_SET(S)->head_insert; e; e = e->next_insert) {
+            ejsval v = e->value;
+            if (EJSVAL_IS_NO_ITER_VALUE_MAGIC(v))
+                continue;
+            // i. Let inOther be ToBoolean(? Call(otherRec.[[Has]], otherRec.[[Set]], « e »)).
+            if (set_record_has (&otherRec, v))
+                // ii. append e to resultSetData if not already present
+                _ejs_set_add (result, v);
+        }
+    }
+    // 6. Else,
+    else {
+        // a. Let keysIter be ? GetKeysIterator(otherRec).
+        ejsval keysIter = GetKeysIterator (&otherRec);
+        // b. Repeat over the keys iterator,
+        for (;;) {
+            ejsval next = IteratorStep (keysIter);
+            if (!EJSVAL_TO_BOOLEAN(next))
+                break;
+            ejsval nextValue = IteratorValue (next);
+            // iv. If SetDataHas(O.[[SetData]], nextValue), append to
+            // resultSetData if not already present (SameValueZero
+            // lookups make the -0 canonicalization observationally
+            // moot; _ejs_set_add canonicalizes on append)
+            if (EJSVAL_TO_BOOLEAN(_ejs_set_has (S, nextValue)))
+                _ejs_set_add (result, nextValue);
+        }
+    }
+
+    // 7-9. Return a new Set whose [[SetData]] is resultSetData.
+    return result;
+}
+
+// ES2025 24.2.4.5 Set.prototype.difference ( other )
+static EJS_NATIVE_FUNC(_ejs_Set_prototype_difference) {
+    ejsval other = _ejs_undefined;
+    if (argc > 0) other = args[0];
+
+    ejsval S = *_this;
+    validate_set_this (S, "Set.prototype.difference called with non-Set this");
+
+    // 3. Let otherRec be ? GetSetRecord(other).
+    EJSSetRecord otherRec = GetSetRecord (other);
+
+    // 4. Let resultSetData be a copy of O.[[SetData]].
+    ejsval result = set_copy (S);
+
+    // 5. If SetDataSize(O.[[SetData]]) <= otherRec.[[Size]], then
+    if (set_data_size(S) <= otherRec.size) {
+        // a. For each element e of resultSetData: the copy is not
+        // observable by the has calls, so removal is a simple
+        // empty-out of the entry
+        for (EJSSetValueEntry* e = EJSVAL_TO_SET(result)->head_insert; e; e = e->next_insert) {
+            ejsval v = e->value;
+            if (EJSVAL_IS_NO_ITER_VALUE_MAGIC(v))
+                continue;
+            if (set_record_has (&otherRec, v))
+                e->value = MAGIC_TO_EJSVAL_IMPL(EJS_NO_ITER_VALUE);
+        }
+    }
+    // 6. Else,
+    else {
+        // a. Let keysIter be ? GetKeysIterator(otherRec).
+        ejsval keysIter = GetKeysIterator (&otherRec);
+        // b. Repeat over the keys iterator, removing each yielded
+        // value from resultSetData (SameValueZero handles -0)
+        for (;;) {
+            ejsval next = IteratorStep (keysIter);
+            if (!EJSVAL_TO_BOOLEAN(next))
+                break;
+            ejsval nextValue = IteratorValue (next);
+            _ejs_set_delete (result, nextValue);
+        }
+    }
+
+    // 7-9. Return a new Set whose [[SetData]] is resultSetData.
+    return result;
+}
+
+// ES2025 24.2.4.15 Set.prototype.symmetricDifference ( other )
+static EJS_NATIVE_FUNC(_ejs_Set_prototype_symmetricDifference) {
+    ejsval other = _ejs_undefined;
+    if (argc > 0) other = args[0];
+
+    ejsval S = *_this;
+    validate_set_this (S, "Set.prototype.symmetricDifference called with non-Set this");
+
+    // 3. Let otherRec be ? GetSetRecord(other).
+    EJSSetRecord otherRec = GetSetRecord (other);
+
+    // 4. Let keysIter be ? GetKeysIterator(otherRec).
+    ejsval keysIter = GetKeysIterator (&otherRec);
+
+    // 5. Let resultSetData be a copy of O.[[SetData]].
+    ejsval result = set_copy (S);
+
+    // 6. Repeat over the keys iterator,
+    for (;;) {
+        ejsval next = IteratorStep (keysIter);
+        if (!EJSVAL_TO_BOOLEAN(next))
+            break;
+        ejsval nextValue = IteratorValue (next);
+        // c. Let inThis be SetDataHas(O.[[SetData]], nextValue):
+        // checked against the live O, not the copy, so values the
+        // iterator added to O are seen
+        if (EJSVAL_TO_BOOLEAN(_ejs_set_has (S, nextValue)))
+            // d. remove nextValue from resultSetData if present
+            _ejs_set_delete (result, nextValue);
+        else
+            // e. append nextValue to resultSetData if not present
+            _ejs_set_add (result, nextValue);
+    }
+
+    // 7-9. Return a new Set whose [[SetData]] is resultSetData.
+    return result;
+}
+
+// ES2025 24.2.4.10 Set.prototype.isSubsetOf ( other )
+static EJS_NATIVE_FUNC(_ejs_Set_prototype_isSubsetOf) {
+    ejsval other = _ejs_undefined;
+    if (argc > 0) other = args[0];
+
+    ejsval S = *_this;
+    validate_set_this (S, "Set.prototype.isSubsetOf called with non-Set this");
+
+    // 3. Let otherRec be ? GetSetRecord(other).
+    EJSSetRecord otherRec = GetSetRecord (other);
+
+    // 4. If SetDataSize(O.[[SetData]]) > otherRec.[[Size]], return false.
+    if (set_data_size(S) > otherRec.size)
+        return _ejs_false;
+
+    // 5. For each element e of O.[[SetData]],
+    for (EJSSetValueEntry* e = EJSVAL_TO_SET(S)->head_insert; e; e = e->next_insert) {
+        ejsval v = e->value;
+        if (EJSVAL_IS_NO_ITER_VALUE_MAGIC(v))
+            continue;
+        // b. If inOther is false, return false.
+        if (!set_record_has (&otherRec, v))
+            return _ejs_false;
+    }
+    // 6. Return true.
+    return _ejs_true;
+}
+
+// ES2025 24.2.4.11 Set.prototype.isSupersetOf ( other )
+static EJS_NATIVE_FUNC(_ejs_Set_prototype_isSupersetOf) {
+    ejsval other = _ejs_undefined;
+    if (argc > 0) other = args[0];
+
+    ejsval S = *_this;
+    validate_set_this (S, "Set.prototype.isSupersetOf called with non-Set this");
+
+    // 3. Let otherRec be ? GetSetRecord(other).
+    EJSSetRecord otherRec = GetSetRecord (other);
+
+    // 4. If SetDataSize(O.[[SetData]]) < otherRec.[[Size]], return false.
+    if (set_data_size(S) < otherRec.size)
+        return _ejs_false;
+
+    // 5. Let keysIter be ? GetKeysIterator(otherRec).
+    ejsval keysIter = GetKeysIterator (&otherRec);
+
+    // 6. Repeat over the keys iterator,
+    for (;;) {
+        ejsval next = IteratorStep (keysIter);
+        if (!EJSVAL_TO_BOOLEAN(next))
+            break;
+        ejsval nextValue = IteratorValue (next);
+        // c. If SetDataHas(O.[[SetData]], nextValue) is false,
+        if (!EJSVAL_TO_BOOLEAN(_ejs_set_has (S, nextValue))) {
+            // i. Perform ? IteratorClose(keysIter, NormalCompletion(unused)).
+            IteratorClose (keysIter, _ejs_false, EJS_FALSE);
+            // ii. Return false.
+            return _ejs_false;
+        }
+    }
+    // 7. Return true.
+    return _ejs_true;
+}
+
+// ES2025 24.2.4.12 Set.prototype.isDisjointFrom ( other )
+static EJS_NATIVE_FUNC(_ejs_Set_prototype_isDisjointFrom) {
+    ejsval other = _ejs_undefined;
+    if (argc > 0) other = args[0];
+
+    ejsval S = *_this;
+    validate_set_this (S, "Set.prototype.isDisjointFrom called with non-Set this");
+
+    // 3. Let otherRec be ? GetSetRecord(other).
+    EJSSetRecord otherRec = GetSetRecord (other);
+
+    // 4. If SetDataSize(O.[[SetData]]) <= otherRec.[[Size]], then
+    if (set_data_size(S) <= otherRec.size) {
+        // a. For each element e of O.[[SetData]],
+        for (EJSSetValueEntry* e = EJSVAL_TO_SET(S)->head_insert; e; e = e->next_insert) {
+            ejsval v = e->value;
+            if (EJSVAL_IS_NO_ITER_VALUE_MAGIC(v))
+                continue;
+            // ii. If inOther is true, return false.
+            if (set_record_has (&otherRec, v))
+                return _ejs_false;
+        }
+    }
+    // 5. Else,
+    else {
+        // a. Let keysIter be ? GetKeysIterator(otherRec).
+        ejsval keysIter = GetKeysIterator (&otherRec);
+        // b. Repeat over the keys iterator,
+        for (;;) {
+            ejsval next = IteratorStep (keysIter);
+            if (!EJSVAL_TO_BOOLEAN(next))
+                break;
+            ejsval nextValue = IteratorValue (next);
+            // c. If SetDataHas(O.[[SetData]], nextValue) is true,
+            if (EJSVAL_TO_BOOLEAN(_ejs_set_has (S, nextValue))) {
+                // i-ii. close the iterator and return false
+                IteratorClose (keysIter, _ejs_false, EJS_FALSE);
+                return _ejs_false;
+            }
+        }
+    }
+    // 6. Return true.
+    return _ejs_true;
+}
+
 // ES2015, June 2015
 // 23.2.1.1 Set ( [ iterable ] )
 static EJS_NATIVE_FUNC(_ejs_Set_impl) {
@@ -521,7 +918,8 @@ _ejs_set_init(ejsval global)
 
     _ejs_gc_add_root (&_ejs_Set_prototype);
     _ejs_Set_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
-    _ejs_object_setprop (_ejs_Set,       _ejs_atom_prototype,  _ejs_Set_prototype);
+    _ejs_object_define_value_property (_ejs_Set, _ejs_atom_prototype, _ejs_Set_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (_ejs_Set_prototype, _ejs_atom_constructor, _ejs_Set, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Set, x, _ejs_Set_##x)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Set_prototype, x, _ejs_Set_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
@@ -535,12 +933,21 @@ _ejs_set_init(ejsval global)
     PROTO_METHOD(has);
     PROTO_GETTER(size);
 
+    // ES2025 set methods
+    PROTO_METHOD(union);
+    PROTO_METHOD(intersection);
+    PROTO_METHOD(difference);
+    PROTO_METHOD(symmetricDifference);
+    PROTO_METHOD(isSubsetOf);
+    PROTO_METHOD(isSupersetOf);
+    PROTO_METHOD(isDisjointFrom);
+
     // expand PROTO_METHOD(values) here so that we can install the function for both keys and @@iterator below
     ejsval _values = _ejs_function_new_native (_ejs_null, _ejs_atom_values, _ejs_Set_prototype_values);
     _ejs_object_define_value_property (_ejs_Set_prototype, _ejs_atom_values, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_FLAGS_WRITABLE | EJS_PROP_CONFIGURABLE);
     _ejs_object_define_value_property (_ejs_Set_prototype, _ejs_atom_keys, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
 
-    _ejs_object_define_value_property (_ejs_Set_prototype, _ejs_Symbol_iterator, _values, EJS_PROP_NOT_ENUMERABLE);
+    _ejs_object_define_value_property (_ejs_Set_prototype, _ejs_Symbol_iterator, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
     _ejs_object_define_value_property (_ejs_Set_prototype, _ejs_Symbol_toStringTag, _ejs_atom_Set, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 
     EJS_INSTALL_SYMBOL_GETTER(_ejs_Set, species, _ejs_Set_get_species);

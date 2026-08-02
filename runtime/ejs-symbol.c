@@ -140,9 +140,13 @@ ejsval _ejs_Symbol_hasInstance EJSVAL_ALIGNMENT;
 ejsval _ejs_Symbol_isConcatSpreadable EJSVAL_ALIGNMENT;
 ejsval _ejs_Symbol_species EJSVAL_ALIGNMENT;
 ejsval _ejs_Symbol_iterator EJSVAL_ALIGNMENT;
+ejsval _ejs_Symbol_asyncIterator EJSVAL_ALIGNMENT;
 ejsval _ejs_Symbol_toPrimitive EJSVAL_ALIGNMENT;
 ejsval _ejs_Symbol_toStringTag EJSVAL_ALIGNMENT;
 ejsval _ejs_Symbol_unscopables EJSVAL_ALIGNMENT;
+
+ejsval _ejs_Symbol_dispose EJSVAL_ALIGNMENT;
+ejsval _ejs_Symbol_asyncDispose EJSVAL_ALIGNMENT;
 
 ejsval _ejs_Symbol_match EJSVAL_ALIGNMENT;
 ejsval _ejs_Symbol_replace EJSVAL_ALIGNMENT;
@@ -157,7 +161,7 @@ _ejs_symbol_init(ejsval global)
 
     _ejs_gc_add_root (&_ejs_Symbol_prototype);
     _ejs_Symbol_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops); // XXX
-    _ejs_object_setprop (_ejs_Symbol,       _ejs_atom_prototype,  _ejs_Symbol_prototype);
+    _ejs_object_define_value_property (_ejs_Symbol, _ejs_atom_prototype, _ejs_Symbol_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
     PROTO_METHOD(toString);
     PROTO_METHOD(valueOf);
@@ -169,9 +173,12 @@ _ejs_symbol_init(ejsval global)
     WELL_KNOWN_SYMBOL(isConcatSpreadable);
     WELL_KNOWN_SYMBOL(species);
     WELL_KNOWN_SYMBOL(iterator);
+    WELL_KNOWN_SYMBOL(asyncIterator);
     WELL_KNOWN_SYMBOL(toPrimitive);
     WELL_KNOWN_SYMBOL(toStringTag);
     WELL_KNOWN_SYMBOL(unscopables);
+    WELL_KNOWN_SYMBOL(dispose);
+    WELL_KNOWN_SYMBOL(asyncDispose);
     WELL_KNOWN_SYMBOL(match);
     WELL_KNOWN_SYMBOL(replace);
     WELL_KNOWN_SYMBOL(split);

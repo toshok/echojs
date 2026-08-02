@@ -1,0 +1,17 @@
+a+b+c
+bbbbbb
+abc
+
+ba
+bb
+-x-y-
+-
+a[-]b
+aab
+abb
+a$b
+a(-,1,a-b-c)b(-,3,a-b-c)c
+a#b#
+non-global: TypeError
+a2b
+2

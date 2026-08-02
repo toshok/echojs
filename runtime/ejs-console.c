@@ -12,6 +12,7 @@
 #include "ejs-function.h"
 #include "ejs-string.h"
 #include "ejs-symbol.h"
+#include "ejs-bigint.h"
 #include "ejs-error.h"
 #include "ejs-array.h"
 #include "ejs-number.h"
@@ -40,6 +41,10 @@ console_toString(ejsval arg) {
     }
     else if (EJSVAL_IS_SYMBOL(arg)) {
         return EJSVAL_TO_SYMBOL(arg)->description;
+    }
+    else if (EJSVAL_IS_BIGINT(arg)) {
+        // node prints bigints with the literal suffix
+        return _ejs_string_concat (_ejs_bigint_to_ejs_string(arg, 10), _ejs_string_new_utf8("n"));
     }
     else if (EJSVAL_IS_NUMBER(arg) || EJSVAL_IS_NUMBER_OBJECT(arg)) {
         // node's inspect distinguishes -0 (ToString collapses it to "0")

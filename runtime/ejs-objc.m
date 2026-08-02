@@ -151,6 +151,8 @@ _ejs_objc_init(ejsval global)
     _ejs_ObjcHandle_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_objchandle_specops);
 
     _ejs_ObjcHandle = _ejs_function_new_native (_ejs_null, _ejs_atom_ObjcHandle, _ejs_ObjcHandle_impl);
+    // a real constructor despite the native-method creation path
+    ((EJSFunction*)EJSVAL_TO_OBJECT(_ejs_ObjcHandle))->constructor_kind = CONSTRUCTOR_KIND_BASE;
 
     _ejs_object_setprop (_ejs_ObjcHandle, _ejs_atom_prototype,  _ejs_ObjcHandle_proto);
     _ejs_object_setprop (_ejs_ObjcHandle_proto, _ejs_atom_constructor,  _ejs_ObjcHandle);
@@ -164,6 +166,8 @@ _ejs_objc_init(ejsval global)
     _ejs_CoffeeKitObject_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_coffeekitobject_specops);
 
     _ejs_CoffeeKitObject = _ejs_function_new_native (_ejs_null, _ejs_atom_PirouetteObject, (EJSClosureFunc)_ejs_CoffeeKitObject_impl);
+    // a real constructor despite the native-method creation path
+    ((EJSFunction*)EJSVAL_TO_OBJECT(_ejs_CoffeeKitObject))->constructor_kind = CONSTRUCTOR_KIND_BASE;
 
     _ejs_object_setprop (_ejs_CoffeeKitObject, _ejs_atom_prototype,  _ejs_CoffeeKitObject_proto);
     _ejs_object_setprop (_ejs_CoffeeKitObject_proto, _ejs_atom_constructor,  _ejs_CoffeeKitObject);

@@ -88,6 +88,7 @@ extern EJSSpecOps _ejs_Generator_specops;
 extern ejsval _ejs_generator_new (ejsval generator_body);
 
 extern void _ejs_generator_init (ejsval global);
+extern ejsval _ejs_mark_async_generator (ejsval fn);
 
 extern void   _ejs_destructure_iterator_wrapper_init (ejsval global);
 extern ejsval _ejs_destructure_iterator_new(ejsval iterator);

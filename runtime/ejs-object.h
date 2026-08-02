@@ -262,8 +262,18 @@ EJSBool _ejs_object_define_accessor_property_desc (ejsval obj, ejsval key, ejsva
 ejsval _ejs_object_setprop (ejsval obj, ejsval key, ejsval value);
 ejsval _ejs_object_getprop (ejsval obj, ejsval key);
 
+// object spread/rest: CopyDataProperties and the
+// descriptor-preserving literal-chunk merge
+ejsval _ejs_copy_data_properties (ejsval target, ejsval source, ejsval excluded);
+ejsval _ejs_require_object_coercible (ejsval value);
+ejsval _ejs_object_spread_merge (ejsval target, ejsval chunk);
+ejsval _ejs_define_field (ejsval obj, ejsval key, ejsval value);
+
 ejsval _ejs_global_setprop (ejsval key, ejsval value);
+ejsval _ejs_global_setprop_strict (ejsval key, ejsval value);
+ejsval _ejs_object_setprop_strict (ejsval obj, ejsval key, ejsval value);
 ejsval _ejs_global_getprop (ejsval key);
+ejsval _ejs_global_getprop_checked (ejsval key);
 
 ejsval _ejs_object_freeze(ejsval O);
 
@@ -317,7 +327,7 @@ ejsval _ejs_object_create (ejsval proto);
 ejsval _ejs_object_new_shaped  (uint32_t argc, ejsval* names, ejsval* values);
 ejsval _ejs_object_fill_shaped (ejsval obj, uint32_t argc, ejsval* names, ejsval* values);
 
-// ordinary-construct support (gc-P5): allocate an empty root-shaped
+// ordinary-construct support: allocate an empty root-shaped
 // ordinary object whose slot storage for `hint` fields is embedded in
 // the object's own cell (0 = bare object, today's layout).  Constructor
 // birth-capacity hints route here so `new F()` results are single-cell.

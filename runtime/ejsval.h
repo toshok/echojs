@@ -144,7 +144,11 @@ EJS_ENUM_HEADER(EJSValueType, uint8_t)
     EJSVAL_TYPE_CLOSUREENV          = 0x06,
     EJSVAL_TYPE_NULL                = 0x07,
     EJSVAL_TYPE_SYMBOL              = 0x08,
-    EJSVAL_TYPE_OBJECT              = 0x09,
+    EJSVAL_TYPE_BIGINT              = 0x09,
+    /* OBJECT must stay the maximum tag: the 64-bit EJSVAL_IS_OBJECT
+     * is a >= compare on the shifted tag (and the emitter bakes the
+     * same constant — lib/compiler.ts isObject) */
+    EJSVAL_TYPE_OBJECT              = 0x0A,
 
     /* These never appear in a ejsval; they are only provided as an out-of-band value. */
     EJSVAL_TYPE_UNKNOWN             = 0x20,
@@ -167,6 +171,7 @@ EJS_ENUM_HEADER(EJSValueTag, uint32_t)
     EJSVAL_TAG_MAGIC                = EJSVAL_TAG_CLEAR | EJSVAL_TYPE_MAGIC,
     EJSVAL_TAG_NULL                 = EJSVAL_TAG_CLEAR | EJSVAL_TYPE_NULL,
     EJSVAL_TAG_SYMBOL               = EJSVAL_TAG_CLEAR | EJSVAL_TYPE_SYMBOL,
+    EJSVAL_TAG_BIGINT               = EJSVAL_TAG_CLEAR | EJSVAL_TYPE_BIGINT,
     EJSVAL_TAG_OBJECT               = EJSVAL_TAG_CLEAR | EJSVAL_TYPE_OBJECT
 } EJS_ENUM_FOOTER(EJSValueTag);
 
@@ -186,6 +191,7 @@ EJS_ENUM_HEADER(EJSValueTag, uint32_t)
     EJSVAL_TAG_MAGIC                = EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_MAGIC,
     EJSVAL_TAG_NULL                 = EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_NULL,
     EJSVAL_TAG_SYMBOL               = EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_SYMBOL,
+    EJSVAL_TAG_BIGINT               = EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_BIGINT,
     EJSVAL_TAG_OBJECT               = EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_OBJECT
 } EJS_ENUM_FOOTER(EJSValueTag);
 
@@ -202,6 +208,7 @@ EJS_ENUM_HEADER(EJSValueShiftedTag, uint64_t)
     EJSVAL_SHIFTED_TAG_MAGIC        = (((uint64_t)EJSVAL_TAG_MAGIC)      << EJSVAL_TAG_SHIFT),
     EJSVAL_SHIFTED_TAG_NULL         = (((uint64_t)EJSVAL_TAG_NULL)       << EJSVAL_TAG_SHIFT),
     EJSVAL_SHIFTED_TAG_SYMBOL       = (((uint64_t)EJSVAL_TAG_SYMBOL)     << EJSVAL_TAG_SHIFT),
+    EJSVAL_SHIFTED_TAG_BIGINT       = (((uint64_t)EJSVAL_TAG_BIGINT)     << EJSVAL_TAG_SHIFT),
     EJSVAL_SHIFTED_TAG_OBJECT       = (((uint64_t)EJSVAL_TAG_OBJECT)     << EJSVAL_TAG_SHIFT)
 } EJS_ENUM_FOOTER(EJSValueShiftedTag);
 
@@ -221,7 +228,8 @@ typedef uint8_t EJSValueType;
 #define EJSVAL_TYPE_CLOSUREENV        ((uint8_t)0x06)
 #define EJSVAL_TYPE_NULL              ((uint8_t)0x07)
 #define EJSVAL_TYPE_SYMBOL            ((uint8_t)0x08)
-#define EJSVAL_TYPE_OBJECT            ((uint8_t)0x09)
+#define EJSVAL_TYPE_BIGINT            ((uint8_t)0x09)
+#define EJSVAL_TYPE_OBJECT            ((uint8_t)0x0A)
 #define EJSVAL_TYPE_UNKNOWN           ((uint8_t)0x20)
 
 #if EJS_BITS_PER_WORD == 32
@@ -236,6 +244,7 @@ typedef uint32_t EJSValueTag;
 #define EJSVAL_TAG_MAGIC              ((uint32_t)(EJSVAL_TAG_CLEAR | EJSVAL_TYPE_MAGIC))
 #define EJSVAL_TAG_NULL               ((uint32_t)(EJSVAL_TAG_CLEAR | EJSVAL_TYPE_NULL))
 #define EJSVAL_TAG_SYMBOL             ((uint32_t)(EJSVAL_TAG_CLEAR | EJSVAL_TYPE_SYMBOL))
+#define EJSVAL_TAG_BIGINT             ((uint32_t)(EJSVAL_TAG_CLEAR | EJSVAL_TYPE_BIGINT))
 #define EJSVAL_TAG_OBJECT             ((uint32_t)(EJSVAL_TAG_CLEAR | EJSVAL_TYPE_OBJECT))
 
 #elif EJS_BITS_PER_WORD == 64
@@ -250,6 +259,7 @@ typedef uint32_t EJSValueTag;
 #define EJSVAL_TAG_MAGIC              (uint32_t)(EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_MAGIC)
 #define EJSVAL_TAG_NULL               (uint32_t)(EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_NULL)
 #define EJSVAL_TAG_SYMBOL             (uint32_t)(EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_SYMBOL)
+#define EJSVAL_TAG_BIGINT             (uint32_t)(EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_BIGINT)
 #define EJSVAL_TAG_OBJECT             (uint32_t)(EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_OBJECT)
 
 typedef uint64_t EJSValueShiftedTag;
@@ -262,6 +272,7 @@ typedef uint64_t EJSValueShiftedTag;
 #define EJSVAL_SHIFTED_TAG_MAGIC      (((uint64_t)EJSVAL_TAG_MAGIC)      << EJSVAL_TAG_SHIFT)
 #define EJSVAL_SHIFTED_TAG_NULL       (((uint64_t)EJSVAL_TAG_NULL)       << EJSVAL_TAG_SHIFT)
 #define EJSVAL_SHIFTED_TAG_SYMBOL     (((uint64_t)EJSVAL_TAG_SYMBOL)     << EJSVAL_TAG_SHIFT)
+#define EJSVAL_SHIFTED_TAG_BIGINT     (((uint64_t)EJSVAL_TAG_BIGINT)     << EJSVAL_TAG_SHIFT)
 #define EJSVAL_SHIFTED_TAG_OBJECT     (((uint64_t)EJSVAL_TAG_OBJECT)     << EJSVAL_TAG_SHIFT)
 
 #endif  /* EJS_BITS_PER_WORD */
@@ -572,6 +583,28 @@ EJSVAL_TO_SYMBOL_IMPL(ejsval_layout l)
 }
 
 static EJS_ALWAYS_INLINE EJSBool
+EJSVAL_IS_BIGINT_IMPL(ejsval_layout l)
+{
+    return l.s.tag == EJSVAL_TAG_BIGINT;
+}
+
+static EJS_ALWAYS_INLINE ejsval_layout
+BIGINT_TO_EJSVAL_IMPL(EJSBigInt *bi)
+{
+    ejsval_layout l;
+    EJS_ASSERT(bi);
+    l.s.tag = EJSVAL_TAG_BIGINT;
+    l.s.payload.ptr = bi;
+    return l;
+}
+
+static EJS_ALWAYS_INLINE EJSBigInt *
+EJSVAL_TO_BIGINT_IMPL(ejsval_layout l)
+{
+    return (EJSBigInt *)l.s.payload.ptr;
+}
+
+static EJS_ALWAYS_INLINE EJSBool
 EJSVAL_IS_MAGIC_IMPL(ejsval_layout l)
 {
     return l.s.tag == EJSVAL_TAG_MAGIC;
@@ -867,6 +900,29 @@ static EJS_ALWAYS_INLINE EJSPrimSymbol *
 EJSVAL_TO_SYMBOL_IMPL(ejsval_layout l)
 {
     return (EJSPrimSymbol *)(l.asBits & EJSVAL_PAYLOAD_MASK);
+}
+
+static EJS_ALWAYS_INLINE EJSBool
+EJSVAL_IS_BIGINT_IMPL(ejsval_layout l)
+{
+    return (uint32_t)(l.asBits >> EJSVAL_TAG_SHIFT) == EJSVAL_TAG_BIGINT;
+}
+
+static EJS_ALWAYS_INLINE ejsval_layout
+BIGINT_TO_EJSVAL_IMPL(EJSBigInt *bi)
+{
+    ejsval_layout l;
+    uint64_t biBits = (uint64_t)bi;
+    EJS_ASSERT(bi);
+    EJS_ASSERT((biBits >> EJSVAL_TAG_SHIFT) == 0);
+    l.asBits = biBits | EJSVAL_SHIFTED_TAG_BIGINT;
+    return l;
+}
+
+static EJS_ALWAYS_INLINE EJSBigInt *
+EJSVAL_TO_BIGINT_IMPL(ejsval_layout l)
+{
+    return (EJSBigInt *)(l.asBits & EJSVAL_PAYLOAD_MASK);
 }
 
 static EJS_ALWAYS_INLINE EJSBool

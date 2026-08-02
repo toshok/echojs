@@ -60,6 +60,7 @@ filegroup(
 shared_sources = [
     "ejs-arguments.c",
     "ejs-array.c",
+    "ejs-atomics.c",
     "ejs-boolean.c",
     "ejs-closureenv.c",
     "ejs-console.c",
@@ -75,6 +76,7 @@ shared_sources = [
     "ejs-gc-minor.c",
     "ejs-generator.c",
     "ejs-init.c",
+    "ejs-iterator.c",
     "ejs-json.c",
     "ejs-map.c",
     "ejs-math.c",
@@ -89,6 +91,7 @@ shared_sources = [
     "ejs-reflect.c",
     "ejs-regexp.c",
     "ejs-require.c",
+    "ejs-resources.c",
     "ejs-set.c",
     "ejs-shapes.c",
     "ejs-stream.c",
@@ -161,6 +164,21 @@ cxx_library(
     deps = [
         ":echo",
         "//external-deps:double-conversion-headers",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+# BigInt over the vendored v8-bigint library (C++20 like the library);
+# merged into libecho.a by //:srcdir-tree, same as echo-dtoa.
+cxx_library(
+    name = "echo-bigint",
+    srcs = ["ejs-bigint.cpp"],
+    header_namespace = "",
+    compiler_flags = EJS_COMPILER_FLAGS + ["-std=c++20"],
+    preferred_linkage = "static",
+    deps = [
+        ":echo",
+        "//external-deps:v8-bigint",
     ],
     visibility = ["PUBLIC"],
 )

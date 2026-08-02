@@ -1,4 +1,4 @@
-// node-side driver for expected-output generation (runtime-P3).
+// node-side driver for expected-output generation.
 // Usage: node harness-run.js <test.js>
 // Installs the harness console shim, then runs the test — the exact
 // mirror of the import wrapper tester.ts compiles on the ejs side.

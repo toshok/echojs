@@ -55,6 +55,6 @@ genrule(
         "//external-deps:compiler-js",
     ],
     out = "generated",
-    cmd = "bash $SRCDIR/buck-gen-js.sh $(location :tsjs)",
+    cmd = "bash $SRCDIR/buck-gen-js.sh $(location :tsjs) $(location //external-deps:maam-cjs)",
     visibility = ["PUBLIC"],
 )

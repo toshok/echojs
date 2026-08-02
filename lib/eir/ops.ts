@@ -51,11 +51,16 @@ export const OPS = {
     const: { arity: 0, effects: E.NONE, imms: ["kind", "value"] },
 
     // --- generic (high tier) operators ------------------------------------
-    add: { arity: 2, effects: GENERIC_OP },
-    sub: { arity: 2, effects: GENERIC_OP },
+    // add/sub carry an optional `update` imm from ++/-- lowering: the
+    // generic emission then calls the increment-flavored runtime entry
+    // (BigInt::add(x, 1n) instead of the mixed-operand TypeError); typed
+    // paths and folds see the ordinary op
+    add: { arity: 2, effects: GENERIC_OP, imms: ["update"] },
+    sub: { arity: 2, effects: GENERIC_OP, imms: ["update"] },
     mul: { arity: 2, effects: GENERIC_OP },
     div: { arity: 2, effects: GENERIC_OP },
     mod: { arity: 2, effects: GENERIC_OP },
+    exp: { arity: 2, effects: GENERIC_OP },
     lt: { arity: 2, effects: GENERIC_OP },
     le: { arity: 2, effects: GENERIC_OP },
     gt: { arity: 2, effects: GENERIC_OP },
@@ -72,6 +77,8 @@ export const OPS = {
     in: { arity: 2, effects: GENERIC_OP },
     neg: { arity: 1, effects: GENERIC_OP },
     unary_plus: { arity: 1, effects: GENERIC_OP },
+    // ToNumeric: like unary_plus but bigints pass through (++/--)
+    to_numeric: { arity: 1, effects: GENERIC_OP },
     bitnot: { arity: 1, effects: GENERIC_OP },
 
     // pure predicates / conversions
@@ -85,14 +92,16 @@ export const OPS = {
 
     // --- properties --------------------------------------------------------
     get_prop: { arity: 2, effects: GENERIC_OP },
-    set_prop: { arity: 3, effects: GENERIC_OP },
+    set_prop: { arity: 3, effects: GENERIC_OP, imms: ["strict"] },
     get_prop_atom: { arity: 1, effects: GENERIC_OP, imms: ["atom"] },
-    set_prop_atom: { arity: 2, effects: GENERIC_OP, imms: ["atom"] },
-    delete_prop: { arity: 2, effects: GENERIC_OP },
+    set_prop_atom: { arity: 2, effects: GENERIC_OP, imms: ["atom", "strict"] },
+    delete_prop: { arity: 2, effects: GENERIC_OP, imms: ["strict"] },
 
     // --- globals ------------------------------------------------------------
-    get_global: { arity: 0, effects: E.READ | E.THROW | E.GC, imms: ["atom"] },
-    set_global: { arity: 1, effects: E.WRITE | E.THROW | E.GC, imms: ["atom"] },
+    // sloppy-mode entry coercion: null/undefined receiver -> global
+    sloppy_this: { arity: 1, effects: E.READ },
+    get_global: { arity: 0, effects: E.READ | E.THROW | E.GC, imms: ["atom", "for_typeof"] },
+    set_global: { arity: 1, effects: E.WRITE | E.THROW | E.GC, imms: ["atom", "strict"] },
 
     // --- closures / environments -------------------------------------------
     // make_env: operand 0 (optional, variadic 0..1) is the parent env
@@ -102,7 +111,7 @@ export const OPS = {
     // imms.fn = the EIR function to target; imms.name = the source-level
     // display name (Function.prototype.name) — the internal fn name is
     // scope-qualified and must not leak
-    make_closure: { arity: 1, effects: E.GC, imms: ["fn", "name"] },
+    make_closure: { arity: 1, effects: E.GC, imms: ["fn", "name", "len"] },
 
     // --- modules -------------------------------------------------------------
     module_slot_load: { arity: 0, effects: E.READ, imms: ["module", "slot"] },

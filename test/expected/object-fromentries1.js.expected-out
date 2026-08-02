@@ -1,0 +1,10 @@
+{ a: 1, b: 2 }
+{}
+{ k: 2 }
+{ '0': 'zero', true: 'yes' }
+{ x: 10, y: 20 }
+{ p: 1, q: 2 }
+1
+no-arg: TypeError
+null: TypeError
+non-object entry: TypeError

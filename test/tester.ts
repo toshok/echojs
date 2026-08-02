@@ -160,7 +160,7 @@ function checkStdout(test_name: string, elapsed: string, cb: () => void): void {
     }
 }
 
-// the value-based harness (runtime-P3): tests generate and run with
+// the value-based harness: tests generate and run with
 // console.log replaced by the serializer in harness-console-shim.js, on
 // both sides, so baselines assert on values, not on node's inspect format
 const harness_shim = "harness-console-shim.js";
@@ -188,9 +188,8 @@ function shouldGenerateExpectedOutput(test_file: string, expected_file: string):
 // their relative import specifiers are extensionless (the compiler's
 // gather-imports requires import syntax, node's ESM loader requires
 // extensions).  tsc transpiles the test and its relative-import closure
-// to CommonJS in a scratch dir (compiler-P2; babel-node's require hook
-// did this until then) and node runs the transpiled copy through the
-// same harness-run driver.
+// to CommonJS in a scratch dir, and node runs the transpiled copy
+// through the same harness-run driver.
 function relativeImportClosure(test: string): string[] {
     const seen = new Set<string>();
     const files: string[] = [];
@@ -366,6 +365,10 @@ function processOneTest(gen_expected: boolean, test: string, cb: (err?: Error | 
                 compiler,
                 platform_target.concat(extra_flags).concat(output_args).concat([
                     "--srcdir",
+                    // the node side runs tests via require() (CJS, sloppy,
+                    // this = module.exports) — script-goal semantics keep
+                    // the two hosts byte-comparable
+                    "--script",
                     "--moduledir",
                     "../node-compat",
                     "--moduledir",
@@ -431,10 +434,8 @@ function processTests(
     tests: string[],
     cb: (err?: Error | null) => void
 ): void {
-    // (the old scheduler seeded i=test_threads but incremented i before
-    // reading tests[i] in the callback — the test at index test_threads
-    // was silently skipped in BOTH passes, which is how weakmap2.js ran
-    // on a years-stale baseline)
+    // read tests[i] BEFORE incrementing i: seeding i=test_threads and
+    // bumping first silently skips the test at index test_threads
     let next = 0;
     let num_outstanding = 0;
 

@@ -1,0 +1,14 @@
+let x = { b: 2, c: 3 };
+console.log(JSON.stringify({ a: 1, ...x, d: 4 }));
+console.log(JSON.stringify({ ...x }));
+console.log(JSON.stringify({ ...null, ...undefined, a: 1 }));
+console.log(JSON.stringify({ ...x, b: 99 }));
+console.log(JSON.stringify({ b: 99, ...x }));
+console.log(JSON.stringify({ ...[10, 20] }));
+console.log(JSON.stringify({ ..."ab" }));
+let getterRan = 0;
+let src = { get g() { getterRan++; return "gv"; } };
+let copy = { ...src };
+console.log(copy.g, getterRan);
+let merged = { ...x, get lazy() { return "L"; } };
+console.log(merged.lazy, Object.keys(merged).join(","));

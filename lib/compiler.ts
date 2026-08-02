@@ -353,7 +353,7 @@ class LLVMIRVisitor implements VisitorSurface {
     loadDoubleEjsValue(n: number): llvm.Value {
         // -0 stringifies as "0": without the special case it would share
         // +0's cache slot (whichever the function emits first wins, and
-        // 1/x flips sign — found by the optimizer's neg-of-const fold).
+        // 1/x flips sign).
         // The test is 1/n === -Infinity, NOT `n === 0 && 1/n < 0`: under
         // the self-hosted runtime `-0 === 0` is false (the strict_eq
         // tag-compare quirk, math2.js), which silently disabled the
@@ -523,6 +523,11 @@ class LLVMIRVisitor implements VisitorSurface {
     }
 
     generateEJSValueForString(id: number | string): llvm.GlobalVariable {
+        // the name is cosmetic (debugging); the created global itself is
+        // the literal's identity.  NEVER re-resolve it by name: LLVM
+        // names are NUL-terminated C strings, so two literals differing
+        // only past an embedded U+0000 truncate to the same name — a
+        // name lookup would fuse them into one global.
         let name = `ejsval-${id}`;
         let strglobal = new llvm.GlobalVariable(
             this.module,
@@ -532,9 +537,7 @@ class LLVMIRVisitor implements VisitorSurface {
             false
         );
         strglobal.setAlignment(8);
-        let val = this.module.getOrInsertGlobal(name, types.EjsValue);
-        val.setAlignment(8);
-        return val;
+        return strglobal;
     }
 
     addStringLiteralInitialization(
@@ -611,9 +614,11 @@ class LLVMIRVisitor implements VisitorSurface {
                 `${prefix}_ejsval`
             );
             let intval = ir.createPtrToInt(ptr, types.Int64, `${prefix}_intval`);
+            // OBJECT_TO_EJSVAL: OR in SHIFTED_TAG_OBJECT (tag 0x1FFFA —
+            // object is the maximum ejsval tag; see isObject)
             let payload = ir.createOr(
                 intval,
-                consts.int64_lowhi(0xfffc0000, 0x00000000),
+                consts.int64_lowhi(0xfffd0000, 0x00000000),
                 `${prefix}_payload`
             );
             let alloca_as_int64 = ir.createBitCast(
@@ -679,17 +684,21 @@ class LLVMIRVisitor implements VisitorSurface {
 
     // EJSVAL_IS_OBJECT: object is the topmost shifted tag, so on 64-bit a
     // single unsigned compare suffices (mirrors EJSVAL_IS_OBJECT_IMPL)
+    // NOTE: OBJECT must stay the maximum ejsval tag (BigInt slotted in
+    // below it) — this constant is SHIFTED_TAG_OBJECT and the check is >=
     isObject(val: llvm.Value): llvm.Value {
         if (this.triple.pointerSize() === 64) {
             return ir.createICmpUGE(
                 this.getEjsvalBits(val),
-                consts.int64_lowhi(0xfffc8000, 0x00000000),
+                // SHIFTED_TAG_OBJECT (tag 0x1FFFA — object moved up when
+                // BIGINT took 0x09)
+                consts.int64_lowhi(0xfffd0000, 0x00000000),
                 "isobj"
             );
         } else {
             // 32-bit: tag compare, the isNumber trunc convention
             let trunc = ir.createTrunc(this.getEjsvalBits(val), types.Int32, "trunc.i");
-            return ir.createICmpEq(trunc, consts.int32(-119) /* 0xFFFFFF89 */, "isobj");
+            return ir.createICmpEq(trunc, consts.int32(-118) /* 0xFFFFFF8A */, "isobj");
         }
     }
 

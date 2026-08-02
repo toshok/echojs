@@ -24,6 +24,17 @@ void _ejs_weakmap_init(ejsval global);
 
 ejsval _ejs_weakmap_new ();
 
+// class private-name storage (#fields, #methods).  each
+// private name desugars to a weakmap in the class's scope; these are the
+// checked accessors the compiler emits.  `name` is a string like "#x",
+// used only for error messages.
+ejsval _ejs_private_field_get   (ejsval map, ejsval obj, ejsval name);
+ejsval _ejs_private_field_set   (ejsval map, ejsval obj, ejsval name, ejsval value);
+ejsval _ejs_private_field_init  (ejsval map, ejsval obj, ejsval value);
+ejsval _ejs_private_brand_check (ejsval map, ejsval obj, ejsval name); // returns obj
+ejsval _ejs_private_has         (ejsval map, ejsval obj);
+ejsval _ejs_private_write_error (ejsval name) __attribute__ ((noreturn));
+
 EJS_END_DECLS
 
 #endif

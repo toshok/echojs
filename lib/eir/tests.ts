@@ -28,7 +28,7 @@ import { DesugarClasses } from "../passes/desugar-classes";
 import { DesugarDestructuring } from "../passes/desugar-destructuring";
 import { DesugarGeneratorFunctions } from "../passes/desugar-generator-functions";
 import { DesugarMetaProperties } from "../passes/desugar-metaproperties";
-import * as esprima from "../../external-deps/esprima/esprima-es6";
+import * as parser from "../parser";
 import type * as e from "../estree";
 import type { CompilerOptions } from "../options";
 import { withPassConfig } from "../pass-config";
@@ -84,7 +84,7 @@ function findFn(mod: Module, name: string): Func {
 }
 
 function parseFn(src: string): e.FunctionDeclaration {
-    let ast = esprima.parse(src, { loc: true, raw: true });
+    let ast = parser.parse(src, { loc: true, raw: true });
     for (let s of ast.body) if (s.type === "FunctionDeclaration") return s;
     throw new Error("no function declaration in source");
 }
@@ -437,7 +437,7 @@ test("lower: nested captured loops chain their envs", () => {
 
 // parse + the pre-EIR desugar passes, like preEIRConvert in compile()
 function parseFnPreEIR(src: string): e.FunctionDeclaration {
-    let ast = esprima.parse(src, { loc: true, raw: true });
+    let ast = parser.parse(src, { loc: true, raw: true });
     const opts = { debug_passes: new Set<string>() } as CompilerOptions;
     ast = new DesugarClasses(opts).visit(ast) as e.Program;
     ast = new DesugarDestructuring(opts).visit(ast) as e.Program;
@@ -568,8 +568,9 @@ test("lower: class accessors lower via make_object_shaped + defineProperties", (
     verifyModule(r.module);
     let all = r.module.functions.map((fn) => printFunction(fn)).join("\n");
     // one property entry carrying BOTH accessors (the get/set pair shares
-    // a descriptor literal with fields get,set)
-    assertContains(all, 'shape="get:boxed,set:boxed"');
+    // a descriptor literal with fields get,set + the spec-attribute
+    // configurable:true)
+    assertContains(all, 'shape="get:boxed,set:boxed,configurable:boxed"');
     assertContains(all, 'atom="defineProperties"');
 });
 
@@ -615,7 +616,7 @@ test("lower: arrow lexical this reads the owner's captured this", () => {
 });
 
 test("lower: toplevel-arrow candidates using this still fall back", () => {
-    const ast = esprima.parse("var f = () => this.x;", { loc: true, raw: true });
+    const ast = parser.parse("var f = () => this.x;", { loc: true, raw: true });
     const decl = ast.body[0] as e.VariableDeclaration;
     const arrow = decl.declarations[0]!.init as e.ArrowFunctionExpression;
     let threw = false;
@@ -743,7 +744,7 @@ test("lower: statement-position yield* lowers as a for-of delegate loop", () => 
 });
 
 test("lower: program with several functions", () => {
-    let ast = esprima.parse(
+    let ast = parser.parse(
         "function one() { return 1; } function two() { return one() + 1; }",
         { loc: true, raw: true }
     );
@@ -886,7 +887,7 @@ test("optimize: write-only object literal dies with its stores", () => {
     assertNotContains(printed, "set_prop_atom");
 });
 
-test("optimize: a written key's reads fold flow-sensitively (sinking-P3)", () => {
+test("optimize: a written key's reads fold flow-sensitively", () => {
     // the read after the write sees the written value; the store and
     // the allocation drain
     let { fn, printed } = lowerAndOptimize(
@@ -1380,12 +1381,12 @@ test("guard-merge: hypot2 becomes one guard region with one slow path", () => {
     assert(countOps(fn, "has_tag") === 2, `has_tag = ${countOps(fn, "has_tag")}`);
     const ft = guardFalseTargets(fn);
     assert(ft.size === 1, `guard-failure targets = ${ft.size}`);
-    // the generic muls survive on the (single) slow path; the slow add
-    // is lattice-lowered afterwards (mul results are proven numbers —
-    // cleanup.ts), so the ToNumber/throw behavior the slow path owes is
-    // exactly the muls'
+    // the generic muls survive on the (single) slow path, and so does
+    // the slow add: with BigInt, untyped mul results may legally be
+    // bigints (hypot2(1n, 2n) is 5n), so cleanup.ts may no longer
+    // lattice-lower the add over them
     assert(countOps(fn, "mul") === 2, "generic muls must survive");
-    assert(countOps(fn, "add") === 0, `slow add lowers to f64, saw ${countOps(fn, "add")}`);
+    assert(countOps(fn, "add") === 1, `slow add stays generic, saw ${countOps(fn, "add")}`);
 });
 
 test("guard-merge: merged fast region is unboxed end-to-end, boxing once", () => {
@@ -1393,11 +1394,11 @@ test("guard-merge: merged fast region is unboxed end-to-end, boxing once", () =>
         "function hypot2(a, b) { return a * a + b * b; }",
         numericStubOracle(["a", "b"])
     );
-    // one box at the region exit, one more where cleanup.ts lowers the
-    // slow path's add over the (proven-number) mul results; the region
-    // INPUTS unbox on the fast side, the mul results on the slow side
-    assert(countOps(fn, "box_f64") === 2, `box_f64 = ${countOps(fn, "box_f64")}`);
-    assert(countOps(fn, "unbox_f64") === 6, `unbox_f64 = ${countOps(fn, "unbox_f64")}`);
+    // one box at the region exit; the slow path stays fully generic
+    // (its mul results may be bigints, so its add can't f64-lower),
+    // leaving the fast region's two input unboxes plus their twins
+    assert(countOps(fn, "box_f64") === 1, `box_f64 = ${countOps(fn, "box_f64")}`);
+    assert(countOps(fn, "unbox_f64") <= 6, `unbox_f64 = ${countOps(fn, "unbox_f64")}`);
     // intermediate joins carry raw f64 params (the optimizer-scoped lift
     // of the P2 boxed-edges rule), all marked for the verifier
     let rawParams = 0;
@@ -1814,7 +1815,7 @@ test("specialize: escaping closures are never trusted, even when the oracle lies
     // three escapes: as a return value, into an object literal, as a call
     // argument.  The (stub) oracle types everything {number} — a wrong
     // oracle must not widen what TRUSTED-specializes; the STRUCTURAL
-    // escape analysis rejects each one.  Since runtime-P2 the escapee
+    // escape analysis rejects each one.  The escapee now
     // gets the boundary wrapper instead: a guarded (trust-free) clone
     // behind entry has_tag guards — a lying oracle costs speed, never
     // behavior.
@@ -2485,8 +2486,8 @@ test("shapes-verify: slot_store repr proofs — typed f64, tagged boxed", () => 
 });
 
 test("shapes-verify: slot_load result stamp must match its repr", () => {
-    // an f64-repr load left stamped "any" is rejected (the boxed
-    // form no longer verifies)...
+    // an f64-repr load left stamped "any" is rejected (a boxed
+    // form does not verify)...
     assertThrows(
         () => verifyModule(buildSlotAttack({ loadType: "any" }).mod),
         "must have type f64"
@@ -2868,7 +2869,7 @@ test("born-shaped: a static literal lowers to make_object_shaped under --types",
 
 test("born-shaped: flag-off (null oracle) mints all-boxed shapes", () => {
     // keys are static truth, so a null oracle still lowers born-shaped
-    // (gc-P5 part 2) — the reprs just stay boxed without type evidence
+    // — the reprs just stay boxed without type evidence
     const { printed } = lowerWithOracle("function f(a) { return { x: 1, y: a }; }", null);
     assertContainsOp(printed, "make_object_shaped");
     assertContains(printed, 'shape="x:boxed,y:boxed"');
@@ -3070,8 +3071,8 @@ test("born-verify: make_object_shaped checks field count and known shape", () =>
     assertThrows(() => verifyModule(mod2), "unknown module shape");
 });
 
-// the optimizer/verifier proof-strength hazard (found by
-// types-bornshapewrong1): foldProvenGuards deletes a has_tag over a
+// the optimizer/verifier proof-strength hazard: foldProvenGuards
+// deletes a has_tag over a
 // const-number join (`c ? 1 : 0`), uncovering the slot_store.  The typed-store form's
 // typed store dissolves the hazard class: the store takes a raw f64
 // (unbox under whatever proof lowering had), so no guard deletion can
@@ -3174,7 +3175,7 @@ test("sink-shaped: a call-operand use escapes", () => {
     assertContains(printed, "make_object_shaped");
 });
 
-test("sink-shaped: a written literal flow-sinks through the generic arms (sinking-P3)", () => {
+test("sink-shaped: a written literal flow-sinks through the generic arms", () => {
     // the store's diamond guards fold FALSE (twin arms; sound under
     // writes), the generic read folds to the written const, and the
     // allocation drains
@@ -3279,7 +3280,7 @@ test("sink-shaped: -fno-shaped-sink leaves the allocation alone", () => {
     });
 });
 
-// --- flow-sensitive sinking + partial escapes (sinking-P3) ------------------
+// --- flow-sensitive sinking + partial escapes -------------------------------
 
 test("sink-flow: writes across branches fold through a minted join param", () => {
     let { printed } = lowerAndOptimize(
@@ -3365,7 +3366,7 @@ test("sink-flow: shaped partial escape materializes a shaped literal", () => {
     assertNotContains(printed, "set_prop_atom");
 });
 
-// --- rest_args / args_obj length sinking (sinking-P3) -----------------------
+// --- rest_args / args_obj length sinking ------------------------------------
 
 test("sink-args: length-only arguments folds to arg_len and drains", () => {
     let { printed } = lowerAndOptimize("function f() { return arguments.length; }");
@@ -3577,7 +3578,7 @@ test("sink-ctor: -fno-ctor-sink leaves the construct alone", () => {
     });
 });
 
-// --- cleanup (compiler-P1): const folding, lattice, CSE, devirt -----------------
+// --- cleanup: const folding, lattice, CSE, devirt ---------------------------
 
 function optStatsOf(src: string): { fn: Func; printed: string; stats: OptStats } {
     let { fn } = lowerOne(src);

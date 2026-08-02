@@ -79,6 +79,7 @@ const binop_for_op: Record<string, string | undefined> = {
     mul: "*",
     div: "/",
     mod: "%",
+    exp: "**",
     lt: "<",
     le: "<=",
     gt: ">",
@@ -769,7 +770,7 @@ export class EIREmitter {
                     ir.createStore(this.val(inst.operands[1]), dref);
                 } else {
                     ir.createStore(this.val(inst.operands[1]), ref);
-                    // the barrier owner is the wrapper OBJECT (gc-P5):
+                    // the barrier owner is the wrapper OBJECT:
                     // its Scan walks the slot values directly, and
                     // embedded storage is not a cell of its own
                     this.emitStoreBarrier(objval, this.val(inst.operands[1]));
@@ -873,9 +874,10 @@ export class EIREmitter {
                 );
             }
             case "set_prop": {
+                const fn = inst.imms["strict"] ? rt.object_setprop_strict : rt.object_setprop;
                 return this.emitCallLike(
                     inst,
-                    rt.object_setprop,
+                    fn,
                     [
                         this.val(inst.operands[0]),
                         this.val(inst.operands[1]),
@@ -886,18 +888,20 @@ export class EIREmitter {
             }
             case "set_prop_atom": {
                 let key = this.v.getAtom(String(inst.imms["atom"]));
+                const fn = inst.imms["strict"] ? rt.object_setprop_strict : rt.object_setprop;
                 return this.emitCallLike(
                     inst,
-                    rt.object_setprop,
+                    fn,
                     [this.val(inst.operands[0]), key, this.val(inst.operands[1])],
                     "setprop"
                 );
             }
 
             case "delete_prop": {
+                const fn = inst.imms["strict"] ? rt.unopdelete_strict : rt.unopdelete;
                 return this.emitCallLike(
                     inst,
-                    rt.unopdelete,
+                    fn,
                     [this.val(inst.operands[0]), this.val(inst.operands[1])],
                     "delres"
                 );
@@ -933,15 +937,25 @@ export class EIREmitter {
                 return;
             }
 
+            case "sloppy_this": {
+                return this.emitCallLike(
+                    inst,
+                    rt.sloppy_this,
+                    [this.val(inst.operands[0])],
+                    "sloppythis"
+                );
+            }
             case "get_global": {
                 let key = this.v.getAtom(String(inst.imms["atom"]));
-                return this.emitCallLike(inst, rt.global_getprop, [key], "getglobal");
+                const fn = inst.imms["for_typeof"] ? rt.global_getprop : rt.global_getprop_checked;
+                return this.emitCallLike(inst, fn, [key], "getglobal");
             }
             case "set_global": {
                 let key = this.v.getAtom(String(inst.imms["atom"]));
+                const fn = inst.imms["strict"] ? rt.global_setprop_strict : rt.global_setprop;
                 return this.emitCallLike(
                     inst,
-                    rt.global_setprop,
+                    fn,
                     [key, this.val(inst.operands[0])],
                     "setglobal"
                 );
@@ -949,10 +963,9 @@ export class EIREmitter {
 
             case "make_env": {
                 const n = inst.imms["size"] as number;
-                // envs are 39% of all allocations (the P0
-                // census) — bump-allocate inline; the runtime call is
-                // the slow path/safepoint.  -fno-inline-alloc is
-                // the compile-time bisect hook.
+                // envs dominate allocation counts — bump-allocate
+                // inline; the runtime call is the slow path/safepoint.
+                // -fno-inline-alloc is the compile-time bisect hook.
                 const slow = () => this.call(rt.make_closure_env, [consts.int32(n)], "env");
                 const rv = passes().inlineAlloc ? this.v.emitEnvAllocInline(n, slow) : slow();
                 this.values.set(inst, rv);
@@ -1000,7 +1013,12 @@ export class EIREmitter {
                 );
                 let rv = this.call(
                     rt.make_closure,
-                    [this.val(inst.operands[0]), name, target],
+                    [
+                        this.val(inst.operands[0]),
+                        name,
+                        target,
+                        consts.int32((inst.imms["len"] as number) ?? 0),
+                    ],
                     "closure"
                 );
                 this.values.set(inst, rv);
@@ -1411,11 +1429,20 @@ export class EIREmitter {
                 return this.emitCallLike(inst, callee, argv, "rtres");
             }
 
+            case "to_numeric":
+                return this.emitCallLike(inst, rt.op_to_numeric, [this.val(inst.operands[0])], "tonum");
+
             default: {
                 // generic binops / unops through the runtime interfaces
                 let binop = binop_for_op[inst.op];
                 if (binop) {
-                    let callee = this.v.ejs_binops[binop];
+                    // ++/-- adds carry the update imm: the increment-
+                    // flavored entries keep BigInt in-type instead of
+                    // throwing the mixed-operand TypeError
+                    let callee =
+                        inst.imms["update"] && inst.op === "add" ? rt.op_add_update :
+                        inst.imms["update"] && inst.op === "sub" ? rt.op_sub_update :
+                        this.v.ejs_binops[binop];
                     if (!callee) throw new Error(`EIR emit: no binop interface for ${binop}`);
                     return this.emitCallLike(
                         inst,

@@ -45,10 +45,13 @@ genrule(
           ' "$(location //ejs-llvm:ejs-llvm.ejs)"' +
           ' "$(location //ejs-llvm:ejs-llvm[static])"' +
           ' "$(location //runtime:echo-dtoa[static])"' +
+          ' "$(location //runtime:echo-bigint[static])"' +
+          ' "$(location //external-deps:v8-bigint[static])"' +
           select({
               "DEFAULT": " -",
               "config//os:macos": ' "$(location //runtime:echo-objc[static])"',
-          }),
+          }) +
+          ' "$(location //external-deps:maam-esm)"',
 )
 
 # stage1: the generated (CommonJS) compiler running under node (with the

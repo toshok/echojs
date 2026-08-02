@@ -1,6 +1,5 @@
 // pattern (and member-expression) loop heads, catch-parameter patterns,
-// nested spreads, debugger statements: constructs that used to fall back
-// to the legacy pipeline and now lower natively.
+// nested spreads, debugger statements: all lower natively.
 
 function forOfArrayPattern(ps) {
     let r = 0;

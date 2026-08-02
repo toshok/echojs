@@ -76,6 +76,7 @@ profile_note_alloc(size_t size, int ffs_bucket, EJSScanType scan_type)
     case EJS_SCAN_TYPE_PRIMSYM:    prof_kind_count[1]++; break;
     case EJS_SCAN_TYPE_OBJECT:     prof_kind_count[2]++; break;
     case EJS_SCAN_TYPE_CLOSUREENV: prof_kind_count[3]++; break;
+    case EJS_SCAN_TYPE_BIGINT:     break; // no dedicated census bucket
     }
     prof_young_count++;
     prof_young_bytes += size;
@@ -318,7 +319,7 @@ paranoid_report_referrers(GCObjectPtr p)
     // the sweep loop's own cell cursor, evacuation temporaries — written
     // AFTER the conservative pin scan ran, so a hit there is the checker
     // reading its own machinery, not a missed mutator reference.  (The
-    // P6.3 file split's codegen shift surfaced exactly that self-hit.)
+    // collector file split's codegen shift surfaced exactly that self-hit.)
     referrer_ctx = "stack";
     referrer_owner = NULL;
     void* volatile probe;

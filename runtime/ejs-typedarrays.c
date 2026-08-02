@@ -11,6 +11,7 @@
 #include "ejs-function.h"
 #include "ejs-string.h"
 #include "ejs-array.h"
+#include "ejs-bigint.h"
 #include "ejs-error.h"
 #include "ejs-symbol.h"
 #include "ejs-proxy.h"
@@ -59,8 +60,82 @@ ejsval _ejs_Float32Array EJSVAL_ALIGNMENT;
 ejsval _ejs_Float64Array_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_Float64Array EJSVAL_ALIGNMENT;
 
+ejsval _ejs_BigInt64Array_prototype EJSVAL_ALIGNMENT;
+ejsval _ejs_BigInt64Array EJSVAL_ALIGNMENT;
+
+ejsval _ejs_BigUint64Array_prototype EJSVAL_ALIGNMENT;
+ejsval _ejs_BigUint64Array EJSVAL_ALIGNMENT;
+
 ejsval _ejs_DataView_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_DataView EJSVAL_ALIGNMENT;
+
+// ToBigInt (7.1.13): number is a TypeError here — the BigInt-element
+// arrays only accept values that are (or coerce to) actual BigInts
+static ejsval
+ToBigInt (ejsval value)
+{
+    ejsval prim = ToPrimitive(value, TO_PRIM_HINT_NUMBER);
+    if (EJSVAL_IS_BIGINT(prim)) return prim;
+    if (EJSVAL_IS_BOOLEAN(prim)) return _ejs_bigint_new_from_int64(EJSVAL_TO_BOOLEAN(prim) ? 1 : 0);
+    if (EJSVAL_IS_STRING(prim)) {
+        ejsval rv = _ejs_bigint_from_string(prim);
+        if (!EJSVAL_IS_BIGINT(rv))
+            _ejs_throw_nativeerror_utf8 (EJS_SYNTAX_ERROR, "Cannot convert string to a BigInt");
+        return rv;
+    }
+    _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Cannot convert value to a BigInt");
+}
+
+// ToBigInt64/ToBigUint64 (7.1.15/16): ToBigInt, then the value modulo
+// 2^64 as raw bits.  The signed and unsigned stores share one bit
+// pattern; only the read-back interpretation differs.
+static uint64_t
+ToBigUint64Bits (ejsval value)
+{
+    EJSBigInt* bi = EJSVAL_TO_BIGINT(ToBigInt(value));
+    uint64_t bits = bi->length ? bi->digits[0] : 0;
+    return bi->sign ? (uint64_t)0 - bits : bits;
+}
+
+// ToIndex (7.1.22) for DataView accesses: RangeError on negative,
+// non-finite, or > 2^53-1 offsets
+static uint32_t
+DataViewIndex (ejsval requestIndex)
+{
+    double d = EJSVAL_IS_UNDEFINED(requestIndex) ? 0 : EJSVAL_TO_NUMBER(ToNumber(requestIndex));
+    if (isnan(d)) d = 0;
+    d = trunc(d);
+    if (!(d >= 0) || d > 9007199254740991.0)
+        _ejs_throw_nativeerror_utf8 (EJS_RANGE_ERROR, "Invalid DataView offset");
+    return (uint32_t)d;
+}
+
+// per-element-kind ejsval conversions, threaded through the typed-array
+// macros so BigInt-element arrays produce/consume BigInts while the
+// numeric arrays stay on the Number path
+#define EJS_TA_TO_EJSVAL_NUM(x)       (NUMBER_TO_EJSVAL((double)(x)))
+#define EJS_TA_TO_EJSVAL_BIGINT64(x)  (_ejs_bigint_new_from_int64((int64_t)(x)))
+#define EJS_TA_TO_EJSVAL_BIGUINT64(x) (_ejs_bigint_new_from_uint64((uint64_t)(x)))
+#define EJS_TA_FROM_EJSVAL_NUM(elementtype, v)    ((elementtype)EJSVAL_TO_NUMBER(ToNumber(v)))
+#define EJS_TA_FROM_EJSVAL_BIGINT(elementtype, v) ((elementtype)ToBigUint64Bits(v))
+#define EJS_TA_FROM_EJSVAL_CLAMPED(elementtype, v) ((elementtype)ToUint8Clamp(v))
+
+/* ToUint8Clamp (7.1.11): NaN and negatives clamp to 0, >255 clamps to
+   255, everything else rounds half to even */
+static uint8_t
+ToUint8Clamp (ejsval value)
+{
+    double d = EJSVAL_TO_NUMBER(ToNumber(value));
+    if (isnan(d) || d <= 0)
+        return 0;
+    if (d >= 255)
+        return 255;
+    double f = floor(d);
+    double diff = d - f;
+    if (diff > 0.5 || (diff == 0.5 && fmod(f, 2) != 0))
+        f += 1;
+    return (uint8_t)f;
+}
 
 static EJSBool
 IsDetachedBuffer (ejsval arrayBuffer)
@@ -72,11 +147,38 @@ IsDetachedBuffer (ejsval arrayBuffer)
     EJSArrayBuffer *Obj = EJSVAL_TO_ARRAYBUFFER(arrayBuffer);
 
     /* 2. If arrayBuffer’s [[ArrayBufferData]] internal slot is null, then return true. */
-    if (Obj->dependent)
+    if (Obj->detached)
         return EJS_TRUE;
+
+    if (Obj->dependent)
+        return IsDetachedBuffer(Obj->data.dependent.buf);
 
     /* 3. Return false. */
     return EJS_FALSE;
+}
+
+/* 24.1.1.3 DetachArrayBuffer(arrayBuffer) — the buffer's data block is
+   conceptually discarded; the allocation itself stays until the GC
+   finalizes the buffer, so live views never dereference a freed
+   pointer.  Every spec-guarded entry point consults IsDetachedBuffer. */
+void
+_ejs_arraybuffer_detach (ejsval bufferval)
+{
+    if (!EJSVAL_IS_ARRAYBUFFER(bufferval))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "value not an array buffer");
+    EJSArrayBuffer *buf = EJSVAL_TO_ARRAYBUFFER(bufferval);
+    buf->detached = EJS_TRUE;
+    buf->size = 0;
+}
+
+/* __ejs.detachArrayBuffer — the host hook behind test262's
+   $262.detachArrayBuffer */
+EJS_NATIVE_FUNC(_ejs_detachArrayBuffer_impl)
+{
+    if (argc < 1)
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "detachArrayBuffer requires an argument");
+    _ejs_arraybuffer_detach (args[0]);
+    return _ejs_undefined;
 }
 
 // Rev 38 Final Draft, April 14, 2015
@@ -105,6 +207,52 @@ ValidateTypedArray (ejsval O)
     return buffer;
 }
 
+/* ToIndex (7.1.22) for a typed-array length request: any non-object
+   constructor argument is a length */
+static uint32_t
+TypedArrayLengthFromValue (ejsval v)
+{
+    double d = EJSVAL_IS_UNDEFINED(v) ? 0 : EJSVAL_TO_NUMBER(ToNumber(v));
+    if (isnan(d)) d = 0;
+    d = trunc(d);
+    if (d < 0 || d > 9007199254740991.0)
+        _ejs_throw_nativeerror_utf8 (EJS_RANGE_ERROR, "Invalid typed array length");
+    return (uint32_t)d;
+}
+
+/* the object-argument half of the TypedArray constructor (23.2.5.1):
+   an object with @@iterator yields its iteration values (IterableToList);
+   anything else is treated as array-like (length + indexed Gets).  The
+   values land in a dense EJS array so they stay visible to the GC while
+   user code (iterators, getters) runs. */
+static ejsval
+TypedArrayGatherFromObject (ejsval obj, uint32_t* count_out)
+{
+    ejsval values = _ejs_array_new (0, EJS_FALSE);
+
+    ejsval usingIterator = GetMethod(obj, _ejs_Symbol_iterator);
+    if (!EJSVAL_IS_UNDEFINED(usingIterator)) {
+        ejsval iterator = GetIterator(obj, usingIterator);
+        uint32_t count = 0;
+        for (;;) {
+            ejsval next = IteratorStep(iterator);
+            if (!EJSVAL_TO_BOOLEAN(next))
+                break;
+            ejsval v = IteratorValue(next);
+            Put (values, NUMBER_TO_EJSVAL(count), v, EJS_TRUE);
+            count++;
+        }
+        *count_out = count;
+        return values;
+    }
+
+    int64_t len = ToLength(Get(obj, _ejs_atom_length));
+    for (int64_t i = 0; i < len; i++)
+        Put (values, NUMBER_TO_EJSVAL(i), Get(obj, NUMBER_TO_EJSVAL(i)), EJS_TRUE);
+    *count_out = (uint32_t)len;
+    return values;
+}
+
 ejsval
 _ejs_arraybuffer_new (int size)
 {
@@ -113,6 +261,7 @@ _ejs_arraybuffer_new (int size)
     _ejs_init_object ((EJSObject*)rv, _ejs_ArrayBuffer_prototype, &_ejs_ArrayBuffer_specops);
 
     rv->dependent = EJS_FALSE;
+    rv->detached = EJS_FALSE;
     rv->size = size;
     if (size)
         rv->data.alloced_buf = calloc(1, size);
@@ -129,6 +278,7 @@ _ejs_arraybuffer_new_slice (ejsval bufferval, int offset, int size)
     _ejs_init_object ((EJSObject*)rv, _ejs_ArrayBuffer_prototype, &_ejs_ArrayBuffer_specops);
 
     rv->dependent = EJS_TRUE;
+    rv->detached = EJS_FALSE;
     rv->data.dependent.offset = MIN(buffer->size, offset);
     rv->data.dependent.buf = bufferval;
     rv->size = size;
@@ -162,6 +312,7 @@ static EJS_NATIVE_FUNC(_ejs_ArrayBuffer_impl) {
     EJSArrayBuffer* buffer = (EJSArrayBuffer*)EJSVAL_TO_OBJECT(*_this);
 
     buffer->dependent = EJS_FALSE;
+    buffer->detached = EJS_FALSE;
     buffer->size = byteLength;
     if (byteLength)
         buffer->data.alloced_buf = calloc (1, byteLength);
@@ -298,17 +449,25 @@ swapBytes (void* value, int elementSizeInBytes)
     }
 }
 
-#define EJS_DATA_VIEW_METHOD_IMPL(ElementType, elementtype, elementSizeInBytes) \
+/* 24.3.1.1 GetViewValue / 24.3.1.2 SetViewValue: ToIndex the offset
+   (RangeError on bad indices), coerce the value, then check for a
+   detached buffer (TypeError) and out-of-range access (RangeError)
+   before touching the data. */
+#define EJS_DATA_VIEW_METHOD_IMPL(ElementType, elementtype, elementSizeInBytes, toEjsval, fromEjsval) \
     static EJS_NATIVE_FUNC(_ejs_DataView_prototype_get##ElementType##_impl) { \
-        if (argc < 1) {                                                 \
-            _ejs_log ("wrong number of arguments\n");                   \
-            EJS_NOT_IMPLEMENTED();                                      \
-        }                                                               \
+        if (!EJSVAL_IS_DATAVIEW(*_this))                                \
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "receiver is not a DataView"); \
                                                                         \
-        uint32_t idx = EJSVAL_TO_NUMBER(args[0]);                       \
+        uint32_t idx = DataViewIndex (argc > 0 ? args[0] : _ejs_undefined); \
         EJSBool littleEndian = EJS_FALSE;                               \
         if (argc > 1)                                                   \
             littleEndian = EJSVAL_TO_BOOLEAN(args[1]);                  \
+                                                                        \
+        EJSDataView* view = (EJSDataView*)EJSVAL_TO_OBJECT(*_this);      \
+        if (IsDetachedBuffer(view->buffer))                             \
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "DataView's buffer is detached"); \
+        if ((uint64_t)idx + (elementSizeInBytes) > view->byteLength)    \
+            _ejs_throw_nativeerror_utf8 (EJS_RANGE_ERROR, "DataView access out of range"); \
                                                                         \
         char* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(*_this));  \
         elementtype val;                                                \
@@ -316,20 +475,24 @@ swapBytes (void* value, int elementSizeInBytes)
         if (needToSwap(littleEndian))                                   \
             swapBytes(&val, elementSizeInBytes);                        \
                                                                         \
-        return NUMBER_TO_EJSVAL(val);                                   \
+        return toEjsval(val);                                           \
     }                                                                   \
                                                                         \
     static EJS_NATIVE_FUNC(_ejs_DataView_prototype_set##ElementType##_impl) { \
-        if (argc < 2) {                                                 \
-            _ejs_log ("wrong number of arguments\n");                   \
-            EJS_NOT_IMPLEMENTED();                                      \
-        }                                                               \
+        if (!EJSVAL_IS_DATAVIEW(*_this))                                \
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "receiver is not a DataView"); \
                                                                         \
-        uint32_t idx = EJSVAL_TO_NUMBER(args[0]);                       \
-        elementtype val = (elementtype)EJSVAL_TO_NUMBER(args[1]);       \
+        uint32_t idx = DataViewIndex (argc > 0 ? args[0] : _ejs_undefined); \
+        elementtype val = fromEjsval(elementtype, argc > 1 ? args[1] : _ejs_undefined); \
         EJSBool littleEndian = EJS_FALSE;                               \
         if (argc > 2)                                                   \
             littleEndian = EJSVAL_TO_BOOLEAN(args[2]);                  \
+                                                                        \
+        EJSDataView* view = (EJSDataView*)EJSVAL_TO_OBJECT(*_this);      \
+        if (IsDetachedBuffer(view->buffer))                             \
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "DataView's buffer is detached"); \
+        if ((uint64_t)idx + (elementSizeInBytes) > view->byteLength)    \
+            _ejs_throw_nativeerror_utf8 (EJS_RANGE_ERROR, "DataView access out of range"); \
                                                                         \
         if (needToSwap(littleEndian))                                   \
             swapBytes(&val, elementSizeInBytes);                        \
@@ -339,16 +502,18 @@ swapBytes (void* value, int elementSizeInBytes)
         return _ejs_undefined;                                          \
     }                                                                   \
 
-EJS_DATA_VIEW_METHOD_IMPL(Int8, int8_t, 1);
-EJS_DATA_VIEW_METHOD_IMPL(Uint8, uint8_t, 1);
-EJS_DATA_VIEW_METHOD_IMPL(Int16, int16_t, 2);
-EJS_DATA_VIEW_METHOD_IMPL(Uint16, uint16_t, 2);
-EJS_DATA_VIEW_METHOD_IMPL(Int32, int32_t, 4);
-EJS_DATA_VIEW_METHOD_IMPL(Uint32, uint32_t, 4);
-EJS_DATA_VIEW_METHOD_IMPL(Float32, float, 4);
-EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
+EJS_DATA_VIEW_METHOD_IMPL(Int8, int8_t, 1, EJS_TA_TO_EJSVAL_NUM, EJS_TA_FROM_EJSVAL_NUM);
+EJS_DATA_VIEW_METHOD_IMPL(Uint8, uint8_t, 1, EJS_TA_TO_EJSVAL_NUM, EJS_TA_FROM_EJSVAL_NUM);
+EJS_DATA_VIEW_METHOD_IMPL(Int16, int16_t, 2, EJS_TA_TO_EJSVAL_NUM, EJS_TA_FROM_EJSVAL_NUM);
+EJS_DATA_VIEW_METHOD_IMPL(Uint16, uint16_t, 2, EJS_TA_TO_EJSVAL_NUM, EJS_TA_FROM_EJSVAL_NUM);
+EJS_DATA_VIEW_METHOD_IMPL(Int32, int32_t, 4, EJS_TA_TO_EJSVAL_NUM, EJS_TA_FROM_EJSVAL_NUM);
+EJS_DATA_VIEW_METHOD_IMPL(Uint32, uint32_t, 4, EJS_TA_TO_EJSVAL_NUM, EJS_TA_FROM_EJSVAL_NUM);
+EJS_DATA_VIEW_METHOD_IMPL(Float32, float, 4, EJS_TA_TO_EJSVAL_NUM, EJS_TA_FROM_EJSVAL_NUM);
+EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8, EJS_TA_TO_EJSVAL_NUM, EJS_TA_FROM_EJSVAL_NUM);
+EJS_DATA_VIEW_METHOD_IMPL(BigInt64, int64_t, 8, EJS_TA_TO_EJSVAL_BIGINT64, EJS_TA_FROM_EJSVAL_BIGINT);
+EJS_DATA_VIEW_METHOD_IMPL(BigUint64, uint64_t, 8, EJS_TA_TO_EJSVAL_BIGUINT64, EJS_TA_FROM_EJSVAL_BIGINT);
 
-#define EJS_TYPED_ARRAY(EnumType, ArrayType, arraytype, elementtype, elementSizeInBytes) \
+#define EJS_TYPED_ARRAY(EnumType, ArrayType, arraytype, elementtype, elementSizeInBytes, toEjsval, fromEjsval) \
     /* ES2015, June 2015 */                                             \
     /* 22.2.4.1 TypedArray( ... argumentsList) */                       \
     static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_impl) {              \
@@ -372,8 +537,17 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
                                                                         \
             if (EJSVAL_IS_OBJECT(args[0])) {                            \
                 if (EJSVAL_IS_TYPEDARRAY(args[0])) {                    \
-                    /* TypedArray(TypedArray array) */                  \
+                    /* TypedArray(TypedArray array): InitializeTypedArrayFromTypedArray */ \
                     EJSTypedArray* typed_array = (EJSTypedArray*)EJSVAL_TO_OBJECT(args[0]); \
+                                                                        \
+                    if (IsDetachedBuffer(typed_array->buffer))          \
+                        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "source typed array's buffer is detached"); \
+                                                                        \
+                    /* the source and target [[ContentType]]s must agree */ \
+                    EJSBool src_bigint = typed_array->element_type == EJS_TYPEDARRAY_BIGINT64 || typed_array->element_type == EJS_TYPEDARRAY_BIGUINT64; \
+                    EJSBool dst_bigint = EJS_TYPEDARRAY_##EnumType == EJS_TYPEDARRAY_BIGINT64 || EJS_TYPEDARRAY_##EnumType == EJS_TYPEDARRAY_BIGUINT64; \
+                    if (src_bigint != dst_bigint)                       \
+                        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "cannot mix BigInt and Number typed arrays"); \
                                                                         \
                     array_len = typed_array->length;                    \
                     arr->length = array_len;                            \
@@ -381,29 +555,14 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
                     arr->byteLength = array_len * (elementSizeInBytes); \
                     arr->buffer = _ejs_arraybuffer_new (arr->byteLength); \
                                                                         \
-                    _ejs_log ("need to copy the existing data from the typed array to this array\n"); \
-                    EJS_NOT_IMPLEMENTED();                              \
-                }                                                       \
-                else if (EJSVAL_IS_ARRAY(args[0])) {                    \
-                    /* TypedArray(type[] array) */                      \
-                                                                        \
-                    array_len = EJS_ARRAY_LEN(args[0]);                 \
-                    arr->length = array_len;                            \
-                    arr->byteOffset = 0;                                \
-                    arr->byteLength = array_len * (elementSizeInBytes); \
-                    arr->buffer = _ejs_arraybuffer_new (arr->byteLength); \
-                                                                        \
-                    void* buf_data = ((EJSArrayBuffer*)EJSVAL_TO_OBJECT(arr->buffer))->data.alloced_buf; \
-                    if (EJSVAL_IS_DENSE_ARRAY(args[0])) {               \
-                        EJSObject* arr = EJSVAL_TO_OBJECT(args[0]);     \
-                        int i;                                          \
-                        for (i = 0; i < EJSARRAY_LEN (arr); i ++) {     \
-                            ((elementtype*)buf_data)[i] = (elementtype)EJSVAL_TO_NUMBER(EJSDENSEARRAY_ELEMENTS(arr)[i]); \
-                        }                                               \
+                    void* dst_data = _ejs_typedarray_get_data ((EJSObject*)arr); \
+                    if (typed_array->element_type == EJS_TYPEDARRAY_##EnumType) { \
+                        /* same element type: bit-level copy */         \
+                        memcpy (dst_data, _ejs_typedarray_get_data (EJSVAL_TO_OBJECT(args[0])), arr->byteLength); \
                     }                                                   \
                     else {                                              \
-                        _ejs_log ("need to implement normal array object copying for sparse arrays.  or do we?\n"); \
-                        EJS_NOT_IMPLEMENTED();                          \
+                        for (uint32_t i = 0; i < array_len; i ++)       \
+                            ((elementtype*)dst_data)[i] = fromEjsval(elementtype, _ejs_typedarray_get_at (EJSVAL_TO_OBJECT(args[0]), i)); \
                     }                                                   \
                 }                                                       \
                 else if (EJSVAL_IS_ARRAYBUFFER(args[0])) {              \
@@ -444,12 +603,25 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
              arr->buffer = args[0];                                     \
          }                                                              \
          else {                                                         \
-             goto construct_from_array_len;                             \
+             /* TypedArray(object): arrays, iterables, and array-likes  \
+                all funnel through one gather */                        \
+             uint32_t gathered_count = 0;                               \
+             ejsval gathered = TypedArrayGatherFromObject (args[0], &gathered_count); \
+                                                                        \
+             array_len = gathered_count;                                \
+             arr->length = array_len;                                   \
+             arr->byteOffset = 0;                                       \
+             arr->byteLength = array_len * (elementSizeInBytes);        \
+             arr->buffer = _ejs_arraybuffer_new (arr->byteLength);      \
+                                                                        \
+             elementtype* dst_data = (elementtype*)_ejs_typedarray_get_data ((EJSObject*)arr); \
+             for (uint32_t i = 0; i < array_len; i ++)                  \
+                 dst_data[i] = fromEjsval(elementtype, Get(gathered, NUMBER_TO_EJSVAL(i))); \
          }                                                              \
      }                                                                  \
-     else if (EJSVAL_IS_NUMBER(args[0])) {                              \
-         /* TypedArray(unsigned long length) */                         \
-         array_len = ToUint32(args[0]);                                 \
+     else {                                                             \
+         /* TypedArray(length): a non-object argument is a length request (ToIndex) */ \
+         array_len = TypedArrayLengthFromValue (args[0]);               \
      construct_from_array_len: {                                        \
              arr->length = array_len;                                   \
              arr->byteOffset = 0;                                       \
@@ -457,16 +629,9 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
              arr->buffer = _ejs_arraybuffer_new (arr->byteLength);      \
          }                                                              \
      }                                                                  \
-     else {                                                             \
-         _ejs_log ("arg0 not a number or object...\n");                      \
-         EJS_NOT_IMPLEMENTED();                                         \
-     }                                                                  \
                                                                         \
-     _ejs_object_define_value_property (*_this, _ejs_atom_length, DOUBLE_TO_EJSVAL_IMPL(arr->length), EJS_PROP_FLAGS_ENUMERABLE); \
-     _ejs_object_define_value_property (*_this, _ejs_atom_byteOffset, DOUBLE_TO_EJSVAL_IMPL(arr->byteOffset), EJS_PROP_FLAGS_ENUMERABLE); \
-     _ejs_object_define_value_property (*_this, _ejs_atom_byteLength, DOUBLE_TO_EJSVAL_IMPL(arr->byteLength), EJS_PROP_FLAGS_ENUMERABLE); \
-     _ejs_object_define_value_property (*_this, _ejs_atom_buffer, arr->buffer, EJS_PROP_FLAGS_ENUMERABLE); \
-                                                                        \
+     /* buffer/byteLength/byteOffset/length live as brand-checked getters
+        on %TypedArray%.prototype, not per-instance value properties */  \
      return *_this;                                                      \
  }                                                                      \
                                                                         \
@@ -489,15 +654,17 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
      }                                                                  \
                                                                         \
      if (is_index) {                                                    \
-         if (idx < 0 || idx > EJS_TYPED_ARRAY_LEN(obj)) {               \
+         if (idx < 0 || idx >= EJS_TYPED_ARRAY_LEN(obj)) {              \
              return _ejs_undefined;                                     \
          }                                                              \
          void* data = _ejs_typedarray_get_data (EJSVAL_TO_OBJECT(obj)); \
-         return NUMBER_TO_EJSVAL ((double)((elementtype*)data)[idx]);   \
+         return toEjsval(((elementtype*)data)[idx]);                    \
      }                                                                  \
                                                                         \
-     /* we also handle the length getter here */                        \
+     /* we also handle the length getter here (a detached buffer reads as length 0) */ \
      if (EJSVAL_IS_STRING(propertyName) && !ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) { \
+         if (IsDetachedBuffer(((EJSTypedArray*)EJSVAL_TO_OBJECT(obj))->buffer)) \
+             return NUMBER_TO_EJSVAL (0);                               \
          return NUMBER_TO_EJSVAL (EJS_TYPED_ARRAY_LEN(obj));            \
      }                                                                  \
                                                                         \
@@ -710,17 +877,17 @@ static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_prototype_set_array)     \
         /* a. Let Pk be ToString(k). */                                 \
         ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));                      \
                                                                         \
-        /* b. Let kNumber be ToNumber(Get(src, Pk)). */                 \
-        /* c. ReturnIfAbrupt(kNumber). */                               \
-        ejsval kNumber = ToNumber(Get(src, Pk));                        \
+        /* b. Let kValue be Get(src, Pk) coerced to the element type. */ \
+        /* c. ReturnIfAbrupt(kValue). */                                \
+        elementtype kElement = fromEjsval(elementtype, Get(src, Pk));   \
                                                                         \
         /* d. If IsDetachedBuffer(targetBuffer) is true, throw a TypeError exception. */    \
         if (IsDetachedBuffer(targetBuffer))                             \
             _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "typed array buffer is detached");  \
                                                                         \
-        /* e. Perform SetValueInBuffer(targetBuffer, targetByteIndex, targetType, kNumber). */  \
+        /* e. Perform SetValueInBuffer(targetBuffer, targetByteIndex, targetType, kValue). */  \
         void *data = _ejs_typedarray_get_data((EJSObject*)targetObj);   \
-        ((elementtype*)data)[targetIndex] = (elementtype) EJSVAL_TO_NUMBER(kNumber);  \
+        ((elementtype*)data)[targetIndex] = kElement;                   \
                                                                         \
         /* f. Set k to k + 1. */                                        \
         k++;                                                            \
@@ -844,7 +1011,7 @@ static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_prototype_set_typedarray)  \
                                                                         \
             /* ii. Perform SetValueInBuffer (targetBuffer, targetByteIndex, "Uint8", value). */ \
             void *data = _ejs_typedarray_get_data((EJSObject*)targetObj); \
-            ((elementtype*)data)[targetIndex] = (elementtype) EJSVAL_TO_NUMBER(value); \
+            ((elementtype*)data)[targetIndex] = fromEjsval(elementtype, value); \
                                                                         \
             /* iii. Set srcByteIndex to srcByteIndex + 1. */            \
             srcIndex++;                                                 \
@@ -997,6 +1164,8 @@ static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_prototype_get_toStringTag) \
     case EJS_TYPEDARRAY_UINT32:        return _ejs_atom_Uint32Array;    \
     case EJS_TYPEDARRAY_FLOAT32:       return _ejs_atom_Float32Array;   \
     case EJS_TYPEDARRAY_FLOAT64:       return _ejs_atom_Float64Array;   \
+    case EJS_TYPEDARRAY_BIGINT64:      return _ejs_atom_BigInt64Array;  \
+    case EJS_TYPEDARRAY_BIGUINT64:     return _ejs_atom_BigUint64Array; \
     default: EJS_NOT_IMPLEMENTED();                                     \
     }                                                                   \
 }                                                                       \
@@ -1050,7 +1219,7 @@ EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_of_impl)                        \
     return newObj;                                                      \
 }
 
-#define EJS_TYPED_ARRAY_SET(EnumType, ArrayType, arraytype, elementtype, elementSizeInBytes) \
+#define EJS_TYPED_ARRAY_SET(EnumType, ArrayType, arraytype, elementtype, elementSizeInBytes, fromEjsval) \
  static EJSBool                                                         \
  _ejs_##ArrayType##array_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver) \
  {                                                                      \
@@ -1074,7 +1243,7 @@ EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_of_impl)                        \
              return EJS_FALSE;                                          \
          }                                                              \
          void* data = _ejs_typedarray_get_data (EJSVAL_TO_OBJECT(obj)); \
-         ((elementtype*)data)[idx] = (elementtype)EJSVAL_TO_NUMBER(val); \
+         ((elementtype*)data)[idx] = fromEjsval(elementtype, val);      \
      }                                                                  \
      return EJS_TRUE; /* XXX */                                         \
  }                                                                      \
@@ -1104,32 +1273,35 @@ _ejs_Uint8Clampedarray_specop_set (ejsval obj, ejsval propertyName, ejsval val, 
             return EJS_FALSE;
         }
         void* data = _ejs_typedarray_get_data (EJSVAL_TO_OBJECT(obj));
-        int64_t v = ((int64_t)EJSVAL_TO_NUMBER(val));
-        ((uint8_t*)data)[idx] = v > 0xFF ? 0xFF : (uint8_t)v;
+        ((uint8_t*)data)[idx] = ToUint8Clamp(val);
     }
     return EJS_TRUE; /* XXX */
 }
 
-EJS_TYPED_ARRAY(INT8, Int8, int8, int8_t, 1);
-EJS_TYPED_ARRAY(UINT8, Uint8, uint8, uint8_t, 1);
-EJS_TYPED_ARRAY(UINT8CLAMPED, Uint8Clamped, uint8, uint8_t, 1);
-EJS_TYPED_ARRAY(INT16, Int16, int16, int16_t, 2);
-EJS_TYPED_ARRAY(UINT16, Uint16, uint16, uint16_t, 2);
-EJS_TYPED_ARRAY(INT32, Int32, int32, int32_t, 4);
-EJS_TYPED_ARRAY(UINT32, Uint32, uint32, uint32_t, 4);
-EJS_TYPED_ARRAY(FLOAT32, Float32, float32, float, 4);
-EJS_TYPED_ARRAY(FLOAT64, Float64, float64, double, 8);
+EJS_TYPED_ARRAY(INT8, Int8, int8, int8_t, 1, EJS_TA_TO_EJSVAL_NUM, EJS_TA_FROM_EJSVAL_NUM);
+EJS_TYPED_ARRAY(UINT8, Uint8, uint8, uint8_t, 1, EJS_TA_TO_EJSVAL_NUM, EJS_TA_FROM_EJSVAL_NUM);
+EJS_TYPED_ARRAY(UINT8CLAMPED, Uint8Clamped, uint8, uint8_t, 1, EJS_TA_TO_EJSVAL_NUM, EJS_TA_FROM_EJSVAL_CLAMPED);
+EJS_TYPED_ARRAY(INT16, Int16, int16, int16_t, 2, EJS_TA_TO_EJSVAL_NUM, EJS_TA_FROM_EJSVAL_NUM);
+EJS_TYPED_ARRAY(UINT16, Uint16, uint16, uint16_t, 2, EJS_TA_TO_EJSVAL_NUM, EJS_TA_FROM_EJSVAL_NUM);
+EJS_TYPED_ARRAY(INT32, Int32, int32, int32_t, 4, EJS_TA_TO_EJSVAL_NUM, EJS_TA_FROM_EJSVAL_NUM);
+EJS_TYPED_ARRAY(UINT32, Uint32, uint32, uint32_t, 4, EJS_TA_TO_EJSVAL_NUM, EJS_TA_FROM_EJSVAL_NUM);
+EJS_TYPED_ARRAY(FLOAT32, Float32, float32, float, 4, EJS_TA_TO_EJSVAL_NUM, EJS_TA_FROM_EJSVAL_NUM);
+EJS_TYPED_ARRAY(FLOAT64, Float64, float64, double, 8, EJS_TA_TO_EJSVAL_NUM, EJS_TA_FROM_EJSVAL_NUM);
+EJS_TYPED_ARRAY(BIGINT64, BigInt64, bigint64, int64_t, 8, EJS_TA_TO_EJSVAL_BIGINT64, EJS_TA_FROM_EJSVAL_BIGINT);
+EJS_TYPED_ARRAY(BIGUINT64, BigUint64, biguint64, uint64_t, 8, EJS_TA_TO_EJSVAL_BIGUINT64, EJS_TA_FROM_EJSVAL_BIGINT);
 
-EJS_TYPED_ARRAY_SET(INT8, Int8, int8, int8_t, 1);
-EJS_TYPED_ARRAY_SET(UINT8, Uint8, uint8, uint8_t, 1);
+EJS_TYPED_ARRAY_SET(INT8, Int8, int8, int8_t, 1, EJS_TA_FROM_EJSVAL_NUM);
+EJS_TYPED_ARRAY_SET(UINT8, Uint8, uint8, uint8_t, 1, EJS_TA_FROM_EJSVAL_NUM);
 // Uint8Clamped handles set differently than all the others, so its implementation is hardcoded above
-//EJS_TYPED_ARRAY_SET(UINT8CLAMPED, Uint8Clamped, uint8, uint8_t, 1);
-EJS_TYPED_ARRAY_SET(INT16, Int16, int16, int16_t, 2);
-EJS_TYPED_ARRAY_SET(UINT16, Uint16, uint16, uint16_t, 2);
-EJS_TYPED_ARRAY_SET(INT32, Int32, int32, int32_t, 4);
-EJS_TYPED_ARRAY_SET(UINT32, Uint32, uint32, uint32_t, 4);
-EJS_TYPED_ARRAY_SET(FLOAT32, Float32, float32, float, 4);
-EJS_TYPED_ARRAY_SET(FLOAT64, Float64, float64, double, 8);
+//EJS_TYPED_ARRAY_SET(UINT8CLAMPED, Uint8Clamped, uint8, uint8_t, 1, EJS_TA_FROM_EJSVAL_NUM);
+EJS_TYPED_ARRAY_SET(INT16, Int16, int16, int16_t, 2, EJS_TA_FROM_EJSVAL_NUM);
+EJS_TYPED_ARRAY_SET(UINT16, Uint16, uint16, uint16_t, 2, EJS_TA_FROM_EJSVAL_NUM);
+EJS_TYPED_ARRAY_SET(INT32, Int32, int32, int32_t, 4, EJS_TA_FROM_EJSVAL_NUM);
+EJS_TYPED_ARRAY_SET(UINT32, Uint32, uint32, uint32_t, 4, EJS_TA_FROM_EJSVAL_NUM);
+EJS_TYPED_ARRAY_SET(FLOAT32, Float32, float32, float, 4, EJS_TA_FROM_EJSVAL_NUM);
+EJS_TYPED_ARRAY_SET(FLOAT64, Float64, float64, double, 8, EJS_TA_FROM_EJSVAL_NUM);
+EJS_TYPED_ARRAY_SET(BIGINT64, BigInt64, bigint64, int64_t, 8, EJS_TA_FROM_EJSVAL_BIGINT);
+EJS_TYPED_ARRAY_SET(BIGUINT64, BigUint64, biguint64, uint64_t, 8, EJS_TA_FROM_EJSVAL_BIGINT);
 
 int _ejs_typed_array_elsizes[EJS_TYPEDARRAY_TYPE_COUNT];
 ejsval _ejs_typed_array_protos[EJS_TYPEDARRAY_TYPE_COUNT];
@@ -1152,6 +1324,9 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_every) {
     /* This function is not generic. */
     if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.every called on non typed-array object");
+
+    /* detached buffers are rejected up front (ValidateTypedArray) */
+    ValidateTypedArray(*_this);
 
     /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
     ejsval O = ToObject(*_this);
@@ -1186,7 +1361,7 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_every) {
         ejsval testResult = _ejs_invoke_closure (callbackfn, &T, 3, callbackfn_args, _ejs_undefined);
 
         /* v. If ToBoolean(testResult) is false, return false. */
-        if (!EJSVAL_TO_BOOLEAN(testResult))
+        if (!ToEJSBool(testResult))
             return _ejs_false;
 
         /* e.  d. Increase k by 1.  */
@@ -1217,6 +1392,9 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_fill) {
     /* This function is not generic. */
     if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.fill called on non typed-array object");
+
+    /* detached buffers are rejected up front (ValidateTypedArray) */
+    ValidateTypedArray(*_this);
 
     /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
     ejsval O = ToObject(*_this);
@@ -1279,6 +1457,9 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_find) {
     if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.find called on non typed-array object");
 
+    /* detached buffers are rejected up front (ValidateTypedArray) */
+    ValidateTypedArray(*_this);
+
     /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
     ejsval O = ToObject(*_this);
     EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
@@ -1310,7 +1491,7 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_find) {
         ejsval testResult = _ejs_invoke_closure (predicate, &T, 3, predicate_args, _ejs_undefined);
 
         /* f. If ToBoolean(testResult) is true, return kValue. */
-        if (EJSVAL_TO_BOOLEAN(testResult))
+        if (ToEJSBool(testResult))
             return kValue;
 
         /* g.  d. Increase k by 1.  */
@@ -1337,6 +1518,9 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_findIndex) {
     /* This function is not generic. */
     if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.findIndex called on non typed-array object");
+
+    /* detached buffers are rejected up front (ValidateTypedArray) */
+    ValidateTypedArray(*_this);
 
     /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
     ejsval O = ToObject(*_this);
@@ -1369,7 +1553,7 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_findIndex) {
         ejsval testResult = _ejs_invoke_closure (predicate, &T, 3, predicate_args, _ejs_undefined);
 
         /* f. If ToBoolean(testResult) is true, return k. */
-        if (EJSVAL_TO_BOOLEAN(testResult))
+        if (ToEJSBool(testResult))
             return NUMBER_TO_EJSVAL(k);
 
         /* g.  d. Increase k by 1.  */
@@ -1396,6 +1580,9 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_forEach) {
     /* This function is not generic. */
     if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.forEach called on non typed-array object");
+
+    /* detached buffers are rejected up front (ValidateTypedArray) */
+    ValidateTypedArray(*_this);
 
     /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
     ejsval O = ToObject(*_this);
@@ -1453,6 +1640,9 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_indexOf) {
     /* This function is not generic. */
     if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.indexOf called on non typed-array object");
+
+    /* detached buffers are rejected up front (ValidateTypedArray) */
+    ValidateTypedArray(*_this);
 
     /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
     ejsval O = ToObject(*_this);
@@ -1519,6 +1709,9 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_join) {
     /* This function is not generic. */
     if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.join called on non typed-array object");
+
+    /* detached buffers are rejected up front (ValidateTypedArray) */
+    ValidateTypedArray(*_this);
 
     /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
     ejsval O = ToObject(*_this);
@@ -1652,6 +1845,9 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_lastIndexOf) {
     if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.lastIndexOf called on non typed-array object");
 
+    /* detached buffers are rejected up front (ValidateTypedArray) */
+    ValidateTypedArray(*_this);
+
     /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
     ejsval O = ToObject(*_this);
     EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
@@ -1722,6 +1918,9 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_reduce) {
     /* This function is not generic. */
     if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.reduce called on non typed-array object");
+
+    /* detached buffers are rejected up front (ValidateTypedArray) */
+    ValidateTypedArray(*_this);
 
     /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
     ejsval O = ToObject(*_this);
@@ -1808,6 +2007,9 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_reduceRight) {
     /* This function is not generic. */
     if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.reduceRight called on non typed-array object");
+
+    /* detached buffers are rejected up front (ValidateTypedArray) */
+    ValidateTypedArray(*_this);
 
     /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
     ejsval O = ToObject(*_this);
@@ -1954,6 +2156,9 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_some) {
     if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.some called on non typed-array object");
 
+    /* detached buffers are rejected up front (ValidateTypedArray) */
+    ValidateTypedArray(*_this);
+
     /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
     ejsval O = ToObject(*_this);
     EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
@@ -1987,7 +2192,7 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_some) {
         ejsval testResult = _ejs_invoke_closure (callbackfn, &T, 3, callbackfn_args, _ejs_undefined);
 
         /* v. If ToBoolean(testResult) is true, return true. */
-        if (EJSVAL_TO_BOOLEAN(testResult))
+        if (ToEJSBool(testResult))
             return _ejs_true;
 
         /* e.  d. Increase k by 1.  */
@@ -2108,6 +2313,533 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_toString) {
     return _ejs_invoke_closure (func, &array, 0, NULL, _ejs_undefined);
 }
 
+// 22.2.3.6 %TypedArray%.prototype.entries ( )
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_entries) {
+    ejsval O = *_this;
+
+    if (!EJSVAL_IS_OBJECT(O))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not an Object");
+
+    if (!EJSVAL_IS_TYPEDARRAY(O))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a typed array");
+
+    ValidateTypedArray(O);
+
+    /* the array iterator machinery reads length/indices through [[Get]],
+       which the typed-array specops service, so it works unchanged here */
+    return _ejs_array_iterator_new (O, EJS_ARRAYITER_KIND_KEYVALUE);
+}
+
+// 23.2.3.1 %TypedArray%.prototype.at ( index )
+// 23.2.3.32 %TypedArray%.prototype.toLocaleString ( [ reserved1 [ , reserved2 ] ] )
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_toLocaleString) {
+    ValidateTypedArray(*_this);
+
+    ejsval O = *_this;
+    int64_t len = EJS_TYPED_ARRAY_LEN(O);
+
+    ejsval sep = _ejs_string_new_utf8 (",");
+    ejsval result = _ejs_atom_empty;
+    for (int64_t k = 0; k < len; k ++) {
+        if (k > 0)
+            result = _ejs_string_concat (result, sep);
+        ejsval element = Get (O, NUMBER_TO_EJSVAL(k));
+        if (EJSVAL_IS_NULL_OR_UNDEFINED(element))
+            continue;
+        ejsval element_obj = ToObject(element);
+        ejsval fn = Get (element_obj, _ejs_atom_toLocaleString);
+        if (!IsCallable(fn))
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "toLocaleString is not callable");
+        ejsval str = ToString(_ejs_invoke_closure (fn, &element, 0, NULL, _ejs_undefined));
+        result = _ejs_string_concat (result, str);
+    }
+    return result;
+}
+
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_at) {
+    ValidateTypedArray(*_this);
+
+    ejsval O = *_this;
+    int64_t len = EJS_TYPED_ARRAY_LEN(O);
+
+    int64_t relativeIndex = argc > 0 ? ToInteger(args[0]) : 0;
+    int64_t k = relativeIndex >= 0 ? relativeIndex : len + relativeIndex;
+
+    if (k < 0 || k >= len)
+        return _ejs_undefined;
+
+    return Get(O, NUMBER_TO_EJSVAL(k));
+}
+
+// 22.2.3.13 %TypedArray%.prototype.includes ( searchElement [ , fromIndex ] )
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_includes) {
+    ValidateTypedArray(*_this);
+
+    ejsval O = *_this;
+    int64_t len = EJS_TYPED_ARRAY_LEN(O);
+
+    if (len == 0)
+        return _ejs_false;
+
+    ejsval searchElement = argc > 0 ? args[0] : _ejs_undefined;
+
+    int64_t n = (argc > 1 && !EJSVAL_IS_UNDEFINED(args[1])) ? ToInteger(args[1]) : 0;
+
+    int64_t k;
+    if (n >= 0)
+        k = n;
+    else {
+        k = len + n;
+        if (k < 0)
+            k = 0;
+    }
+
+    while (k < len) {
+        ejsval elementK = Get(O, NUMBER_TO_EJSVAL(k));
+        if (SameValueZero(searchElement, elementK))
+            return _ejs_true;
+        k++;
+    }
+
+    return _ejs_false;
+}
+
+// 23.2.3.11 %TypedArray%.prototype.findLast ( predicate [ , thisArg ] )
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_findLast) {
+    ValidateTypedArray(*_this);
+
+    ejsval O = *_this;
+    int64_t len = EJS_TYPED_ARRAY_LEN(O);
+
+    ejsval predicate = argc > 0 ? args[0] : _ejs_undefined;
+    ejsval T = argc > 1 ? args[1] : _ejs_undefined;
+
+    if (!IsCallable(predicate))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
+
+    for (int64_t k = len - 1; k >= 0; k--) {
+        ejsval kValue = Get(O, NUMBER_TO_EJSVAL(k));
+
+        ejsval predicate_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };
+        ejsval testResult = _ejs_invoke_closure (predicate, &T, 3, predicate_args, _ejs_undefined);
+
+        if (ToEJSBool(testResult))
+            return kValue;
+    }
+
+    return _ejs_undefined;
+}
+
+// 23.2.3.12 %TypedArray%.prototype.findLastIndex ( predicate [ , thisArg ] )
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_findLastIndex) {
+    ValidateTypedArray(*_this);
+
+    ejsval O = *_this;
+    int64_t len = EJS_TYPED_ARRAY_LEN(O);
+
+    ejsval predicate = argc > 0 ? args[0] : _ejs_undefined;
+    ejsval T = argc > 1 ? args[1] : _ejs_undefined;
+
+    if (!IsCallable(predicate))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
+
+    for (int64_t k = len - 1; k >= 0; k--) {
+        ejsval kValue = Get(O, NUMBER_TO_EJSVAL(k));
+
+        ejsval predicate_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };
+        ejsval testResult = _ejs_invoke_closure (predicate, &T, 3, predicate_args, _ejs_undefined);
+
+        if (ToEJSBool(testResult))
+            return NUMBER_TO_EJSVAL(k);
+    }
+
+    return NUMBER_TO_EJSVAL(-1);
+}
+
+// 22.2.3.9 %TypedArray%.prototype.filter ( callbackfn [ , thisArg ] )
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_filter) {
+    ValidateTypedArray(*_this);
+
+    ejsval O = *_this;
+    EJSTypedArrayType element_type = EJSVAL_TO_TYPEDARRAY(O)->element_type;
+    uint32_t len = EJS_TYPED_ARRAY_LEN(O);
+    uint32_t elsize = _ejs_typed_array_elsizes[element_type];
+
+    ejsval callbackfn = argc > 0 ? args[0] : _ejs_undefined;
+    ejsval T = argc > 1 ? args[1] : _ejs_undefined;
+
+    if (!IsCallable(callbackfn))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
+
+    /* the buffer's malloc'd block never moves, so this pointer stays
+       valid across callback-triggered GCs */
+    char* data = (char*)_ejs_typedarray_get_data (EJSVAL_TO_OBJECT(O));
+
+    /* kept elements are staged as raw element bits (not ejsvals), so
+       the malloc'd staging area holds no GC references while the
+       callback runs; the bits are snapshotted before each callback so
+       callback mutations of O don't alter already-selected values */
+    char* staged = (char*)malloc ((size_t)len * elsize);
+    uint32_t captured = 0;
+
+    for (uint32_t k = 0; k < len; k++) {
+        ejsval kValue = Get(O, NUMBER_TO_EJSVAL(k));
+
+        char saved[8];
+        memcpy (saved, data + (size_t)k * elsize, elsize);
+
+        ejsval callbackfn_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };
+        ejsval selected = _ejs_invoke_closure (callbackfn, &T, 3, callbackfn_args, _ejs_undefined);
+
+        if (ToEJSBool(selected)) {
+            memcpy (staged + (size_t)captured * elsize, saved, elsize);
+            captured++;
+        }
+    }
+
+    ejsval A = _ejs_typedarray_new (element_type, captured);
+    if (captured > 0)
+        memcpy (_ejs_typedarray_get_data (EJSVAL_TO_OBJECT(A)), staged, (size_t)captured * elsize);
+    free (staged);
+
+    return A;
+}
+
+// 22.2.3.24 %TypedArray%.prototype.slice ( start, end )
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_slice) {
+    ValidateTypedArray(*_this);
+
+    ejsval O = *_this;
+    EJSTypedArrayType element_type = EJSVAL_TO_TYPEDARRAY(O)->element_type;
+    int64_t len = EJS_TYPED_ARRAY_LEN(O);
+    uint32_t elsize = _ejs_typed_array_elsizes[element_type];
+
+    int64_t relativeStart = argc > 0 ? ToInteger(args[0]) : 0;
+    int64_t k = relativeStart < 0 ? (len + relativeStart > 0 ? len + relativeStart : 0)
+                                  : (relativeStart < len ? relativeStart : len);
+
+    int64_t relativeEnd = (argc > 1 && !EJSVAL_IS_UNDEFINED(args[1])) ? ToInteger(args[1]) : len;
+    int64_t final = relativeEnd < 0 ? (len + relativeEnd > 0 ? len + relativeEnd : 0)
+                                    : (relativeEnd < len ? relativeEnd : len);
+
+    int64_t count = final - k > 0 ? final - k : 0;
+
+    ejsval A = _ejs_typedarray_new (element_type, (uint32_t)count);
+
+    /* same element type: a bit-level copy preserves every lane exactly */
+    if (count > 0) {
+        char* data = (char*)_ejs_typedarray_get_data (EJSVAL_TO_OBJECT(O));
+        char* adata = (char*)_ejs_typedarray_get_data (EJSVAL_TO_OBJECT(A));
+        memcpy (adata, data + (size_t)k * elsize, (size_t)count * elsize);
+    }
+
+    return A;
+}
+
+// 23.2.3.32 %TypedArray%.prototype.toReversed ( )
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_toReversed) {
+    ValidateTypedArray(*_this);
+
+    ejsval O = *_this;
+    EJSTypedArrayType element_type = EJSVAL_TO_TYPEDARRAY(O)->element_type;
+    uint32_t len = EJS_TYPED_ARRAY_LEN(O);
+    uint32_t elsize = _ejs_typed_array_elsizes[element_type];
+
+    ejsval A = _ejs_typedarray_new (element_type, len);
+
+    char* data = (char*)_ejs_typedarray_get_data (EJSVAL_TO_OBJECT(O));
+    char* adata = (char*)_ejs_typedarray_get_data (EJSVAL_TO_OBJECT(A));
+
+    for (uint32_t i = 0; i < len; i++)
+        memcpy (adata + (size_t)i * elsize, data + (size_t)(len - 1 - i) * elsize, elsize);
+
+    return A;
+}
+
+// 23.2.3.36 %TypedArray%.prototype.with ( index, value )
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_with) {
+    ValidateTypedArray(*_this);
+
+    ejsval O = *_this;
+    EJSTypedArrayType element_type = EJSVAL_TO_TYPEDARRAY(O)->element_type;
+    int64_t len = EJS_TYPED_ARRAY_LEN(O);
+    uint32_t elsize = _ejs_typed_array_elsizes[element_type];
+
+    int64_t relativeIndex = argc > 0 ? ToInteger(args[0]) : 0;
+    int64_t actualIndex = relativeIndex >= 0 ? relativeIndex : len + relativeIndex;
+
+    ejsval value = argc > 1 ? args[1] : _ejs_undefined;
+
+    /* the value coerces per element kind before the index check, so a
+       bad value on a BigInt lane raises its TypeError first */
+    ejsval numericValue;
+    if (element_type == EJS_TYPEDARRAY_BIGINT64 || element_type == EJS_TYPEDARRAY_BIGUINT64)
+        numericValue = ToBigInt(value);
+    else
+        numericValue = ToNumber(value);
+
+    if (actualIndex < 0 || actualIndex >= len)
+        _ejs_throw_nativeerror_utf8 (EJS_RANGE_ERROR, "invalid index for %TypedArray%.prototype.with");
+
+    ejsval A = _ejs_typedarray_new (element_type, (uint32_t)len);
+
+    char* data = (char*)_ejs_typedarray_get_data (EJSVAL_TO_OBJECT(O));
+    char* adata = (char*)_ejs_typedarray_get_data (EJSVAL_TO_OBJECT(A));
+    memcpy (adata, data, (size_t)len * elsize);
+
+    Put(A, NUMBER_TO_EJSVAL(actualIndex), numericValue, EJS_TRUE);
+
+    return A;
+}
+
+/* element bits -> ejsval, for handing raw sort keys to a JS comparator */
+static ejsval
+typedarray_raw_to_ejsval (EJSTypedArrayType element_type, const void* p)
+{
+    switch (element_type) {
+    case EJS_TYPEDARRAY_INT8:         return NUMBER_TO_EJSVAL(*(const int8_t*)p);
+    case EJS_TYPEDARRAY_UINT8:
+    case EJS_TYPEDARRAY_UINT8CLAMPED: return NUMBER_TO_EJSVAL(*(const uint8_t*)p);
+    case EJS_TYPEDARRAY_INT16:        return NUMBER_TO_EJSVAL(*(const int16_t*)p);
+    case EJS_TYPEDARRAY_UINT16:       return NUMBER_TO_EJSVAL(*(const uint16_t*)p);
+    case EJS_TYPEDARRAY_INT32:        return NUMBER_TO_EJSVAL(*(const int32_t*)p);
+    case EJS_TYPEDARRAY_UINT32:       return NUMBER_TO_EJSVAL(*(const uint32_t*)p);
+    case EJS_TYPEDARRAY_FLOAT32:      return NUMBER_TO_EJSVAL(*(const float*)p);
+    case EJS_TYPEDARRAY_FLOAT64:      return NUMBER_TO_EJSVAL(*(const double*)p);
+    case EJS_TYPEDARRAY_BIGINT64:     return _ejs_bigint_new_from_int64(*(const int64_t*)p);
+    case EJS_TYPEDARRAY_BIGUINT64:    return _ejs_bigint_new_from_uint64(*(const uint64_t*)p);
+    default: EJS_NOT_REACHED();
+    }
+}
+
+typedef int (*TypedArrayCmpFn)(const void* a, const void* b, void* ctx);
+
+/* stable bottom-up merge sort over raw elements; stability is
+   observable when a JS comparator reports ties */
+static void
+typedarray_merge_sort (char* base, uint32_t n, size_t elsize, TypedArrayCmpFn cmp, void* ctx)
+{
+    if (n < 2)
+        return;
+
+    char* tmp = (char*)malloc ((size_t)n * elsize);
+
+    for (size_t width = 1; width < n; width *= 2) {
+        for (size_t lo = 0; lo + width < n; lo += 2 * width) {
+            size_t mid = lo + width;
+            size_t hi = lo + 2 * width;
+            if (hi > n) hi = n;
+
+            size_t i = lo, j = mid, k = 0;
+            while (i < mid && j < hi) {
+                if (cmp (base + i * elsize, base + j * elsize, ctx) <= 0)
+                    memcpy (tmp + k++ * elsize, base + i++ * elsize, elsize);
+                else
+                    memcpy (tmp + k++ * elsize, base + j++ * elsize, elsize);
+            }
+            if (i < mid) {
+                memcpy (tmp + k * elsize, base + i * elsize, (mid - i) * elsize);
+                k += mid - i;
+            }
+            if (j < hi) {
+                memcpy (tmp + k * elsize, base + j * elsize, (hi - j) * elsize);
+                k += hi - j;
+            }
+            memcpy (base + lo * elsize, tmp, k * elsize);
+        }
+    }
+
+    free (tmp);
+}
+
+#define TA_DEFAULT_CMP(name, ctype)                                     \
+    static int name (const void* a, const void* b, void* ctx)           \
+    {                                                                   \
+        ctype x = *(const ctype*)a, y = *(const ctype*)b;               \
+        return x < y ? -1 : x > y ? 1 : 0;                              \
+    }
+
+TA_DEFAULT_CMP(ta_cmp_int8, int8_t)
+TA_DEFAULT_CMP(ta_cmp_uint8, uint8_t)
+TA_DEFAULT_CMP(ta_cmp_int16, int16_t)
+TA_DEFAULT_CMP(ta_cmp_uint16, uint16_t)
+TA_DEFAULT_CMP(ta_cmp_int32, int32_t)
+TA_DEFAULT_CMP(ta_cmp_uint32, uint32_t)
+TA_DEFAULT_CMP(ta_cmp_int64, int64_t)
+TA_DEFAULT_CMP(ta_cmp_uint64, uint64_t)
+
+/* default float ordering: -Inf .. -0 .. +0 .. +Inf, NaNs last */
+static int
+ta_cmp_fp (double x, double y)
+{
+    if (isnan(x)) return isnan(y) ? 0 : 1;
+    if (isnan(y)) return -1;
+    if (x < y) return -1;
+    if (x > y) return 1;
+    if (x == 0 && y == 0)
+        return (signbit(y) ? 1 : 0) - (signbit(x) ? 1 : 0);
+    return 0;
+}
+
+static int
+ta_cmp_float (const void* a, const void* b, void* ctx)
+{
+    return ta_cmp_fp (*(const float*)a, *(const float*)b);
+}
+
+static int
+ta_cmp_double (const void* a, const void* b, void* ctx)
+{
+    return ta_cmp_fp (*(const double*)a, *(const double*)b);
+}
+
+static TypedArrayCmpFn
+typedarray_default_cmp (EJSTypedArrayType element_type)
+{
+    switch (element_type) {
+    case EJS_TYPEDARRAY_INT8:         return ta_cmp_int8;
+    case EJS_TYPEDARRAY_UINT8:
+    case EJS_TYPEDARRAY_UINT8CLAMPED: return ta_cmp_uint8;
+    case EJS_TYPEDARRAY_INT16:        return ta_cmp_int16;
+    case EJS_TYPEDARRAY_UINT16:       return ta_cmp_uint16;
+    case EJS_TYPEDARRAY_INT32:        return ta_cmp_int32;
+    case EJS_TYPEDARRAY_UINT32:       return ta_cmp_uint32;
+    case EJS_TYPEDARRAY_FLOAT32:      return ta_cmp_float;
+    case EJS_TYPEDARRAY_FLOAT64:      return ta_cmp_double;
+    case EJS_TYPEDARRAY_BIGINT64:     return ta_cmp_int64;
+    case EJS_TYPEDARRAY_BIGUINT64:    return ta_cmp_uint64;
+    default: EJS_NOT_REACHED();
+    }
+}
+
+typedef struct {
+    ejsval comparefn;
+    EJSTypedArrayType element_type;
+} TypedArraySortCtx;
+
+static int
+ta_cmp_js (const void* a, const void* b, void* ctx)
+{
+    TypedArraySortCtx* c = (TypedArraySortCtx*)ctx;
+
+    /* fresh ejsvals per comparison: raw bits carry no GC references
+       across the callback, and the comparator only sees values */
+    ejsval x = typedarray_raw_to_ejsval (c->element_type, a);
+    ejsval y = typedarray_raw_to_ejsval (c->element_type, b);
+
+    ejsval cmp_args[2] = { x, y };
+    ejsval undef_this = _ejs_undefined;
+    ejsval v = _ejs_invoke_closure (c->comparefn, &undef_this, 2, cmp_args, _ejs_undefined);
+
+    double d = EJSVAL_TO_NUMBER(ToNumber(v));
+    if (isnan(d)) return 0;
+    return d < 0 ? -1 : d > 0 ? 1 : 0;
+}
+
+/* the sort works on a raw copy and writes back at the end, mirroring
+   the spec's sort-a-read-out-list shape; comparator-triggered detaches
+   can't corrupt the pass since the allocation outlives the detach */
+static void
+typedarray_sort_data (ejsval O, ejsval comparefn, char* data, uint32_t len)
+{
+    EJSTypedArrayType element_type = EJSVAL_TO_TYPEDARRAY(O)->element_type;
+    uint32_t elsize = _ejs_typed_array_elsizes[element_type];
+
+    char* work = (char*)malloc ((size_t)len * elsize);
+    memcpy (work, data, (size_t)len * elsize);
+
+    if (EJSVAL_IS_UNDEFINED(comparefn)) {
+        typedarray_merge_sort (work, len, elsize, typedarray_default_cmp(element_type), NULL);
+    }
+    else {
+        TypedArraySortCtx ctx = { comparefn, element_type };
+        typedarray_merge_sort (work, len, elsize, ta_cmp_js, &ctx);
+    }
+
+    memcpy (data, work, (size_t)len * elsize);
+    free (work);
+}
+
+// 22.2.3.26 %TypedArray%.prototype.sort ( comparefn )
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_sort) {
+    ejsval comparefn = argc > 0 ? args[0] : _ejs_undefined;
+
+    /* the comparator check precedes receiver validation */
+    if (!EJSVAL_IS_UNDEFINED(comparefn) && !IsCallable(comparefn))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "comparator is not a function");
+
+    ValidateTypedArray(*_this);
+
+    ejsval O = *_this;
+    uint32_t len = EJS_TYPED_ARRAY_LEN(O);
+    char* data = (char*)_ejs_typedarray_get_data (EJSVAL_TO_OBJECT(O));
+
+    typedarray_sort_data (O, comparefn, data, len);
+
+    return O;
+}
+
+// 23.2.3.33 %TypedArray%.prototype.toSorted ( comparefn )
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_toSorted) {
+    ejsval comparefn = argc > 0 ? args[0] : _ejs_undefined;
+
+    if (!EJSVAL_IS_UNDEFINED(comparefn) && !IsCallable(comparefn))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "comparator is not a function");
+
+    ValidateTypedArray(*_this);
+
+    ejsval O = *_this;
+    EJSTypedArrayType element_type = EJSVAL_TO_TYPEDARRAY(O)->element_type;
+    uint32_t len = EJS_TYPED_ARRAY_LEN(O);
+    uint32_t elsize = _ejs_typed_array_elsizes[element_type];
+
+    ejsval A = _ejs_typedarray_new (element_type, len);
+
+    char* data = (char*)_ejs_typedarray_get_data (EJSVAL_TO_OBJECT(O));
+    char* adata = (char*)_ejs_typedarray_get_data (EJSVAL_TO_OBJECT(A));
+    memcpy (adata, data, (size_t)len * elsize);
+
+    typedarray_sort_data (A, comparefn, adata, len);
+
+    return A;
+}
+
+/* %TypedArray%.prototype getters — brand-checked, so lifting them off a
+   typed array and applying them to any other object throws */
+
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_get_buffer) {
+    if (!EJSVAL_IS_TYPEDARRAY(*_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "get buffer called on incompatible receiver");
+    return EJSVAL_TO_TYPEDARRAY(*_this)->buffer;
+}
+
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_get_byteLength) {
+    if (!EJSVAL_IS_TYPEDARRAY(*_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "get byteLength called on incompatible receiver");
+    EJSTypedArray* arr = EJSVAL_TO_TYPEDARRAY(*_this);
+    if (IsDetachedBuffer(arr->buffer))
+        return NUMBER_TO_EJSVAL(0);
+    return NUMBER_TO_EJSVAL(arr->byteLength);
+}
+
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_get_byteOffset) {
+    if (!EJSVAL_IS_TYPEDARRAY(*_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "get byteOffset called on incompatible receiver");
+    EJSTypedArray* arr = EJSVAL_TO_TYPEDARRAY(*_this);
+    if (IsDetachedBuffer(arr->buffer))
+        return NUMBER_TO_EJSVAL(0);
+    return NUMBER_TO_EJSVAL(arr->byteOffset);
+}
+
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_get_length) {
+    if (!EJSVAL_IS_TYPEDARRAY(*_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "get length called on incompatible receiver");
+    EJSTypedArray* arr = EJSVAL_TO_TYPEDARRAY(*_this);
+    if (IsDetachedBuffer(arr->buffer))
+        return NUMBER_TO_EJSVAL(0);
+    return NUMBER_TO_EJSVAL(arr->length);
+}
+
 ejsval
 _ejs_typedarray_new (EJSTypedArrayType element_type, uint32_t length)
 {
@@ -2145,13 +2877,15 @@ _ejs_typedarray_new_from_array (EJSTypedArrayType element_type, ejsval arrayObj)
         switch (element_type) {
         case EJS_TYPEDARRAY_INT8: ((int8_t*)data)[i] = (int8_t)EJSVAL_TO_NUMBER(item); break;
         case EJS_TYPEDARRAY_UINT8: ((uint8_t*)data)[i] = (uint8_t)EJSVAL_TO_NUMBER(item); break;
-        case EJS_TYPEDARRAY_UINT8CLAMPED: EJS_NOT_IMPLEMENTED();
+        case EJS_TYPEDARRAY_UINT8CLAMPED: _ejs_typedarray_set_at ((EJSObject*)EJSVAL_TO_OBJECT(typedarr), i, item); break;
         case EJS_TYPEDARRAY_INT16: ((int16_t*)data)[i] = (int16_t)EJSVAL_TO_NUMBER(item); break;
         case EJS_TYPEDARRAY_UINT16: ((uint16_t*)data)[i] = (uint16_t)EJSVAL_TO_NUMBER(item); break;
         case EJS_TYPEDARRAY_INT32: ((int32_t*)data)[i] = (int32_t)EJSVAL_TO_NUMBER(item); break;
         case EJS_TYPEDARRAY_UINT32: ((uint32_t*)data)[i] = (uint32_t)EJSVAL_TO_NUMBER(item); break;
         case EJS_TYPEDARRAY_FLOAT32: ((float*)data)[i] = (float)EJSVAL_TO_NUMBER(item); break;
         case EJS_TYPEDARRAY_FLOAT64: ((double*)data)[i] = (double)EJSVAL_TO_NUMBER(item); break;
+        case EJS_TYPEDARRAY_BIGINT64: ((int64_t*)data)[i] = (int64_t)ToBigUint64Bits(item); break;
+        case EJS_TYPEDARRAY_BIGUINT64: ((uint64_t*)data)[i] = ToBigUint64Bits(item); break;
         default: EJS_NOT_REACHED();
         }
     }
@@ -2166,14 +2900,16 @@ _ejs_typedarray_get_at (EJSObject *array, int index)
 
     switch (((EJSTypedArray*)array)->element_type) {
     case EJS_TYPEDARRAY_INT8: return NUMBER_TO_EJSVAL(((int8_t*)data)[index]);
-    case EJS_TYPEDARRAY_UINT8: return NUMBER_TO_EJSVAL(((uint8_t*)data)[index]);
-    case EJS_TYPEDARRAY_UINT8CLAMPED: EJS_NOT_IMPLEMENTED();
+    case EJS_TYPEDARRAY_UINT8:
+    case EJS_TYPEDARRAY_UINT8CLAMPED: return NUMBER_TO_EJSVAL(((uint8_t*)data)[index]);
     case EJS_TYPEDARRAY_INT16: return NUMBER_TO_EJSVAL(((int16_t*)data)[index]);
     case EJS_TYPEDARRAY_UINT16: return NUMBER_TO_EJSVAL(((uint16_t*)data)[index]);
     case EJS_TYPEDARRAY_INT32: return NUMBER_TO_EJSVAL(((int32_t*)data)[index]);
     case EJS_TYPEDARRAY_UINT32: return NUMBER_TO_EJSVAL(((uint32_t*)data)[index]);
     case EJS_TYPEDARRAY_FLOAT32: return NUMBER_TO_EJSVAL(((float*)data)[index]);
     case EJS_TYPEDARRAY_FLOAT64: return NUMBER_TO_EJSVAL(((double*)data)[index]);
+    case EJS_TYPEDARRAY_BIGINT64: return _ejs_bigint_new_from_int64(((int64_t*)data)[index]);
+    case EJS_TYPEDARRAY_BIGUINT64: return _ejs_bigint_new_from_uint64(((uint64_t*)data)[index]);
     default: EJS_NOT_REACHED();
     }
 }
@@ -2186,13 +2922,15 @@ _ejs_typedarray_set_at (EJSObject *array, int index, ejsval value)
     switch (((EJSTypedArray*)array)->element_type) {
     case EJS_TYPEDARRAY_INT8: ((int8_t*)data)[index] = (int8_t)EJSVAL_TO_NUMBER(value); break;
     case EJS_TYPEDARRAY_UINT8: ((uint8_t*)data)[index] = (uint8_t)EJSVAL_TO_NUMBER(value); break;
-    case EJS_TYPEDARRAY_UINT8CLAMPED: EJS_NOT_IMPLEMENTED();
+    case EJS_TYPEDARRAY_UINT8CLAMPED: ((uint8_t*)data)[index] = ToUint8Clamp(value); break;
     case EJS_TYPEDARRAY_INT16: ((int16_t*)data)[index] = (int16_t)EJSVAL_TO_NUMBER(value); break;
     case EJS_TYPEDARRAY_UINT16: ((uint16_t*)data)[index] = (uint16_t)EJSVAL_TO_NUMBER(value); break;
     case EJS_TYPEDARRAY_INT32: ((int32_t*)data)[index] = (int32_t)EJSVAL_TO_NUMBER(value); break;
     case EJS_TYPEDARRAY_UINT32: ((uint32_t*)data)[index] = (uint32_t)EJSVAL_TO_NUMBER(value); break;
     case EJS_TYPEDARRAY_FLOAT32: ((float*)data)[index] = (float)EJSVAL_TO_NUMBER(value); break;
     case EJS_TYPEDARRAY_FLOAT64: ((double*)data)[index] = (double)EJSVAL_TO_NUMBER(value); break;
+    case EJS_TYPEDARRAY_BIGINT64: ((int64_t*)data)[index] = (int64_t)ToBigUint64Bits(value); break;
+    case EJS_TYPEDARRAY_BIGUINT64: ((uint64_t*)data)[index] = ToBigUint64Bits(value); break;
     default:  EJS_NOT_REACHED();
     }
 }
@@ -2244,7 +2982,7 @@ _ejs_typedarrays_init(ejsval global)
 
         _ejs_gc_add_root (&_ejs_ArrayBuffer_prototype);
         _ejs_ArrayBuffer_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
-        _ejs_object_setprop (_ejs_ArrayBuffer, _ejs_atom_prototype,   _ejs_ArrayBuffer_prototype);
+        _ejs_object_define_value_property (_ejs_ArrayBuffer, _ejs_atom_prototype, _ejs_ArrayBuffer_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
         PROTO_METHOD(ArrayBuffer, slice);
 
@@ -2261,7 +2999,7 @@ _ejs_typedarrays_init(ejsval global)
 
         _ejs_gc_add_root (&_ejs_DataView_prototype);
         _ejs_DataView_prototype = _ejs_object_new (_ejs_null, &_ejs_Object_specops);
-        _ejs_object_setprop (_ejs_DataView, _ejs_atom_prototype, _ejs_DataView_prototype);
+        _ejs_object_define_value_property (_ejs_DataView, _ejs_atom_prototype, _ejs_DataView_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
         PROTO_METHOD_IMPL(DataView, getInt8);
         PROTO_METHOD_IMPL(DataView, setInt8);
@@ -2279,6 +3017,10 @@ _ejs_typedarrays_init(ejsval global)
         PROTO_METHOD_IMPL(DataView, setFloat32);
         PROTO_METHOD_IMPL(DataView, getFloat64);
         PROTO_METHOD_IMPL(DataView, setFloat64);
+        PROTO_METHOD_IMPL(DataView, getBigInt64);
+        PROTO_METHOD_IMPL(DataView, setBigInt64);
+        PROTO_METHOD_IMPL(DataView, getBigUint64);
+        PROTO_METHOD_IMPL(DataView, setBigUint64);
 
         _ejs_object_define_value_property (_ejs_DataView_prototype, _ejs_Symbol_toStringTag, _ejs_atom_DataView, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
     }
@@ -2287,11 +3029,18 @@ _ejs_typedarrays_init(ejsval global)
     _ejs_gc_add_root (&_ejs_TypedArray_prototype);
     _ejs_TypedArray_prototype = _ejs_object_new (_ejs_null, &_ejs_Object_specops);
 
+    PROTO_METHOD_IMPL_GENERIC(at);
+    PROTO_METHOD_IMPL_GENERIC(toLocaleString);
+    PROTO_METHOD_IMPL_GENERIC(entries);
     PROTO_METHOD_IMPL_GENERIC(every);
     PROTO_METHOD_IMPL_GENERIC(fill);
+    PROTO_METHOD_IMPL_GENERIC(filter);
     PROTO_METHOD_IMPL_GENERIC(find);
     PROTO_METHOD_IMPL_GENERIC(findIndex);
+    PROTO_METHOD_IMPL_GENERIC(findLast);
+    PROTO_METHOD_IMPL_GENERIC(findLastIndex);
     PROTO_METHOD_IMPL_GENERIC(forEach);
+    PROTO_METHOD_IMPL_GENERIC(includes);
     PROTO_METHOD_IMPL_GENERIC(indexOf);
     PROTO_METHOD_IMPL_GENERIC(join);
     PROTO_METHOD_IMPL_GENERIC(keys);
@@ -2300,8 +3049,18 @@ _ejs_typedarrays_init(ejsval global)
     PROTO_METHOD_IMPL_GENERIC(reduce);
     PROTO_METHOD_IMPL_GENERIC(reduceRight);
     PROTO_METHOD_IMPL_GENERIC(reverse);
+    PROTO_METHOD_IMPL_GENERIC(slice);
     PROTO_METHOD_IMPL_GENERIC(some);
+    PROTO_METHOD_IMPL_GENERIC(sort);
+    PROTO_METHOD_IMPL_GENERIC(toReversed);
+    PROTO_METHOD_IMPL_GENERIC(toSorted);
     PROTO_METHOD_IMPL_GENERIC(toString);
+    PROTO_METHOD_IMPL_GENERIC(with);
+
+    EJS_INSTALL_ATOM_GETTER(_ejs_TypedArray_prototype, buffer, _ejs_TypedArray_prototype_get_buffer);
+    EJS_INSTALL_ATOM_GETTER(_ejs_TypedArray_prototype, byteLength, _ejs_TypedArray_prototype_get_byteLength);
+    EJS_INSTALL_ATOM_GETTER(_ejs_TypedArray_prototype, byteOffset, _ejs_TypedArray_prototype_get_byteOffset);
+    EJS_INSTALL_ATOM_GETTER(_ejs_TypedArray_prototype, length, _ejs_TypedArray_prototype_get_length);
 
 #define ADD_TYPEDARRAY(EnumType, ArrayType, arraytype, elementSizeInBytes) EJS_MACRO_START \
     _ejs_##ArrayType##Array = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_##ArrayType##Array, _ejs_##ArrayType##Array_impl); \
@@ -2309,12 +3068,12 @@ _ejs_typedarrays_init(ejsval global)
                                                                         \
     _ejs_gc_add_root (&_ejs_##ArrayType##Array_prototype);              \
     _ejs_##ArrayType##Array_prototype = _ejs_object_new(_ejs_TypedArray_prototype, &_ejs_Object_specops); \
-    _ejs_object_setprop (_ejs_##ArrayType##Array, _ejs_atom_prototype,  _ejs_##ArrayType##Array_prototype); \
-    _ejs_object_setprop (_ejs_##ArrayType##Array_prototype, _ejs_atom_constructor,  _ejs_##ArrayType##Array); \
+    _ejs_object_define_value_property (_ejs_##ArrayType##Array, _ejs_atom_prototype, _ejs_##ArrayType##Array_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE); \
+    _ejs_object_define_value_property (_ejs_##ArrayType##Array_prototype, _ejs_atom_constructor, _ejs_##ArrayType##Array, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE); \
                                                                         \
-    /* make sure constructor.BYTES_PER_ELEMENT and prototype.BYTES_PER_ELEMENT are defined */              \
-    _ejs_object_define_value_property (_ejs_##ArrayType##Array, _ejs_atom_BYTES_PER_ELEMENT, NUMBER_TO_EJSVAL(elementSizeInBytes), EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE); \
-    _ejs_object_define_value_property (_ejs_##ArrayType##Array_prototype, _ejs_atom_BYTES_PER_ELEMENT, NUMBER_TO_EJSVAL(elementSizeInBytes), EJS_PROP_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE); \
+    /* constructor.BYTES_PER_ELEMENT and prototype.BYTES_PER_ELEMENT are { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false } */ \
+    _ejs_object_define_value_property (_ejs_##ArrayType##Array, _ejs_atom_BYTES_PER_ELEMENT, NUMBER_TO_EJSVAL(elementSizeInBytes), EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE); \
+    _ejs_object_define_value_property (_ejs_##ArrayType##Array_prototype, _ejs_atom_BYTES_PER_ELEMENT, NUMBER_TO_EJSVAL(elementSizeInBytes), EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE); \
                                                                         \
     _ejs_typed_array_elsizes[EJS_TYPEDARRAY_##EnumType] = elementSizeInBytes; \
     _ejs_typed_array_protos[EJS_TYPEDARRAY_##EnumType] = _ejs_##ArrayType##Array_prototype; \
@@ -2348,6 +3107,16 @@ EJS_MACRO_END
     ADD_TYPEDARRAY(UINT32, Uint32, uint32, 4);
     ADD_TYPEDARRAY(FLOAT32, Float32, float32, 4);
     ADD_TYPEDARRAY(FLOAT64, Float64, float64, 8);
+
+    // the BigInt element types keep their class init and constructor
+    // roots here, next to the rest of their setup (the numeric typed
+    // arrays get both in ejs-init.c)
+    _ejs_Class_initialize (&_ejs_BigInt64Array_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_BigUint64Array_specops, &_ejs_Object_specops);
+    _ejs_gc_add_root (&_ejs_BigInt64Array);
+    _ejs_gc_add_root (&_ejs_BigUint64Array);
+    ADD_TYPEDARRAY(BIGINT64, BigInt64, bigint64, 8);
+    ADD_TYPEDARRAY(BIGUINT64, BigUint64, biguint64, 8);
 }
 
 static ejsval
@@ -2554,9 +3323,7 @@ _ejs_dataview_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 
 // DataView is NOT an integer-indexed exotic object (unlike the
 // TypedArrays): view[i] is an ordinary property, byte access goes
-// through get/setUint8 etc.  ejs used to route indexes at the
-// underlying buffer here, which typedarray5 caught once the harness
-// went value-based (runtime-P3).
+// through get/setUint8 etc.
 EJS_DEFINE_CLASS(DataView,
                  OP_INHERIT, // [[GetPrototypeOf]]
                  OP_INHERIT, // [[SetPrototypeOf]]
@@ -2609,3 +3376,5 @@ ADD_TYPEDARRAY_SPECOPS(Int32, int32);
 ADD_TYPEDARRAY_SPECOPS(Uint32, uint32);
 ADD_TYPEDARRAY_SPECOPS(Float32, float32);
 ADD_TYPEDARRAY_SPECOPS(Float64, float64);
+ADD_TYPEDARRAY_SPECOPS(BigInt64, bigint64);
+ADD_TYPEDARRAY_SPECOPS(BigUint64, biguint64);

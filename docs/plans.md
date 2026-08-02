@@ -141,12 +141,37 @@ runtime-plan.md, compiler-plan.md.
 
 Catch up with the language; adopt test262.  Detail: language-plan.md.
 
-- [ ] **P8.1** gap inventory + test262 subset probe (language-P1).
-- [ ] **P8.2** parser replacement behind the ESTree seam
+- [x] **P8.1** gap inventory + test262 subset probe (language-P1).
+      DONE 2026-07-31 — docs/language-p1-results.md (26,820-test
+      probe, runner in test/test262/; 35% pass, parser confirmed as
+      the long pole, prioritized language-P3 feature list).
+- [x] **P8.2** parser replacement behind the ESTree seam
       (language-P2; coordinates with compiler-P3 if TS input
-      happens).
-- [ ] **P8.3** features in payoff order (language-P3).
-- [ ] **P8.4** test262 CI lane (language-P4).
+      happens).  DONE 2026-07-31 — docs/language-p2-results.md
+      (acorn 8.18.0 behind lib/parser.ts, chosen over @babel/parser by
+      a self-host probe; unsupported-syntax gates replace silent
+      miscompiles; five pre-existing runtime bugs fixed; matrix
+      426/20/0, corpus AST-identity vs node).
+- [x] **P8.3** features in payoff order (language-P3).  DONE 2026-07-31
+      — docs/language-p3-results.md (the payoff list landed: `**`/`**=`,
+      `??`, logical assignment, optional chaining, object spread/rest,
+      bare catch, class fields + private members + static blocks,
+      async/await + `for await`; eight pre-existing bugs fixed incl.
+      super.other() mis-dispatch and Promise.all-never-resolves; still
+      gated: async generators, BigInt, dynamic import; matrix 438/20/0
+      ×5 lanes).
+- [x] **P8.4** test262 CI lane (language-P4).  DONE 2026-07-31 —
+      docs/language-p4-results.md (`test/test262/lane.sh`: curated
+      selection vs pinned suite SHA, checked-in expectations file as a
+      conformance ratchet; runs in the macOS bootstrap job).  First
+      ratchet turn same day (language-P4.1,
+      docs/language-p4.1-results.md): async generators landed, `yield*`
+      value-position/forwarding fixed, function `.length`/`.name`,
+      for-in symbol-key crash, globalThis; class/elements and
+      for-await-of both 71%/31% → 90%.  Second turn (language-P4.2,
+      docs/bigint-plan.md): BIGINT — bought V8's standalone bigint
+      library (vendored external-deps/v8-bigint), new BIGINT ejsval
+      tag, literals through ops through BigInt()/asIntN/asUintN.
 - [ ] **P8.5** un-fork the JS external-deps (language-P5).
 
 ## P9 — Distribution
@@ -189,3 +214,27 @@ Pause bounds independent of live-set size.  Detail: gc-plan.md.
       survivor evacuation (gc-P6).
 - [ ] **P10.2** fully concurrent evacuation — only on P10.1's pause
       evidence (gc-P7).
+
+## P11 — Self-hosted type oracle
+
+`--types` in the shipped compiler.  Ordered after P8 (the language
+milestone makes maam's ES2022 output compile as-is — decided
+2026-07-31, see maam-plan.md's self-hosting strategy addendum);
+interleaves freely with P9.5/P10.  Detail: maam-plan.md.
+
+- [x] **P11.1** compile maam into the bootstrap (maam-P5).  DONE
+      2026-07-31 — docs/maam-p5-results.md (the `$maam` static-import
+      seam: ESM build compiled into stage1+ via srcdir/BUCK wiring,
+      CJS build require()d by stage0; gates: the --types differential
+      lane host-vs-host mode — stage0 and stage1 produce byte-identical
+      typed output over the suite — plus the full matrix, and the
+      README caveat deleted.  All five prereqs landed: `export
+      */export * as ns`, `.js`-suffixed specifiers, the 14 stdlib
+      methods (+Object.values), NUL-safe source reads, and the maam
+      ⊤-operand soundness fix with bigint/async corpus.  The gate
+      flushed four pre-existing echojs bugs: NUL-truncated LLVM-name
+      literal fusion, NUL-truncating string compares in
+      SameValue(Zero)/relational ops, the stale pre-BigInt object
+      tag in emitEjsvalFromPtr, and Array.prototype.every skipping
+      ToBoolean on the callback result).  The maam repo merge remains
+      a follow-on.

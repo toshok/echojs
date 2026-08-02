@@ -14,6 +14,67 @@ packaged artifacts + a clean-machine install smoke — see
 
 ## [Unreleased]
 
+### Changed
+
+- **Programs compile under the ECMAScript Module goal by default**:
+  every toplevel is strict mode and toplevel `this` is `undefined`.
+  The new `--script` flag restores script-goal semantics (sloppy
+  toplevel unless `"use strict"`, `this` bound to `globalThis`).
+  Parsing uses the module grammar either way.
+- test262 conformance sweep: the CI lane climbs from 43% to 75%+
+  passing.  Builtin functions carry spec `.name`/`.length` and
+  property attributes; builtin methods are no longer constructors;
+  failed strict-mode assignments/deletes and constructing
+  non-constructors throw proper `TypeError`s; unresolvable references
+  throw `ReferenceError`; destructuring follows the iterator protocol
+  (close-on-completion, error propagation); anonymous classes get
+  NamedEvaluation names; `process.env` is mutable (node parity).
+
+### Added
+
+- New globals and methods: full `Date` API (previously only
+  `getTime`/`getTimezoneOffset`/`toString`), `BigInt64Array`/
+  `BigUint64Array`, `SharedArrayBuffer` and single-agent `Atomics`,
+  `Iterator` and the iterator-helpers methods, `DisposableStack`/
+  `AsyncDisposableStack`/`SuppressedError` (+ `Symbol.dispose`/
+  `Symbol.asyncDispose`), `WeakRef`, `FinalizationRegistry`,
+  `AggregateError`, `Error.isError`, error `cause`,
+  `Map`/`WeakMap.prototype.getOrInsert(Computed)`, `Map.groupBy`,
+  WeakMap symbol keys, `Array.prototype.toReversed`/`toSorted`/
+  `toSpliced`/`with`/`findLastIndex`, the `Set` methods proposal
+  (`union` et al), most missing `%TypedArray%.prototype` methods and
+  typed-array construction from iterables/array-likes,
+  `String.prototype.isWellFormed`/`toWellFormed`,
+  `Math.f16round`/`sumPrecise` and the missing `Math` constants,
+  `JSON.rawJSON`/`isRawJSON`, and spec `SyntaxError`s from
+  `JSON.parse`.
+- `--types` works in the self-hosted compiler: the MAAM abstract
+  interpreter (external-deps/echojs-maam) is compiled into the
+  bootstrap, so the shipped binary runs the same type analysis the
+  node-hosted compiler does, with byte-identical output.
+- Module system: `export * from` and `export * as ns from`, and
+  `.js`-suffixed relative import specifiers (NodeNext output style).
+- Standard library: `Object.entries`/`values`/`fromEntries`/`hasOwn`,
+  `Array.prototype.includes`/`at`/`flat`/`flatMap`/`findLast`, and
+  `String.prototype.at`/`padStart`/`padEnd`/`trimStart`/`trimEnd`/
+  `replaceAll`.
+
+### Fixed
+
+- Strings containing an embedded `U+0000` are handled correctly
+  end-to-end: source files no longer truncate at a raw NUL byte,
+  distinct string literals differing only past a NUL no longer fuse
+  into one constant, and `===`/`Object.is`/relational
+  comparisons/`Map`/`Set` see the full code-unit sequence.
+- Namespace objects (`import * as ns` / `export * as ns`) carry the
+  correct object tag; runtime property reads on module namespace
+  objects resolve through the export accessors.
+- `String.prototype.replace` no longer drops the tail of the string
+  when the match ends at the second-to-last character, and `` $` ``
+  (before-match) substitutions are supported.
+- `Array.prototype.every` applies ToBoolean to the callback result:
+  falsy non-boolean results (null, 0, "") now fail the predicate.
+
 ## [0.2.0] - 2026-07-30
 
 ### Added

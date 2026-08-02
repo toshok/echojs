@@ -16,10 +16,8 @@ export class HoistFuncDecls extends TransformPass {
     private decls: Map<string, e.FunctionDeclaration> | null = null;
 
     // explicit, so tsc doesn't synthesize `constructor() {
-    // super(...arguments); }` — spreading `arguments` used to trip a
-    // runtime bug (the arguments object's specops ToNumber'd Symbol
-    // keys, so the @@iterator lookup threw; fixed in ejs-arguments.c,
-    // but the compiler shouldn't gratuitously depend on it either)
+    // super(...arguments); }` — the compiler shouldn't gratuitously
+    // depend on the runtime's arguments-object iteration
     constructor(options: CompilerOptions) {
         super(options);
     }

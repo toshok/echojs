@@ -130,6 +130,8 @@ const options: CompilerOptions = {
     import_variables: [],
     srcdir: false,
     stdout_writer: new Writer(process.stdout),
+    parser: "acorn",
+    script: false,
 };
 
 function add_native_module_dir(dir: string): void {
@@ -248,6 +250,10 @@ const args: Record<string, ArgSpec | undefined> = {
         handlerArgc: 1,
         help: "--module path-to-search-for-modules",
     },
+    "--parser": {
+        option: "parser",
+        help: "which parser to use: acorn (default) or esprima (for bisection)",
+    },
     "--help": {
         flag: "show_help",
         help: "output this help info.",
@@ -297,6 +303,10 @@ const args: Record<string, ArgSpec | undefined> = {
     "--srcdir": {
         flag: "srcdir",
         help: "internal flag.  if set, will look for libecho/libpcre/etc from source directory locations.",
+    },
+    "--script": {
+        flag: "script",
+        help: "compile with script-goal semantics: sloppy toplevel and `this` bound to globalThis.  The default is the module goal (strict toplevel, `this` is undefined).  Module-grammar parsing applies either way.",
     },
     "--print-passes": {
         handler: () => (print_passes = true),
@@ -756,9 +766,8 @@ function compileFile(
     compiled_module.writeBitcodeToFile(bc_filename);
     debug.log(1, `done writing ${bc_filename}`);
 
-    // textual IR is a debug artifact now: written only under --leave-temp
-    // (buck-test-lowtier.sh greps it for the low-tier float ops — the same
-    // pre-opt module dump the old pipeline fed to llvm-as)
+    // textual IR is a debug artifact: written only under --leave-temp
+    // (buck-test-lowtier.sh greps it for the low-tier float ops)
     if (options.leave_temp_files) {
         let ll_filename = tmpfile(".ll");
         temp_files.push(ll_filename);

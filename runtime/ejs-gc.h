@@ -15,7 +15,10 @@ typedef enum {
   EJS_SCAN_TYPE_PRIMSTR = 1 << 0,
   EJS_SCAN_TYPE_PRIMSYM = 1 << 1,
   EJS_SCAN_TYPE_OBJECT = 1 << 2,
-  EJS_SCAN_TYPE_CLOSUREENV = 1 << 3
+  EJS_SCAN_TYPE_CLOSUREENV = 1 << 3,
+  // a GC leaf: no child ejsvals, no self-interior pointers, no
+  // finalizer — every collector dispatch correctly falls through
+  EJS_SCAN_TYPE_BIGINT = 1 << 4
 } EJSScanType;
 
 #define EJS_GC_INTERNAL_FLAGS_MASK 0x0000ffff
@@ -43,9 +46,8 @@ extern GCObjectPtr _ejs_gc_alloc(size_t size, EJSScanType scan_type);
 
 // ---- forwarding plumbing ---------------------------------------
 //
-// Inert until a mover (minor evacuation / major compaction) consumes it;
-// landed now so the header bit inventory is complete and the helpers are
-// exercised (EJS_GC_SELFTEST=1) with the old collector still active.
+// Consumed by the movers (minor evacuation / major compaction);
+// EJS_GC_SELFTEST=1 exercises the helpers standalone.
 //
 // Forwarding uses the classic first-word overwrite: once an object has been
 // evacuated its old header is dead (the copy carries the real one), so the

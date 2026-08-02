@@ -1,0 +1,12 @@
+bigint BigInt {} BigInt {}
+BigInt {} BigInt {} BigInt {} BigInt {} BigInt {} BigInt {}
+BigInt {}
+true false true true true true
+BigInt {} BigInt {} BigInt {} BigInt {}
+ff BigInt {} BigInt {} BigInt {} BigInt {}
+BigInt {} BigInt {} BigInt {} BigInt {} BigInt {} BigInt {}
+BigInt {}
+false true true
+mix: TypeError
+json: TypeError
+7 true

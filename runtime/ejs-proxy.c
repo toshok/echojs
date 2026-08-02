@@ -90,7 +90,7 @@ _ejs_proxy_init(ejsval global)
     // instance with its specops in _ejs_object_create.)
     _ejs_gc_add_root (&_ejs_Proxy_prototype);
     _ejs_Proxy_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
-    _ejs_object_setprop (_ejs_Proxy, _ejs_atom_prototype, _ejs_Proxy_prototype);
+    _ejs_object_define_value_property (_ejs_Proxy, _ejs_atom_prototype, _ejs_Proxy_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Proxy, x, _ejs_Proxy_##x)
 

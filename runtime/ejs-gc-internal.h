@@ -2,7 +2,7 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
-// The collector's internal contract (runtime-P4 / P6.3 file split).
+// The collector's internal contract (the collector file split).
 // Nothing here is API — ejs-gc.h is the public surface.  Module map:
 //
 //   ejs-gc.c        lifecycle API, allocator entry, cell free path,
@@ -210,13 +210,8 @@ struct _LargeObjectInfo {
 
 // heap_pages is indexed by ffs(cell_size) - OBJECT_SIZE_LOW_LIMIT_BITS,
 // i.e. 16B -> 1 .. 256B -> 5 ([0] is unused); +2 covers the inclusive
-// top class.  Until gc-P5 the ffs comparisons routed 256-byte
-// cells to the LOS (ffs(256) = 9 > HIGH_LIMIT_BITS), so the top class
-// existed only on paper — the pre-gc-P4 LOS had a linear lookup that
-// made large cell populations quadratic to mark.  With the LOS bsearch
-// and the direct arena map in, the class is enabled: single-cell shaped
-// objects up to the 14-field cap (32+16+112 = 160) and >14-slot envs
-// now take pages, not the LOS.
+// top class.  Single-cell shaped objects up to the 14-field cap
+// (32+16+112 = 160) and >14-slot envs take pages, not the LOS.
 #define HEAP_PAGELISTS_COUNT (OBJECT_SIZE_HIGH_LIMIT_BITS - OBJECT_SIZE_LOW_LIMIT_BITS) + 2
 
 // allocated-ness of a young ACTIVE page's cell is the bump rule:
