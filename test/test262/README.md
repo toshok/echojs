@@ -9,9 +9,9 @@ classifying every outcome.  Three uses:
   suite SHA (`suite.sha`), checked against `expectations.txt`.  CI
   (the macOS bootstrap job) fails on any regression (expected-pass
   test failing) or stale expectation (expected-fail test passing).
-- **Full suite**: the `test262-shard` matrix in `bootstrap.yml` —
-  every in-scope test, sharded across parallel Linux runners on each
-  push and PR, ratcheted against `full-baseline.json`.
+- **Full suite**: `.github/workflows/test262-full.yml` — every
+  in-scope test, sharded across parallel Linux runners on each push
+  and PR, ratcheted against `full-baseline.json`.
 
 ## The CI lane
 
@@ -35,14 +35,15 @@ diff — the shrinking file is the conformance ratchet.  Bumping
 
 ## The full suite
 
-The full run is part of the bootstrap matrix rather than a workflow of
-its own, so nothing builds the compiler twice: the Linux x86_64 job
-uploads its stage1 workroot and the suite checkout, the `test262-shard`
-matrix runs `--shard K/N` slices against that one build, and
-`test262-report` concatenates the results, checks that every shard
-reported, and posts the report to the run summary.  The shard count
-lives in `SHARDS` at the top of `bootstrap.yml`, alongside the matrix
-list it has to agree with.
+`test262-full.yml` is a reusable workflow with no triggers of its own:
+`ci.yml` and `release.yml` call it after their per-platform
+`bootstrap.yml` jobs, so it runs inside their run and nothing builds
+the compiler twice.  The Linux x86_64 build uploads its stage1
+workroot and the suite checkout, the shard matrix extracts that
+archive and runs `--shard K/N` slices of it, and the collect job
+concatenates the results, checks that every shard reported, and posts
+the report to the run summary.  The shard count lives in `SHARDS` at
+the top of that file, alongside the matrix list it has to agree with.
 
 The ratchet is `full-baseline.json` — `{evaluated, pass, tolerance}`.
 Per-test expectations are the lane's contract and don't scale to 45k

@@ -1,11 +1,11 @@
-# The full buck2 bootstrap matrix, as a reusable workflow: ci.yml runs
-# it on every push/PR, release.yml runs the SAME jobs on a version tag
-# — "a release is a green matrix" is literal here, one definition and
-# two callers.
+# The buck2 bootstrap for ONE platform, as a reusable workflow.  The
+# platform list lives in the callers — ci.yml on every push/PR,
+# release.yml on a version tag — which invoke this once per platform,
+# as separate jobs rather than a matrix so each shows up under its own
+# name and can be depended on individually.
 #
-# Per platform (macOS arm64, Linux arm64/x86_64), sequential targets —
-# buck2 shares artifacts between them, so the stage ladder (stage1
-# builds feed stage2/3) costs one traversal:
+# Sequential targets; buck2 shares artifacts between them, so the stage
+# ladder (stage1 builds feed stage2/3) costs one traversal:
 #
 #   test-eir     EIR unit tests (node-hosted)
 #   test-stage0  full suite against the node-hosted compiler
@@ -13,56 +13,92 @@
 #   test-stage2  suite against stage1's self-compile
 #   test-stage3  suite + the stage2/stage3 byte-identity fixed point
 #
-# then the test262 conformance run, and the dist tarball with its
-# smoke tests and the package smokes, uploading echojs-dist-<platform>
-# artifacts.
+# then test262, the dist tarball with its smoke tests, and the package
+# smokes, uploading an echojs-dist-<platform> artifact.
 #
-# test262 branches on how much runner capacity a platform has.  Linux
-# x86_64 uploads its stage1 workroot and the suite checkout, and the
-# test262-shard matrix below runs the whole suite against that one
-# build — no shard compiles the compiler, they extract it.  Everywhere
-# else runs the curated lane in-job against expectations.txt.
+# What varies between platforms is either the OS (brew vs apt, and the
+# homebrew smoke that only exists on macOS) or an input.  test262 is an
+# input: one platform runs the curated lane in-job, and one uploads its
+# stage1 workroot for the sharded full suite to run against — see
+# test262-full.yml.
 name: bootstrap
 
 on:
   workflow_call:
     inputs:
-      update-test262-baseline:
-        description: rewrite test262 full-baseline.json from this run
+      platform:
+        description: names the job and the dist artifact (e.g. linux-x86_64)
+        type: string
+        required: true
+      runner:
+        description: the runner label to build on
+        type: string
+        required: true
+      buck-config:
+        description: extra buck2 flags, e.g. --config llvm.prefix=...
+        type: string
+        default: ""
+      typecheck:
+        description: run the TypeScript typecheck (platform-independent, so one platform does it)
+        type: boolean
+        default: false
+      test262-lane:
+        description: run the curated test262 lane against expectations.txt
+        type: boolean
+        default: false
+      upload-test262-workroot:
+        description: upload the stage1 workroot + suite for the sharded full run
         type: boolean
         default: false
 
-env:
-  # the test262-shard matrix must list exactly 0..SHARDS-1.  Drift is
-  # loud in both directions: a short list fails the collect job's
-  # completeness check, a long one is rejected by --shard K/N.
-  SHARDS: "12"
-
 jobs:
-  bootstrap-macos-arm64:
-    name: bootstrap-macos-arm64
-    runs-on: macos-15 # arm64
-    timeout-minutes: 120
+  bootstrap:
+    # the caller's job id supplies the platform half of the check name
+    name: bootstrap
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Install llvm
+        if: runner.os == 'macOS'
         run: |
           brew install llvm
           "$(brew --prefix llvm)/bin/llvm-config" --version
+          echo "LLVM_PREFIX=$(brew --prefix llvm)" >> "$GITHUB_ENV"
+
+      - name: Install packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential cmake libunwind-dev libuv1-dev
+
+      # puts /usr/lib/llvm-22/bin on PATH (prelude's cxx toolchain wants
+      # a bare clang++ there) and seeds the cache the test262 shards
+      # restore from, so they don't each install a toolchain
+      - uses: ./.github/actions/setup-llvm
+        if: runner.os == 'Linux'
+        with:
+          save: "true"
+
+      - name: llvm prefix
+        if: runner.os == 'Linux'
+        run: |
+          llvm-config --version
+          echo "LLVM_PREFIX=/usr/lib/llvm-22" >> "$GITHUB_ENV"
 
       # the facebook/buck2 `latest` release binary, same as before —
       # the action just owns the platform selection and unpacking
       - uses: dtolnay/install-buck2@latest
       - run: buck2 --version
 
-      # the node version is unpinned: the value-based harness
-      # serializes logged values itself (test/harness-console-shim.js)
-      # on both the node and ejs sides, so baselines don't depend on
-      # node's inspect format (verified: 22.4.0 and 22.23.2 generate
-      # byte-identical baselines)
+      # the node version is unpinned: the value-based harness serializes
+      # logged values itself (test/harness-console-shim.js) on both the
+      # node and ejs sides, so baselines don't depend on node's inspect
+      # format (verified: 22.4.0 and 22.23.2 generate byte-identical
+      # baselines)
       - uses: actions/setup-node@v4
         with:
           node-version: 22.x
@@ -73,28 +109,30 @@ jobs:
       # the node-hosted (stage0) compiler drives llvm through this
       # node-gyp native addon; buck picks up the built artifact
       - name: Build the node-llvm addon
-        run: ./node-llvm/build-addon.sh "$(brew --prefix llvm)"
+        run: ./node-llvm/build-addon.sh "$LLVM_PREFIX"
 
       - name: TypeScript typecheck
+        if: inputs.typecheck
         run: |
           node node_modules/typescript/bin/tsc -p tsconfig.json
           node node_modules/typescript/bin/tsc -p test --noEmit
 
       - name: buck2 bootstrap matrix
         run: |
-          buck2 build \
+          buck2 build ${{ inputs.buck-config }} \
             //:test-eir \
             //:test-stage0 \
             //:test-stage1 \
             //:test-stage2 \
             //:test-stage3
 
-      # the test262 lane: the curated selection against the pinned
-      # suite SHA, checked against expectations.txt.  The lane rather
-      # than the full suite here — macos runners bill at 10x, so the
-      # sharded run lives on Linux x86_64 — and this is the platform
-      # expectations.txt is generated on.
+      # the test262 lane: the curated selection against the pinned suite
+      # SHA, checked against expectations.txt.  The lane rather than the
+      # full suite wherever this runs — the sharded run needs a platform
+      # with runner capacity to spare — and expectations.txt is
+      # generated on whichever platform enables it.
       - name: test262 lane
+        if: inputs.test262-lane
         run: |
           git init -q "$RUNNER_TEMP/test262"
           git -C "$RUNNER_TEMP/test262" fetch -q --depth 1 \
@@ -102,17 +140,44 @@ jobs:
           git -C "$RUNNER_TEMP/test262" checkout -q FETCH_HEAD
           ./test/test262/lane.sh --suite "$RUNNER_TEMP/test262" --jobs 6
 
-      # the relocatable dist artifact + its installed-layout smoke
-      # test; the stage builds above are shared, so this only adds the
-      # repack + smoke compile
+      # what the test262-full shards run against: the stage1 workroot
+      # (srcdir-tree + lib/generated + ./ejs, already built above — this
+      # only copies buck's outputs) and the pinned suite, fetched once
+      # here instead of on every shard
+      - name: test262 workroot + suite
+        if: inputs.upload-test262-workroot
+        run: |
+          ./test/test262/assemble-workroot.sh "$RUNNER_TEMP/workroot" \
+            ${{ inputs.buck-config }}
+          tar -C "$RUNNER_TEMP/workroot" -czf workroot.tar.gz .
+          git init -q "$RUNNER_TEMP/test262"
+          git -C "$RUNNER_TEMP/test262" fetch -q --depth 1 \
+            https://github.com/tc39/test262.git "$(cat test/test262/suite.sha)"
+          git -C "$RUNNER_TEMP/test262" checkout -q FETCH_HEAD
+          tar -C "$RUNNER_TEMP" --exclude .git -czf suite.tar.gz test262
+
+      - uses: actions/upload-artifact@v4
+        if: inputs.upload-test262-workroot
+        with:
+          name: test262-inputs
+          path: |
+            workroot.tar.gz
+            suite.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0 # both are already gzipped
+
+      # the relocatable dist artifact + its installed-layout smoke test;
+      # the stage builds above are shared, so this only adds the repack
+      # + smoke compile
       - name: dist artifact
         run: |
-          buck2 build //:test-dist
-          buck2 build //:dist --out dist-out/
+          buck2 build ${{ inputs.buck-config }} //:test-dist
+          buck2 build ${{ inputs.buck-config }} //:dist --out dist-out/
 
       - uses: actions/upload-artifact@v4
         with:
-          name: echojs-dist-macos-arm64
+          name: echojs-dist-${{ inputs.platform }}
           path: dist-out/*.tar.gz
           if-no-files-found: error
 
@@ -121,6 +186,7 @@ jobs:
       # installs through its EJS_NPM_TARBALL override.  release.yml
       # points both at hosted release assets instead.
       - name: package smoke (homebrew + npm)
+        if: runner.os == 'macOS'
         run: |
           brew tap-new --no-git toshok/echojs-ci
           ./packaging/homebrew/make-formula.sh \
@@ -142,109 +208,10 @@ jobs:
           ./node_modules/.bin/ejs -q -o smoke.exe ../smoke.js
           test "$(./smoke.exe)" = "ok 23"
 
-      - name: Surface test logs on failure
-        if: failure()
-        run: |
-          find buck-out/v2 -name "test-*.log" -newer package.json 2>/dev/null | while read -r f; do
-            echo "=== $f ==="
-            tail -60 "$f"
-          done || true
-
-  bootstrap-linux:
-    name: bootstrap-linux-${{ matrix.arch }}
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 150
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-          - arch: x86_64
-            runner: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install packages
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq build-essential cmake libunwind-dev libuv1-dev
-
-      # puts /usr/lib/llvm-22/bin on PATH (prelude's cxx toolchain wants
-      # a bare clang++ there) and seeds the cache the test262 shards
-      # restore from, so they don't each install a toolchain
-      - uses: ./.github/actions/setup-llvm
-        with:
-          save: "true"
-      - run: llvm-config --version
-
-      - uses: dtolnay/install-buck2@latest
-      - run: buck2 --version
-
-      # the node version is unpinned — see the macOS job's note
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.x
-
-      - name: npm ci
-        run: npm ci
-
-      - name: Build the node-llvm addon
-        run: ./node-llvm/build-addon.sh /usr/lib/llvm-22
-
-      - name: buck2 bootstrap matrix
-        run: |
-          buck2 build --config llvm.prefix=/usr/lib/llvm-22 \
-            //:test-eir \
-            //:test-stage0 \
-            //:test-stage1 \
-            //:test-stage2 \
-            //:test-stage3
-
-      # what the test262-shard matrix runs against: the stage1 workroot
-      # (srcdir-tree + lib/generated + ./ejs, already built above — this
-      # only copies buck's outputs) and the pinned suite, fetched once
-      # here instead of on every shard
-      - name: test262 workroot + suite
-        if: matrix.arch == 'x86_64'
-        run: |
-          ./test/test262/assemble-workroot.sh "$RUNNER_TEMP/workroot" \
-            --config llvm.prefix=/usr/lib/llvm-22
-          tar -C "$RUNNER_TEMP/workroot" -czf workroot.tar.gz .
-          git init -q "$RUNNER_TEMP/test262"
-          git -C "$RUNNER_TEMP/test262" fetch -q --depth 1 \
-            https://github.com/tc39/test262.git "$(cat test/test262/suite.sha)"
-          git -C "$RUNNER_TEMP/test262" checkout -q FETCH_HEAD
-          tar -C "$RUNNER_TEMP" --exclude .git -czf suite.tar.gz test262
-
-      - uses: actions/upload-artifact@v4
-        if: matrix.arch == 'x86_64'
-        with:
-          name: test262-inputs
-          path: |
-            workroot.tar.gz
-            suite.tar.gz
-          if-no-files-found: error
-          retention-days: 1
-          compression-level: 0 # both are already gzipped
-
-      # the dist artifact — see the macOS job's note
-      - name: dist artifact
-        run: |
-          buck2 build --config llvm.prefix=/usr/lib/llvm-22 //:test-dist
-          buck2 build --config llvm.prefix=/usr/lib/llvm-22 //:dist --out dist-out/
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: echojs-dist-linux-${{ matrix.arch }}
-          path: dist-out/*.tar.gz
-          if-no-files-found: error
-
-      # the npm wrapper against the tarball just built
-      # (the prefix installer is smoke-tested inside //:test-dist)
+      # the npm wrapper against the tarball just built (the prefix
+      # installer is smoke-tested inside //:test-dist)
       - name: package smoke (npm)
+        if: runner.os == 'Linux'
         run: |
           cd "$RUNNER_TEMP"
           npm pack "$GITHUB_WORKSPACE/packaging/npm"
@@ -256,119 +223,10 @@ jobs:
           ./node_modules/.bin/ejs -q -o smoke.exe smoke.js
           test "$(./smoke.exe)" = "ok 23"
 
-  # the whole suite, one slice per runner, against the workroot the
-  # x86_64 build uploaded — these jobs never build the compiler.  They
-  # wait on the whole Linux matrix (both arches) because that is the
-  # granularity `needs` offers; a red arm64 leg holds the report back.
-  test262-shard:
-    name: test262 shard ${{ matrix.shard }}
-    needs: bootstrap-linux
-    runs-on: ubuntu-24.04
-    timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] # 0..SHARDS-1
-    steps:
-      # the runner scripts only — the compiler arrives prebuilt, so no
-      # submodules
-      - uses: actions/checkout@v4
-
-      # the compiler shells out to opt/llc/clang++ and links compiled
-      # programs against libuv/libunwind (build-essential for the system
-      # headers and linker clang++ drives — present on the image, named
-      # here so the job doesn't lean on that)
-      - name: Install packages
+      - name: Surface test logs on failure
+        if: failure()
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq build-essential libunwind-dev libuv1-dev
-
-      - uses: ./.github/actions/setup-llvm
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.x
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: test262-inputs
-
-      - name: unpack workroot + suite
-        run: |
-          mkdir -p "$RUNNER_TEMP/workroot"
-          tar -C "$RUNNER_TEMP/workroot" -xzf workroot.tar.gz
-          tar -C "$RUNNER_TEMP" -xzf suite.tar.gz
-
-      - name: run shard
-        run: |
-          node test/test262/run-test262.mjs run \
-            --suite "$RUNNER_TEMP/test262" \
-            --ejs "$RUNNER_TEMP/workroot" \
-            --jobs 4 \
-            --stride-language 1 --cap-builtins all \
-            --shard "${{ matrix.shard }}/$SHARDS" \
-            --out "shard-${{ matrix.shard }}.jsonl"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: test262-shard-${{ matrix.shard }}
-          path: shard-${{ matrix.shard }}.jsonl
-          if-no-files-found: error
-          retention-days: 3
-
-  test262-report:
-    name: test262 collect + report
-    needs: [bootstrap-linux, test262-shard]
-    # runs on a failed shard too — a missing slice is exactly what the
-    # completeness check has to catch — but not when the shards never
-    # ran or were cancelled, where there is nothing to collect
-    if: always() && (needs.test262-shard.result == 'success' || needs.test262-shard.result == 'failure')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.x
-
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: test262-shard-*
-          merge-multiple: true
-          path: shards
-
-      # a lost shard would otherwise produce a perfectly plausible pass
-      # rate over a fraction of the suite
-      - name: check every shard reported
-        run: |
-          have=$(find shards -name '*.jsonl' 2>/dev/null | wc -l)
-          if [ "$have" -ne "$SHARDS" ]; then
-            echo "only $have of $SHARDS shard results present — the report would undercount" \
-              | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-
-      - name: collect
-        run: cat shards/*.jsonl > all.jsonl
-
-      - name: report
-        run: |
-          args=(--in all.jsonl --md report.md --baseline test/test262/full-baseline.json)
-          if [ "${{ inputs.update-test262-baseline }}" = "true" ]; then args+=(--update-baseline); fi
-          set +e
-          node test/test262/run-test262.mjs report "${args[@]}"
-          rc=$?
-          set -e
-          cat report.md >> "$GITHUB_STEP_SUMMARY"
-          exit $rc
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test262-full-results
-          path: |
-            all.jsonl
-            report.md
-            test/test262/full-baseline.json
-          if-no-files-found: warn # a failed collect leaves nothing to upload
+          find buck-out/v2 -name "test-*.log" -newer package.json 2>/dev/null | while read -r f; do
+            echo "=== $f ==="
+            tail -60 "$f"
+          done || true

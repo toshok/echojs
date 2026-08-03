@@ -61,12 +61,39 @@ jobs:
             exit 1
           fi
 
-  bootstrap:
+  # the same per-platform calls ci.yml makes, with the same inputs
+  macos-arm64:
     needs: version-check
     uses: ./.github/workflows/bootstrap.yml
+    with:
+      platform: macos-arm64
+      runner: macos-15
+      typecheck: true
+      test262-lane: true
+
+  linux-arm64:
+    needs: version-check
+    uses: ./.github/workflows/bootstrap.yml
+    with:
+      platform: linux-arm64
+      runner: ubuntu-24.04-arm
+      buck-config: --config llvm.prefix=/usr/lib/llvm-22
+
+  linux-x86_64:
+    needs: version-check
+    uses: ./.github/workflows/bootstrap.yml
+    with:
+      platform: linux-x86_64
+      runner: ubuntu-24.04
+      buck-config: --config llvm.prefix=/usr/lib/llvm-22
+      upload-test262-workroot: true
+
+  test262-full:
+    needs: [macos-arm64, linux-arm64, linux-x86_64]
+    uses: ./.github/workflows/test262-full.yml
 
   publish:
-    needs: bootstrap
+    needs: [macos-arm64, linux-arm64, linux-x86_64, test262-full]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -163,7 +190,7 @@ jobs:
   # a machine that has never seen the repo: only the tarball + the
   # README's documented prerequisites
   smoke-linux:
-    needs: bootstrap
+    needs: [linux-arm64, linux-x86_64]
     strategy:
       fail-fast: false
       matrix:
@@ -197,7 +224,7 @@ jobs:
           test "$(./hello)" = "squares: 1,4,9"
 
   smoke-macos:
-    needs: bootstrap
+    needs: macos-arm64
     runs-on: macos-15
     steps:
       - uses: actions/download-artifact@v4

@@ -1,0 +1,143 @@
+# The whole test262 suite, sharded across parallel runners, as a
+# reusable workflow.  It has no triggers of its own: ci.yml and
+# release.yml call it after the bootstrap jobs, so it runs inside their
+# run and can download the artifact one of them uploaded.
+#
+# Nothing here builds the compiler.  The bootstrap job invoked with
+# upload-test262-workroot uploads the stage1 workroot it already built
+# plus the pinned suite checkout; every shard extracts that archive and
+# runs its slice of the selection.  The collect job concatenates the
+# slices, refuses to report unless every shard came back, and ratchets
+# the result against full-baseline.json.
+#
+# Distinct from the curated lane, which one bootstrap platform runs
+# in-job against expectations.txt: the lane is the fast per-PR gate,
+# this is the comprehensive number.
+name: test262-full
+
+on:
+  workflow_call:
+    inputs:
+      update-baseline:
+        description: rewrite full-baseline.json from this run
+        type: boolean
+        default: false
+
+env:
+  # the shard matrix must list exactly 0..SHARDS-1.  Drift is loud in
+  # both directions: a short list fails the collect job's completeness
+  # check, a long one is rejected by --shard K/N.
+  SHARDS: "12"
+
+jobs:
+  shard:
+    name: shard ${{ matrix.shard }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] # 0..SHARDS-1
+    steps:
+      # the runner scripts only — the compiler arrives prebuilt, so no
+      # submodules
+      - uses: actions/checkout@v4
+
+      # the compiler shells out to opt/llc/clang++ and links compiled
+      # programs against libuv/libunwind (build-essential for the system
+      # headers and linker clang++ drives — present on the image, named
+      # here so the job doesn't lean on that)
+      - name: Install packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential libunwind-dev libuv1-dev
+
+      - uses: ./.github/actions/setup-llvm
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: test262-inputs
+
+      - name: unpack workroot + suite
+        run: |
+          mkdir -p "$RUNNER_TEMP/workroot"
+          tar -C "$RUNNER_TEMP/workroot" -xzf workroot.tar.gz
+          tar -C "$RUNNER_TEMP" -xzf suite.tar.gz
+
+      - name: run shard
+        run: |
+          node test/test262/run-test262.mjs run \
+            --suite "$RUNNER_TEMP/test262" \
+            --ejs "$RUNNER_TEMP/workroot" \
+            --jobs 4 \
+            --stride-language 1 --cap-builtins all \
+            --shard "${{ matrix.shard }}/$SHARDS" \
+            --out "shard-${{ matrix.shard }}.jsonl"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test262-shard-${{ matrix.shard }}
+          path: shard-${{ matrix.shard }}.jsonl
+          if-no-files-found: error
+          retention-days: 3
+
+  report:
+    name: collect + report
+    needs: shard
+    # runs on a failed shard too — a missing slice is exactly what the
+    # completeness check has to catch — but not when the shards never
+    # ran or were cancelled, where there is nothing to collect
+    if: always() && (needs.shard.result == 'success' || needs.shard.result == 'failure')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: test262-shard-*
+          merge-multiple: true
+          path: shards
+
+      # a lost shard would otherwise produce a perfectly plausible pass
+      # rate over a fraction of the suite
+      - name: check every shard reported
+        run: |
+          have=$(find shards -name '*.jsonl' 2>/dev/null | wc -l)
+          if [ "$have" -ne "$SHARDS" ]; then
+            echo "only $have of $SHARDS shard results present — the report would undercount" \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: collect
+        run: cat shards/*.jsonl > all.jsonl
+
+      - name: report
+        run: |
+          args=(--in all.jsonl --md report.md --baseline test/test262/full-baseline.json)
+          if [ "${{ inputs.update-baseline }}" = "true" ]; then args+=(--update-baseline); fi
+          set +e
+          node test/test262/run-test262.mjs report "${args[@]}"
+          rc=$?
+          set -e
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          exit $rc
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test262-full-results
+          path: |
+            all.jsonl
+            report.md
+            test/test262/full-baseline.json
+          if-no-files-found: warn # a failed collect leaves nothing to upload
