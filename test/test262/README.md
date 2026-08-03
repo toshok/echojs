@@ -3,16 +3,15 @@
 Host tooling that runs [tc39/test262] against a built `ejs`,
 classifying every outcome.  Three uses:
 
-- **Probe** (language-P1): any selection, reported by feature/area —
-  the exhaustiveness check behind the language-P3 payoff list.
-- **CI lane** (language-P4): `lane.sh` — a small fixed selection
-  against the pinned suite SHA (`suite.sha`), checked against
-  `expectations.txt`.  CI (the macOS bootstrap job) fails on any
-  regression (expected-pass test failing) or stale expectation
-  (expected-fail test passing).
-- **Full suite**: `.github/workflows/test262-full.yml` — every
-  in-scope test, sharded across parallel Linux runners on each push
-  and PR, ratcheted against `full-baseline.json`.
+- **Probe**: any selection, reported by feature/area — the
+  exhaustiveness check behind the payoff list.
+- **CI lane**: `lane.sh` — a small fixed selection against the pinned
+  suite SHA (`suite.sha`), checked against `expectations.txt`.  CI
+  (the macOS bootstrap job) fails on any regression (expected-pass
+  test failing) or stale expectation (expected-fail test passing).
+- **Full suite**: the `test262-shard` matrix in `bootstrap.yml` —
+  every in-scope test, sharded across parallel Linux runners on each
+  push and PR, ratcheted against `full-baseline.json`.
 
 ## The CI lane
 
@@ -36,21 +35,24 @@ diff — the shrinking file is the conformance ratchet.  Bumping
 
 ## The full suite
 
-`.github/workflows/test262-full.yml` runs every in-scope test on each
-push to main and each PR (plus nightly and `workflow_dispatch`): one
-job builds the workroot and fetches the suite, a shard matrix runs
-`--shard K/N` slices of it against that one build, and a collect job
-concatenates the results, checks that every shard reported, and posts
-the report to the run summary.
+The full run is part of the bootstrap matrix rather than a workflow of
+its own, so nothing builds the compiler twice: the Linux x86_64 job
+uploads its stage1 workroot and the suite checkout, the `test262-shard`
+matrix runs `--shard K/N` slices against that one build, and
+`test262-report` concatenates the results, checks that every shard
+reported, and posts the report to the run summary.  The shard count
+lives in `SHARDS` at the top of `bootstrap.yml`, alongside the matrix
+list it has to agree with.
 
 The ratchet is `full-baseline.json` — `{evaluated, pass, tolerance}`.
 Per-test expectations are the lane's contract and don't scale to 45k
 rows, so the full run holds two numbers instead: coverage must not
 shrink and the pass count must not drop by more than `tolerance`.  To
-move it, run the workflow with the `update-baseline` input, download
-the `test262-full-results` artifact, and commit the regenerated file.
-Being a report job, a broken ratchet marks the run red without
-blocking merges — the lane stays the gate.
+move it, run CI with the `update-test262-baseline` input, download the
+`test262-full-results` artifact, and commit the regenerated file.
+Until that file exists the check no-ops, so the ratchet only gets
+teeth when you commit one — after which a regression reddens CI, and
+because `release.yml` runs the same matrix, blocks a release.
 
 The baseline is a Linux number and `expectations.txt` is a macOS one.
 Semantics don't vary by platform, but `fail-crash`, `compile-timeout`
@@ -142,6 +144,6 @@ error/crash after parse), `fail-crash` (binary died on a signal),
 accepted), `compile-timeout` / `run-timeout`, `skip-unsupported`.
 
 The report groups failures by frontmatter `features:` — that table,
-descending, is the payoff ordering for language-P3.
+descending, is the payoff ordering for feature work.
 
 [tc39/test262]: https://github.com/tc39/test262

@@ -1,12 +1,20 @@
-# EchoJS CI: the full buck2 bootstrap matrix on every push/PR.  The
-# jobs live in bootstrap.yml (a reusable workflow) so release.yml can
-# run the identical matrix on a version tag.
+# EchoJS CI: the root of every build.  The jobs live in bootstrap.yml
+# (a reusable workflow) so release.yml can run the identical matrix on
+# a version tag — one definition, two callers, no second workflow
+# racing this one.  That includes test262: the curated lane on macOS,
+# the full sharded suite off the Linux x86_64 build.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      update-test262-baseline:
+        description: rewrite test262 full-baseline.json from this run
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -15,3 +23,5 @@ concurrency:
 jobs:
   bootstrap:
     uses: ./.github/workflows/bootstrap.yml
+    with:
+      update-test262-baseline: ${{ inputs.update-test262-baseline || false }}

@@ -1,4 +1,4 @@
-# EchoJS release pipeline (release-P3).  Runs when a v<semver> tag is
+# EchoJS release pipeline.  Runs when a v<semver> tag is
 # pushed (prepare-release.sh makes the tag; pushing it is the human
 # act that starts this).  A release is:
 #
@@ -6,7 +6,9 @@
 #                   CHANGELOG all agree
 #   bootstrap       the SAME full matrix CI runs (bootstrap.yml):
 #                   stage ladder + dist tarballs + package smokes on
-#                   all three platforms
+#                   all three platforms, plus the test262 conformance
+#                   run — a regression against the committed baseline
+#                   reddens the matrix and holds the release
 #   publish         a DRAFT GitHub release holding the three tarballs,
 #                   the generated homebrew formula (hosted urls), and
 #                   the npm wrapper tgz; changelog section = notes.

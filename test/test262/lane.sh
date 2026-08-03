@@ -1,5 +1,5 @@
 #!/bin/bash
-# The test262 CI lane (language-P4): a fixed curated selection against
+# The test262 CI lane: a fixed curated selection against
 # the pinned suite SHA (suite.sha), checked against expectations.txt.
 # Exits nonzero on any regression (expected-pass test failing) or stale
 # expectation (expected-fail test passing).

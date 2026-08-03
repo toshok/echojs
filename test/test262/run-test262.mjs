@@ -16,9 +16,9 @@
 //   node test/test262/run-test262.mjs report --in results.jsonl [--md report.md] \
 //     [--baseline file [--update-baseline]]
 //
-// The CI lane (language-P4) drives this through lane.sh: a fixed
-// selection (stride/cap) against a pinned suite SHA, checked against
-// the checked-in expectations file.
+// The CI lane drives this through lane.sh: a fixed selection
+// (stride/cap) against a pinned suite SHA, checked against the
+// checked-in expectations file.
 
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
