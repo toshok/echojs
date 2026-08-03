@@ -1,16 +1,18 @@
 # test262: probe + CI lane
 
-Host tooling that runs a curated slice of [tc39/test262] against a
-built `ejs`, classifying every outcome.  Two uses:
+Host tooling that runs [tc39/test262] against a built `ejs`,
+classifying every outcome.  Three uses:
 
-- **Probe** (language-P1): the full curated selection, reported by
-  feature/area — the exhaustiveness check behind the language-P3
-  payoff list.
-- **CI lane** (language-P4): `lane.sh` — a smaller fixed selection
+- **Probe** (language-P1): any selection, reported by feature/area —
+  the exhaustiveness check behind the language-P3 payoff list.
+- **CI lane** (language-P4): `lane.sh` — a small fixed selection
   against the pinned suite SHA (`suite.sha`), checked against
   `expectations.txt`.  CI (the macOS bootstrap job) fails on any
   regression (expected-pass test failing) or stale expectation
   (expected-fail test passing).
+- **Full suite**: `.github/workflows/test262-full.yml` — every
+  in-scope test, sharded across parallel Linux runners on each push
+  and PR, ratcheted against `full-baseline.json`.
 
 ## The CI lane
 
@@ -32,6 +34,28 @@ is ignored.  After feature work, rerun with `--update` and commit the
 diff — the shrinking file is the conformance ratchet.  Bumping
 `suite.sha` requires an `--update` run in the same commit.
 
+## The full suite
+
+`.github/workflows/test262-full.yml` runs every in-scope test on each
+push to main and each PR (plus nightly and `workflow_dispatch`): one
+job builds the workroot and fetches the suite, a shard matrix runs
+`--shard K/N` slices of it against that one build, and a collect job
+concatenates the results, checks that every shard reported, and posts
+the report to the run summary.
+
+The ratchet is `full-baseline.json` — `{evaluated, pass, tolerance}`.
+Per-test expectations are the lane's contract and don't scale to 45k
+rows, so the full run holds two numbers instead: coverage must not
+shrink and the pass count must not drop by more than `tolerance`.  To
+move it, run the workflow with the `update-baseline` input, download
+the `test262-full-results` artifact, and commit the regenerated file.
+Being a report job, a broken ratchet marks the run red without
+blocking merges — the lane stays the gate.
+
+The baseline is a Linux number and `expectations.txt` is a macOS one.
+Semantics don't vary by platform, but `fail-crash`, `compile-timeout`
+and `run-timeout` can, so regenerate each where it runs.
+
 ## Running the probe
 
 The runner needs (a) a test262 checkout and (b) a workroot: the
@@ -51,13 +75,43 @@ node test/test262/run-test262.mjs report --in results.jsonl --md report.md
 
 ## Selection policy
 
-- `test/language/**` — everything (the P8 target area).
-- `test/built-ins/**` — stratified: the first `--cap-builtins` (3)
-  tests of every leaf directory, so every constructor and method gets
-  probed without the full 24k volume.
+- `test/language/**` and `test/annexB/language/**` — every
+  `--stride-language`th test of the sorted walk (1 = everything).
+- `test/built-ins/**` and `test/annexB/built-ins/**` — stratified: the
+  first `--cap-builtins` (3) tests of every leaf directory, so every
+  constructor and method gets probed without the full 24k volume.
+  `--cap-builtins all` takes the lot.
 - `test/harness/**` — everything (validates the harness files
   themselves compile and run).
-- `intl402/` and `staging/` — out of scope.
+- `intl402/` (no `Intl`) and `staging/` (not normative) — out of scope.
+
+The whole suite is `--stride-language 1 --cap-builtins all`: ~48.7k
+tests, of which ~3.3k are skipped as out of scope for AOT (below) and
+~45.5k are evaluated.  `--shard K/N` runs slice K of N over a sorted
+list, so N runners partition the selection without coordinating.
+
+## Out of scope for AOT
+
+Some tests no ahead-of-time engine can pass, whatever echojs
+implements: they need a compiler at run time, or a host hook that has
+no AOT meaning.  They are classified `skip-unsupported` before
+compiling — otherwise each costs a compile+link to reach a foregone
+failure — with a `needs` tag on the row, and they are excluded from
+the pass rate and never enter `expectations.txt`.  A test is out of
+scope when it
+
+- is tagged `cross-realm`, `ShadowRealm`, or `dynamic-import`;
+- lives under `language/eval-code/`, `annexB/language/eval-code/`, or
+  `built-ins/eval/`;
+- calls `eval(...)` or `Function(...)` in its body, or reaches
+  `$262.agent`;
+- includes a harness file that does either — `fnGlobalObject.js` is
+  `Function("return this;")()`, so its dependents are out too.  That
+  set is derived from the suite, not listed, so it tracks SHA bumps.
+
+Unimplemented features are *not* out of scope: `Temporal`, `Atomics`,
+`SharedArrayBuffer` and friends stay in the denominator, because an
+AOT engine could implement them.
 
 ## Probe simplifications (vs a conforming runner)
 
@@ -75,8 +129,9 @@ node test/test262/run-test262.mjs report --in results.jsonl --md report.md
 - Negative tests pass on any nonzero exit at the expected phase (parse
   → compile fails; runtime → binary exits nonzero); the error type is
   not matched.
-- No `$262` host object; tests needing it fail at runtime and show up
-  bucketed under their feature.
+- Only the part of `$262` echojs can honor (`global`, `gc`,
+  `detachArrayBuffer`, `destroy`); tests reaching for the rest are out
+  of scope above.
 
 ## Outcome classes
 
@@ -84,7 +139,7 @@ node test/test262/run-test262.mjs report --in results.jsonl --md report.md
 error/crash after parse), `fail-crash` (binary died on a signal),
 `fail-runtime` (uncaught error / assert), `fail-async` (exit 0 but no
 `Test262:AsyncTestComplete`), `fail-negative-*` (negative test
-accepted), `compile-timeout` / `run-timeout`, `skip-agent`.
+accepted), `compile-timeout` / `run-timeout`, `skip-unsupported`.
 
 The report groups failures by frontmatter `features:` — that table,
 descending, is the payoff ordering for language-P3.

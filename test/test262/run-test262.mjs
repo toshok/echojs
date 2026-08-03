@@ -9,10 +9,12 @@
 //   node test/test262/run-test262.mjs run \
 //     --suite  <test262 checkout> \
 //     --ejs    <workroot with ./ejs + srcdir layout> \
-//     [--jobs N] [--cap-builtins 3] [--stride-language 1] [--filter substr] \
+//     [--jobs N] [--cap-builtins 3|all] [--stride-language 1] [--filter substr] \
+//     [--shard K/N] \
 //     [--out results.jsonl] [--expectations file [--update-expectations]]
 //
-//   node test/test262/run-test262.mjs report --in results.jsonl [--md report.md]
+//   node test/test262/run-test262.mjs report --in results.jsonl [--md report.md] \
+//     [--baseline file [--update-baseline]]
 //
 // The CI lane (language-P4) drives this through lane.sh: a fixed
 // selection (stride/cap) against a pinned suite SHA, checked against
@@ -89,31 +91,86 @@ function collectTests(suiteDir, capBuiltins, strideLanguage = 1) {
     // language: every strideLanguage-th test of the sorted walk (1 = all).
     // The walk is depth-first sorted, so a global stride samples every
     // directory proportionally — the lane's knob for fitting a CI budget.
+    // annexB/language rides the same stride: Annex B is normative for
+    // web-facing engines, so its extensions belong in the denominator.
     let li = 0;
-    walk(path.join(suiteDir, "test", "language"), (p) => {
-        if (isTest(p) && li++ % strideLanguage === 0) tests.push(p);
-    });
+    for (const root of [["test", "language"], ["test", "annexB", "language"]]) {
+        walk(path.join(suiteDir, ...root), (p) => {
+            if (isTest(p) && li++ % strideLanguage === 0) tests.push(p);
+        });
+    }
     walk(path.join(suiteDir, "test", "harness"), (p) => {
         if (isTest(p)) tests.push(p);
     });
-    // built-ins: stratified — first N tests of every leaf directory, so
-    // every constructor/method is probed without the full 24k volume.
+    // built-ins (and their Annex B extensions): stratified — first N
+    // tests of every leaf directory, so every constructor/method is
+    // probed without the full 24k volume.
     const perDir = new Map();
-    walk(path.join(suiteDir, "test", "built-ins"), (p) => {
-        if (!isTest(p)) return;
-        const d = path.dirname(p);
-        const got = perDir.get(d) || 0;
-        if (got < capBuiltins) {
-            perDir.set(d, got + 1);
-            tests.push(p);
-        }
-    });
+    for (const root of [["test", "built-ins"], ["test", "annexB", "built-ins"]]) {
+        walk(path.join(suiteDir, ...root), (p) => {
+            if (!isTest(p)) return;
+            const d = path.dirname(p);
+            const got = perDir.get(d) || 0;
+            if (got < capBuiltins) {
+                perDir.set(d, got + 1);
+                tests.push(p);
+            }
+        });
+    }
     return tests;
 }
 
+// ---------- AOT viability ----------
+// Tests no ahead-of-time engine can pass, whatever echojs implements:
+// they need a compiler at run time (`eval`, the Function constructor,
+// dynamic `import()`) or a host hook that has no AOT meaning (a second
+// realm, an agent).  Classified before compiling — each would otherwise
+// cost a compile+link to reach a foregone failure — and reported as
+// `skip-unsupported`, so the pass rate reads "of what an AOT engine
+// could conceivably pass".
+const NEEDS_COMPILER = /(^|[^.\w])(eval|Function)\s*\(/;
+const NEEDS_AGENT = /\$262\s*\.\s*agent/;
+const UNSUPPORTED_FEATURES = new Set(["cross-realm", "ShadowRealm", "dynamic-import"]);
+// whole trees devoted to eval semantics; their tests reach eval through
+// indirection the source scan below does not see
+const UNSUPPORTED_DIRS = ["test/language/eval-code/", "test/annexB/language/eval-code/", "test/built-ins/eval/"];
+
+const stripFrontmatter = (src) => src.replace(/\/\*---[\s\S]*?---\*\//, "");
+
+// harness files that themselves need a compiler or an agent —
+// fnGlobalObject.js is `Function("return this;")()` — so including one
+// disqualifies a test as surely as calling eval does.  Derived from the
+// suite rather than listed, so it tracks the harness across SHA bumps.
+let needyHarness = null;
+function harnessNeedingHost(suiteDir) {
+    if (needyHarness) return needyHarness;
+    needyHarness = new Set();
+    const dir = path.join(suiteDir, "harness");
+    for (const f of fs.readdirSync(dir)) {
+        if (!f.endsWith(".js")) continue;
+        const body = stripFrontmatter(fs.readFileSync(path.join(dir, f), "utf8"));
+        if (NEEDS_COMPILER.test(body) || NEEDS_AGENT.test(body)) needyHarness.add(f);
+    }
+    return needyHarness;
+}
+
+// null if the test is in scope; otherwise a short tag naming what it
+// needs (recorded on the row, so the report can break the skips down)
+function unsupportedReason(suiteDir, rel, src, meta) {
+    if (meta.flags.includes("CanBlockIsFalse")) return "agent";
+    if (UNSUPPORTED_DIRS.some((d) => rel.startsWith(d))) return "eval";
+    const feat = meta.features.find((f) => UNSUPPORTED_FEATURES.has(f));
+    if (feat) return feat;
+    const inc = meta.includes.find((h) => harnessNeedingHost(suiteDir).has(h));
+    if (inc) return `harness:${inc}`;
+    const body = stripFrontmatter(src);
+    if (NEEDS_COMPILER.test(body)) return "eval";
+    if (NEEDS_AGENT.test(body)) return "agent";
+    return null;
+}
+
 // ---------- harness assembly ----------
-function assembleSource(suiteDir, testPath, meta) {
-    const src = fs.readFileSync(testPath, "utf8");
+function assembleSource(suiteDir, src, meta) {
     if (meta.flags.includes("raw")) return { source: src, strict: false };
     const strict = meta.flags.includes("onlyStrict");
     const harness = ["assert.js", "sta.js"];
@@ -185,19 +242,21 @@ const firstLine = (s) =>
 
 async function runOne(cfg, testPath) {
     const rel = path.relative(cfg.suite, testPath);
-    const meta = parseFrontmatter(fs.readFileSync(testPath, "utf8"));
+    const src = fs.readFileSync(testPath, "utf8");
+    const meta = parseFrontmatter(src);
     const base = {
         test: rel,
         features: meta.features,
         flags: meta.flags,
         neg: meta.negative ? `${meta.negative.phase}:${meta.negative.type}` : null,
     };
-    if (meta.flags.includes("CanBlockIsFalse")) return { ...base, status: "skip-agent" };
+    const unsupported = unsupportedReason(cfg.suite, rel, src, meta);
+    if (unsupported) return { ...base, status: "skip-unsupported", needs: unsupported };
 
     const isModule = meta.flags.includes("module");
     const tmp = fs.mkdtempSync(path.join(cfg.tmpRoot, "t262-"));
     try {
-        const { source } = assembleSource(cfg.suite, testPath, meta);
+        const { source } = assembleSource(cfg.suite, src, meta);
         // module tests may import themselves by name — keep the original
         // basename for them
         const srcFile = path.join(tmp, isModule ? path.basename(testPath) : "test.js");
@@ -405,16 +464,26 @@ function cmdReport(opts) {
         .split("\n")
         .filter(Boolean)
         .map((l) => JSON.parse(l));
-    const failing = rows.filter((r) => r.status.startsWith("fail-") || r.status.endsWith("-timeout"));
+    // membership is tested per row per feature below — a Set, not the
+    // array, or this is quadratic at full-suite volume
+    const failing = new Set(rows.filter((r) => r.status.startsWith("fail-") || r.status.endsWith("-timeout")));
     const byStatus = {};
     for (const r of rows) byStatus[r.status] = (byStatus[r.status] || 0) + 1;
+
+    // the headline: pass rate over what was actually evaluated (skips are
+    // out-of-scope tests, not failures — see the AOT viability section)
+    const evaluated = rows.filter((r) => !r.status.startsWith("skip")).length;
+    const passed = byStatus.pass || 0;
+    const skipped = rows.length - evaluated;
+    const needs = new Map();
+    for (const r of rows) if (r.needs) needs.set(r.needs, (needs.get(r.needs) || 0) + 1);
 
     // per-feature failure counts — the prioritized feature list
     const featFail = new Map(), featTotal = new Map();
     for (const r of rows) {
         for (const f of r.features || []) {
             featTotal.set(f, (featTotal.get(f) || 0) + 1);
-            if (failing.includes(r)) featFail.set(f, (featFail.get(f) || 0) + 1);
+            if (failing.has(r)) featFail.set(f, (featFail.get(f) || 0) + 1);
         }
     }
     // per-area pass rates (top two path components)
@@ -439,7 +508,13 @@ function cmdReport(opts) {
 
     const lines = [];
     lines.push(`# test262 probe report`, "");
-    lines.push(`total: ${rows.length}`, "");
+    lines.push(`**pass ${passed}/${evaluated} (${((100 * passed) / evaluated).toFixed(1)}%)**`, "");
+    lines.push(`${rows.length} selected, ${skipped} skipped as out of scope for AOT`, "");
+    if (needs.size)
+        lines.push(
+            "skipped by need: " + [...needs.entries()].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(", "),
+            ""
+        );
     lines.push(`## By status`, "");
     for (const [k, v] of Object.entries(byStatus).sort((a, b) => b[1] - a[1])) lines.push(`- ${k}: ${v}`);
     lines.push("", `## Failures by feature (prioritized)`, "");
@@ -451,9 +526,57 @@ function cmdReport(opts) {
         lines.push(`| ${k} | ${a.pass} | ${a.total} | ${((100 * a.pass) / a.total).toFixed(1)}% |`);
     lines.push("", `## Top error signatures`, "");
     for (const [s, n] of [...sig.entries()].sort((a, b) => b[1] - a[1]).slice(0, 40)) lines.push(`- ${n}× \`${s}\``);
+    if (opts.baseline) lines.push("", ...checkBaseline(opts, { evaluated, passed }));
     const md = lines.join("\n") + "\n";
     if (opts.md) fs.writeFileSync(opts.md, md);
     else process.stdout.write(md);
+}
+
+// ---------- baseline ----------
+// The full-suite ratchet.  Expectations-per-test is the lane's contract
+// and does not scale to 45k rows, so the full run holds two numbers: how
+// many tests were evaluated (coverage must not shrink — a lost shard or
+// a selection mistake shows up here) and how many passed (conformance
+// must not go backwards).  `tolerance` absorbs the odd loaded-runner
+// timeout; raise it if CI proves noisy, and regenerate after real work
+// with --update-baseline.
+function checkBaseline(opts, { evaluated, passed }) {
+    const file = opts.baseline;
+    const now = { evaluated, pass: passed, tolerance: 0 };
+    if (opts["update-baseline"]) {
+        const prior = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
+        now.tolerance = prior.tolerance ?? 0;
+        fs.writeFileSync(file, JSON.stringify(now, null, 4) + "\n");
+        return [`## Baseline`, "", `wrote ${file}: ${JSON.stringify(now)}`];
+    }
+    if (!fs.existsSync(file)) {
+        return [
+            `## Baseline`,
+            "",
+            `no ${file} yet — nothing to compare against.  To start the ratchet,`,
+            "commit this:",
+            "",
+            "```json",
+            JSON.stringify(now, null, 4),
+            "```",
+        ];
+    }
+    const base = JSON.parse(fs.readFileSync(file, "utf8"));
+    const tol = base.tolerance ?? 0;
+    const out = [`## Baseline`, "", `baseline ${base.pass}/${base.evaluated} (tolerance ${tol})`, ""];
+    const fails = [];
+    if (evaluated < base.evaluated)
+        fails.push(`coverage shrank: evaluated ${evaluated} < baseline ${base.evaluated} — a shard or selection is missing tests`);
+    if (passed < base.pass - tol) fails.push(`conformance regressed: pass ${passed} < baseline ${base.pass} - ${tol}`);
+    for (const f of fails) {
+        console.error(f);
+        out.push(`- FAIL ${f}`);
+    }
+    if (fails.length) process.exitCode = 1;
+    else out.push(`- OK (pass ${passed - base.pass >= 0 ? "+" : ""}${passed - base.pass} vs baseline)`);
+    if (passed > base.pass)
+        out.push(`- ${passed - base.pass} more passing than the baseline — regenerate it with --update-baseline`);
+    return out;
 }
 
 const [cmd, ...rest] = process.argv.slice(2);

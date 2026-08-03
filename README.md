@@ -105,10 +105,11 @@ iterator helpers, `globalThis`, ...).
 
 Conformance is measured against
 [test262](https://github.com/tc39/test262): a curated CI lane passes
-~75%, with [docs/language-plan.md](docs/language-plan.md) tracking the
-remainder.  Out of scope for an ahead-of-time compiler: `eval` and
-`new Function` (no runtime code generation), and cross-realm host
-objects (`ShadowRealm`).  A few divergences from node are pinned on
+~77%, and the full suite runs sharded on every push and PR, with
+[docs/language-plan.md](docs/language-plan.md) tracking the remainder.
+Out of scope for an ahead-of-time compiler, and excluded from those
+rates: `eval` and `new Function` (no runtime code generation), dynamic
+`import()`, and cross-realm host objects (`ShadowRealm`).  A few divergences from node are pinned on
 purpose (Annex B block-function hoisting, `toLocaleString` ICU
 rounding).
 
