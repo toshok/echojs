@@ -1,28 +1,34 @@
 # The full test262 suite, sharded across parallel Linux runners.
 # Distinct from the curated lane in bootstrap.yml: the lane is a fast
 # macOS gate (a strided selection checked against expectations.txt);
-# this runs every language/ + built-ins/ + harness/ test and reports a
-# pass-rate summary — comprehensive coverage, report-only (it does not
-# block merges).  JS semantics don't vary by platform, so one Linux
+# this runs every language/ + built-ins/ + annexB/ + harness/ test that
+# an AOT engine could conceivably pass, and ratchets the result against
+# full-baseline.json.  JS semantics don't vary by platform, so one Linux
 # arch suffices, and Linux runners bill at 1x (the fan-out is cheap).
 #
-# One build job assembles the stage1 workroot and uploads it; N shard
-# jobs each run their slice against that same workroot (the compiler is
-# built once, not N times); a collect job concatenates the shard
-# results and posts the report to the run summary.
+# One build job assembles the stage1 workroot and the suite checkout and
+# uploads them; N shard jobs each run their slice against that same
+# workroot (the compiler is built once, not N times); a collect job
+# concatenates the shard results and posts the report to the run summary.
 name: test262-full
 
 on:
   push:
     branches: [main]
+    paths-ignore: ["docs/**", "**/*.md"]
   pull_request:
+    paths-ignore: ["docs/**", "**/*.md"]
   schedule:
     - cron: "0 8 * * *" # nightly, 08:00 UTC
   workflow_dispatch:
     inputs:
       shards:
         description: number of parallel shards
-        default: "8"
+        default: "12"
+      update-baseline:
+        description: rewrite full-baseline.json from this run (download it from the artifact)
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -49,12 +55,10 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential cmake libunwind-dev libuv1-dev
 
-      - name: Install llvm 22
-        run: |
-          curl -sSf https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh
-          chmod +x /tmp/llvm.sh
-          sudo /tmp/llvm.sh 22
-          echo "/usr/lib/llvm-22/bin" >> "$GITHUB_PATH"
+      # the one job that populates the toolchain cache the shards restore
+      - uses: ./.github/actions/setup-llvm
+        with:
+          save: "true"
 
       - uses: dtolnay/install-buck2@latest
 
@@ -77,17 +81,31 @@ jobs:
             --config llvm.prefix=/usr/lib/llvm-22
           tar -C "$RUNNER_TEMP/workroot" -czf workroot.tar.gz .
 
+      # fetched once here rather than on every shard: the checkout is
+      # ~25MB packed and the shards download it with the workroot
+      - name: checkout test262
+        run: |
+          git init -q "$RUNNER_TEMP/test262"
+          git -C "$RUNNER_TEMP/test262" fetch -q --depth 1 \
+            https://github.com/tc39/test262.git "$(cat test/test262/suite.sha)"
+          git -C "$RUNNER_TEMP/test262" checkout -q FETCH_HEAD
+          tar -C "$RUNNER_TEMP" --exclude .git -czf suite.tar.gz test262
+
       - uses: actions/upload-artifact@v4
         with:
-          name: test262-workroot
-          path: workroot.tar.gz
+          name: test262-inputs
+          path: |
+            workroot.tar.gz
+            suite.tar.gz
           if-no-files-found: error
+          retention-days: 1
+          compression-level: 0 # both are already gzipped
 
       # publish the shard count (N) and the matrix list ([0..N-1]) so
       # the shard job's --shard K/N and its matrix agree
       - id: cfg
         run: |
-          N="${{ github.event.inputs.shards || '8' }}"
+          N="${{ github.event.inputs.shards || '12' }}"
           echo "shards=$N" >> "$GITHUB_OUTPUT"
           echo "list=$(node -e 'console.log(JSON.stringify([...Array(+process.argv[1]).keys()]))' "$N")" >> "$GITHUB_OUTPUT"
 
@@ -95,26 +113,26 @@ jobs:
     name: shard ${{ matrix.shard }}
     needs: build
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
         shard: ${{ fromJSON(needs.build.outputs.shard-list) }}
     steps:
-      # the runner scripts + the pinned suite SHA (no submodules — the
-      # compiler is prebuilt in the workroot artifact)
+      # the runner scripts only — the compiler is prebuilt in the
+      # artifact, so no submodules
       - uses: actions/checkout@v4
 
       # the compiler shells out to opt/llc/clang++ and links compiled
-      # programs against libuv/libunwind
-      - name: Install packages + llvm 22
+      # programs against libuv/libunwind (build-essential for the system
+      # headers and linker clang++ drives — present on the image, named
+      # here so the job doesn't lean on that)
+      - name: Install packages
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential libunwind-dev libuv1-dev
-          curl -sSf https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh
-          chmod +x /tmp/llvm.sh
-          sudo /tmp/llvm.sh 22
-          echo "/usr/lib/llvm-22/bin" >> "$GITHUB_PATH"
+
+      - uses: ./.github/actions/setup-llvm
 
       - uses: actions/setup-node@v4
         with:
@@ -122,19 +140,13 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: test262-workroot
+          name: test262-inputs
 
-      - name: unpack workroot
+      - name: unpack workroot + suite
         run: |
           mkdir -p "$RUNNER_TEMP/workroot"
           tar -C "$RUNNER_TEMP/workroot" -xzf workroot.tar.gz
-
-      - name: checkout test262
-        run: |
-          git init -q "$RUNNER_TEMP/test262"
-          git -C "$RUNNER_TEMP/test262" fetch -q --depth 1 \
-            https://github.com/tc39/test262.git "$(cat test/test262/suite.sha)"
-          git -C "$RUNNER_TEMP/test262" checkout -q FETCH_HEAD
+          tar -C "$RUNNER_TEMP" -xzf suite.tar.gz
 
       - name: run shard
         run: |
@@ -151,11 +163,15 @@ jobs:
           name: test262-shard-${{ matrix.shard }}
           path: shard-${{ matrix.shard }}.jsonl
           if-no-files-found: error
+          retention-days: 3
 
   report:
     name: collect + report
-    needs: shard
-    if: always() && needs.shard.result != 'cancelled'
+    needs: [build, shard]
+    # runs on a failed shard too — a missing slice is exactly what the
+    # completeness check below has to catch — but not when the shards
+    # never ran or were cancelled, where there is nothing to collect
+    if: always() && (needs.shard.result == 'success' || needs.shard.result == 'failure')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -171,16 +187,39 @@ jobs:
           merge-multiple: true
           path: shards
 
+      # a lost shard would otherwise produce a perfectly plausible pass
+      # rate over a fraction of the suite
+      - name: check every shard reported
+        run: |
+          have=$(find shards -name '*.jsonl' 2>/dev/null | wc -l)
+          want=${{ needs.build.outputs.shards }}
+          if [ "$have" -ne "$want" ]; then
+            echo "only $have of $want shard results present — the report would undercount" \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: collect
+        run: cat shards/*.jsonl > all.jsonl
+
       - name: report
         run: |
-          cat shards/*.jsonl > all.jsonl
-          node test/test262/run-test262.mjs report --in all.jsonl --md report.md
+          UPDATE=""
+          if [ "${{ github.event.inputs.update-baseline }}" = "true" ]; then UPDATE="--update-baseline"; fi
+          set +e
+          node test/test262/run-test262.mjs report --in all.jsonl --md report.md \
+            --baseline test/test262/full-baseline.json $UPDATE
+          rc=$?
+          set -e
           cat report.md >> "$GITHUB_STEP_SUMMARY"
+          exit $rc
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: test262-full-results
           path: |
             all.jsonl
             report.md
-          if-no-files-found: error
+            test/test262/full-baseline.json
+          if-no-files-found: warn # a failed collect leaves nothing to upload
