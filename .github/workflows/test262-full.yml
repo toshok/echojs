@@ -1,12 +1,13 @@
 # The whole test262 suite, sharded across parallel runners, as a
-# reusable workflow.  It has no triggers of its own: ci.yml and
-# release.yml call it after the bootstrap jobs, so it runs inside their
-# run and can download the artifact one of them uploaded.
+# reusable workflow.  It has no triggers of its own: bootstrap.yml
+# calls it on the platform whose test262-full input is set, once that
+# platform's build finishes, so it runs inside the same workflow run
+# and can download the artifact that build uploaded.
 #
-# Nothing here builds the compiler.  The bootstrap job invoked with
-# upload-test262-workroot uploads the stage1 workroot it already built
-# plus the pinned suite checkout; every shard extracts that archive and
-# runs its slice of the selection.  The collect job concatenates the
+# Nothing here builds the compiler.  That bootstrap job uploads the
+# stage1 workroot it already built plus the pinned suite checkout;
+# every shard extracts that archive and runs its slice of the
+# selection.  The collect job concatenates the
 # slices, refuses to report unless every shard came back, and ratchets
 # the result against full-baseline.json.
 #

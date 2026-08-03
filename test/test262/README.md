@@ -36,14 +36,15 @@ diff — the shrinking file is the conformance ratchet.  Bumping
 ## The full suite
 
 `test262-full.yml` is a reusable workflow with no triggers of its own:
-`ci.yml` and `release.yml` call it after their per-platform
-`bootstrap.yml` jobs, so it runs inside their run and nothing builds
-the compiler twice.  The Linux x86_64 build uploads its stage1
-workroot and the suite checkout, the shard matrix extracts that
-archive and runs `--shard K/N` slices of it, and the collect job
-concatenates the results, checks that every shard reported, and posts
-the report to the run summary.  The shard count lives in `SHARDS` at
-the top of that file, alongside the matrix list it has to agree with.
+`bootstrap.yml` calls it on the platform whose `test262-full` input is
+set — Linux x86_64 — once that platform's build is done, so it runs
+inside the same workflow run, waits on no other platform, and nothing
+builds the compiler twice.  That build uploads its stage1 workroot and
+the suite checkout, the shard matrix extracts that archive and runs
+`--shard K/N` slices of it, and the collect job concatenates the
+results, checks that every shard reported, and posts the report to the
+run summary.  The shard count lives in `SHARDS` at the top of that
+file, alongside the matrix list it has to agree with.
 
 The ratchet is `full-baseline.json` — `{evaluated, pass, tolerance}`.
 Per-test expectations are the lane's contract and don't scale to 45k

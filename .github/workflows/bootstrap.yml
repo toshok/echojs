@@ -17,10 +17,12 @@
 # smokes, uploading an echojs-dist-<platform> artifact.
 #
 # What varies between platforms is either the OS (brew vs apt, and the
-# homebrew smoke that only exists on macOS) or an input.  test262 is an
-# input: one platform runs the curated lane in-job, and one uploads its
-# stage1 workroot for the sharded full suite to run against — see
-# test262-full.yml.
+# homebrew smoke that only exists on macOS) or an input.  test262
+# branches here: a platform runs the curated lane as a step, or hands
+# its stage1 workroot to the sharded full suite (test262-full.yml,
+# called below), or neither.  The sharded run is a job rather than a
+# step because it needs runners of its own, and it hangs off THIS
+# platform's build — no other platform's failure holds it up.
 name: bootstrap
 
 on:
@@ -46,8 +48,12 @@ on:
         description: run the curated test262 lane against expectations.txt
         type: boolean
         default: false
-      upload-test262-workroot:
-        description: upload the stage1 workroot + suite for the sharded full run
+      test262-full:
+        description: run the whole suite, sharded, against this platform's build
+        type: boolean
+        default: false
+      update-test262-baseline:
+        description: rewrite full-baseline.json from the sharded run
         type: boolean
         default: false
 
@@ -140,12 +146,12 @@ jobs:
           git -C "$RUNNER_TEMP/test262" checkout -q FETCH_HEAD
           ./test/test262/lane.sh --suite "$RUNNER_TEMP/test262" --jobs 6
 
-      # what the test262-full shards run against: the stage1 workroot
+      # what the shards below run against: the stage1 workroot
       # (srcdir-tree + lib/generated + ./ejs, already built above — this
       # only copies buck's outputs) and the pinned suite, fetched once
       # here instead of on every shard
       - name: test262 workroot + suite
-        if: inputs.upload-test262-workroot
+        if: inputs.test262-full
         run: |
           ./test/test262/assemble-workroot.sh "$RUNNER_TEMP/workroot" \
             ${{ inputs.buck-config }}
@@ -157,7 +163,7 @@ jobs:
           tar -C "$RUNNER_TEMP" --exclude .git -czf suite.tar.gz test262
 
       - uses: actions/upload-artifact@v4
-        if: inputs.upload-test262-workroot
+        if: inputs.test262-full
         with:
           name: test262-inputs
           path: |
@@ -230,3 +236,13 @@ jobs:
             echo "=== $f ==="
             tail -60 "$f"
           done || true
+
+  # the whole suite, sharded across its own runners, against the
+  # workroot the build just uploaded.  needs only this platform's
+  # build, so a red arch elsewhere neither holds it up nor skips it.
+  test262-full:
+    needs: bootstrap
+    if: inputs.test262-full
+    uses: ./.github/workflows/test262-full.yml
+    with:
+      update-baseline: ${{ inputs.update-test262-baseline }}

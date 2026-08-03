@@ -4,11 +4,11 @@
 # makes the same calls on a version tag — one definition, several
 # callers, no second workflow racing this one.
 #
-# test262 runs both ways: the curated lane in-job on macOS, against
-# expectations.txt, and the whole suite sharded in test262-full.yml,
-# against the workroot the x86_64 build uploads.  The sharded run waits
-# on every platform — a red matrix is not a run worth spending a dozen
-# runners to measure conformance on.
+# test262 runs both ways, and which way is a per-platform input to
+# bootstrap.yml: the curated lane in-job on macOS, against
+# expectations.txt, and the whole suite sharded off the x86_64 build,
+# which bootstrap.yml dispatches itself so it waits on that build and
+# nothing else.
 name: CI
 
 on:
@@ -51,10 +51,5 @@ jobs:
       runner: ubuntu-24.04
       buck-config: --config llvm.prefix=/usr/lib/llvm-22
       # the build the sharded suite runs against
-      upload-test262-workroot: true
-
-  test262-full:
-    needs: [macos-arm64, linux-arm64, linux-x86_64]
-    uses: ./.github/workflows/test262-full.yml
-    with:
-      update-baseline: ${{ inputs.update-test262-baseline || false }}
+      test262-full: true
+      update-test262-baseline: ${{ inputs.update-test262-baseline || false }}
