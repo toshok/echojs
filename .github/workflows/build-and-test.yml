@@ -1,8 +1,8 @@
 # The buck2 bootstrap for ONE platform, as a reusable workflow.  The
-# platform list lives in the callers — ci.yml on every push/PR,
-# release.yml on a version tag — which invoke this once per platform,
-# as separate jobs rather than a matrix so each shows up under its own
-# name and can be depended on individually.
+# platform list lives in the callers: ci.yml invokes this from a matrix
+# on every push/PR, release.yml as explicit per-platform jobs on a
+# version tag (its smoke jobs depend on individual platforms, which a
+# matrix leg can't offer).
 #
 # Sequential targets; buck2 shares artifacts between them, so the stage
 # ladder (stage1 builds feed stage2/3) costs one traversal:
@@ -23,7 +23,7 @@
 # called below), or neither.  The sharded run is a job rather than a
 # step because it needs runners of its own, and it hangs off THIS
 # platform's build — no other platform's failure holds it up.
-name: bootstrap
+name: build-and-test
 
 on:
   workflow_call:
@@ -59,7 +59,8 @@ on:
 
 jobs:
   bootstrap:
-    # the caller's job id supplies the platform half of the check name
+    # the caller supplies the platform half of the check name (its job
+    # name or matrix leg); this half names the stage ladder
     name: bootstrap
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 150

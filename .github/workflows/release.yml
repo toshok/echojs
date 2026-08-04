@@ -4,11 +4,12 @@
 #
 #   version-check   the tag, package.json, the npm wrapper, and the
 #                   CHANGELOG all agree
-#   bootstrap       the SAME full matrix CI runs (bootstrap.yml):
-#                   stage ladder + dist tarballs + package smokes on
-#                   all three platforms, plus the test262 conformance
-#                   run — a regression against the committed baseline
-#                   reddens the matrix and holds the release
+#   build-and-test  the SAME per-platform builds CI runs
+#                   (build-and-test.yml): stage ladder + dist tarballs
+#                   + package smokes on all three platforms, plus the
+#                   test262 conformance run — a regression against the
+#                   committed baseline reddens the matrix and holds
+#                   the release
 #   publish         a DRAFT GitHub release holding the three tarballs,
 #                   the generated homebrew formula (hosted urls), and
 #                   the npm wrapper tgz; changelog section = notes.
@@ -61,10 +62,12 @@ jobs:
             exit 1
           fi
 
-  # the same per-platform calls ci.yml makes, with the same inputs
+  # the same per-platform builds ci.yml runs, but as explicit jobs
+  # rather than ci.yml's matrix: smoke-linux/smoke-macos below need
+  # individual platforms, and needs can't name a matrix leg
   macos-arm64:
     needs: version-check
-    uses: ./.github/workflows/bootstrap.yml
+    uses: ./.github/workflows/build-and-test.yml
     with:
       platform: macos-arm64
       runner: macos-15
@@ -73,7 +76,7 @@ jobs:
 
   linux-arm64:
     needs: version-check
-    uses: ./.github/workflows/bootstrap.yml
+    uses: ./.github/workflows/build-and-test.yml
     with:
       platform: linux-arm64
       runner: ubuntu-24.04-arm
@@ -81,7 +84,7 @@ jobs:
 
   linux-x86_64:
     needs: version-check
-    uses: ./.github/workflows/bootstrap.yml
+    uses: ./.github/workflows/build-and-test.yml
     with:
       platform: linux-x86_64
       runner: ubuntu-24.04

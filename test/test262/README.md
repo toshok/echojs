@@ -7,7 +7,7 @@ classifying every outcome.  Three uses:
   exhaustiveness check behind the payoff list.
 - **CI lane**: `lane.sh` — a small fixed selection against the pinned
   suite SHA (`suite.sha`), checked against `expectations.txt`.  CI
-  (the macOS bootstrap job) fails on any regression (expected-pass
+  (the macOS build-and-test job) fails on any regression (expected-pass
   test failing) or stale expectation (expected-fail test passing).
 - **Full suite**: `.github/workflows/test262-full.yml` — every
   in-scope test, sharded across parallel Linux runners on each push
@@ -36,7 +36,7 @@ diff — the shrinking file is the conformance ratchet.  Bumping
 ## The full suite
 
 `test262-full.yml` is a reusable workflow with no triggers of its own:
-`bootstrap.yml` calls it on the platform whose `test262-full` input is
+`build-and-test.yml` calls it on the platform whose `test262-full` input is
 set — Linux x86_64 — once that platform's build is done, so it runs
 inside the same workflow run, waits on no other platform, and nothing
 builds the compiler twice.  That build uploads its stage1 workroot and

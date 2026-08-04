@@ -1,14 +1,15 @@
 # EchoJS CI: the root of every build, and the place the platform list
-# lives.  Each platform is one call of bootstrap.yml (the reusable
-# per-platform build) so it reports under its own name; release.yml
-# makes the same calls on a version tag — one definition, several
-# callers, no second workflow racing this one.
+# lives.  One matrixed call of build-and-test.yml (the reusable
+# per-platform build) — legs are independent (fail-fast off), each
+# reports under its platform name, and per-platform behavior is data in
+# the matrix entry rather than a separate job.  release.yml runs the
+# same builds on a version tag, but as explicit jobs: its smoke jobs
+# depend on individual platforms, and needs can't name a matrix leg.
 #
-# test262 runs both ways, and which way is a per-platform input to
-# bootstrap.yml: the curated lane in-job on macOS, against
-# expectations.txt, and the whole suite sharded off the x86_64 build,
-# which bootstrap.yml dispatches itself so it waits on that build and
-# nothing else.
+# test262 runs both ways, and which way is a per-platform input: the
+# curated lane in-job on macOS, against expectations.txt, and the whole
+# suite sharded off the x86_64 build, which build-and-test.yml
+# dispatches itself so it waits on that build and nothing else.
 name: CI
 
 on:
@@ -27,29 +28,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  macos-arm64:
-    uses: ./.github/workflows/bootstrap.yml
+  build-and-test:
+    name: ${{ matrix.platform }}
+    strategy:
+      # a red platform is information; don't let it cancel the others
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-arm64
+            runner: macos-15
+            # platform-independent, so exactly one platform pays for it
+            typecheck: true
+            # expectations.txt is generated on this platform
+            test262-lane: true
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
+            buck-config: --config llvm.prefix=/usr/lib/llvm-22
+          - platform: linux-x86_64
+            runner: ubuntu-24.04
+            buck-config: --config llvm.prefix=/usr/lib/llvm-22
+            # the build the sharded suite runs against
+            test262-full: true
+    uses: ./.github/workflows/build-and-test.yml
     with:
-      platform: macos-arm64
-      runner: macos-15
-      # platform-independent, so exactly one platform pays for it
-      typecheck: true
-      # expectations.txt is generated on this platform
-      test262-lane: true
-
-  linux-arm64:
-    uses: ./.github/workflows/bootstrap.yml
-    with:
-      platform: linux-arm64
-      runner: ubuntu-24.04-arm
-      buck-config: --config llvm.prefix=/usr/lib/llvm-22
-
-  linux-x86_64:
-    uses: ./.github/workflows/bootstrap.yml
-    with:
-      platform: linux-x86_64
-      runner: ubuntu-24.04
-      buck-config: --config llvm.prefix=/usr/lib/llvm-22
-      # the build the sharded suite runs against
-      test262-full: true
-      update-test262-baseline: ${{ inputs.update-test262-baseline || false }}
+      platform: ${{ matrix.platform }}
+      runner: ${{ matrix.runner }}
+      buck-config: ${{ matrix.buck-config || '' }}
+      typecheck: ${{ matrix.typecheck || false }}
+      test262-lane: ${{ matrix.test262-lane || false }}
+      test262-full: ${{ matrix.test262-full || false }}
+      update-test262-baseline: ${{ (matrix.test262-full && inputs.update-test262-baseline) || false }}
