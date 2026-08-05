@@ -163,7 +163,14 @@ jobs:
           git -C "$RUNNER_TEMP/test262" fetch -q --depth 1 \
             https://github.com/tc39/test262.git "$(cat test/test262/suite.sha)"
           git -C "$RUNNER_TEMP/test262" checkout -q FETCH_HEAD
+          # the workroot is assembled here rather than left to lane.sh's
+          # no---ejs fallback so buck-config reaches buck2: lane.sh
+          # assembles configless, which on Linux is a different (broken)
+          # configuration than the matrix above built
+          ./test/test262/assemble-workroot.sh "$RUNNER_TEMP/workroot" \
+            ${{ inputs.buck-config }}
           ./test/test262/lane.sh --suite "$RUNNER_TEMP/test262" --jobs 6 \
+            --ejs "$RUNNER_TEMP/workroot" \
             --expectations "test/test262/${{ inputs.lane-expectations }}" \
             ${{ inputs.update-lane-expectations && '--update' || '' }}
 

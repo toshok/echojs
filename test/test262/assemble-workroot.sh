@@ -12,7 +12,19 @@ DEST="$1"; shift
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 
-OUTS="$(cd "$REPO" && buck2 build "$@" //:srcdir-tree //lib:generated //:ejs.exe.stage1 --show-full-output 2>/dev/null)"
+# buck2's progress spam goes to stderr, so it's captured rather than
+# inherited — but on failure it's the only diagnostic there is, so it
+# gets replayed instead of swallowed
+ERRLOG="$(mktemp "${TMPDIR:-/tmp}/t262-buck2-XXXXXX.log")"
+STATUS=0
+OUTS="$(cd "$REPO" && buck2 build "$@" //:srcdir-tree //lib:generated //:ejs.exe.stage1 --show-full-output 2>"$ERRLOG")" || STATUS=$?
+if [ "$STATUS" -ne 0 ]; then
+    cat "$ERRLOG" >&2
+    rm -f "$ERRLOG"
+    echo "assemble-workroot: buck2 build failed (exit $STATUS)" >&2
+    exit "$STATUS"
+fi
+rm -f "$ERRLOG"
 TREE="$(echo "$OUTS" | awk '$1 == "root//:srcdir-tree" {print $2}')"
 GENERATED="$(echo "$OUTS" | awk '$1 == "root//lib:generated" {print $2}')"
 STAGE_EXE="$(echo "$OUTS" | awk '$1 == "root//:ejs.exe.stage1" {print $2}')"
