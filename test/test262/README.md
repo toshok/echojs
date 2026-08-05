@@ -59,12 +59,15 @@ file, alongside the matrix list it has to agree with.
 The ratchet is `full-baseline.json` — `{evaluated, pass, tolerance}`.
 Per-test expectations are the lane's contract and don't scale to 45k
 rows, so the full run holds two numbers instead: coverage must not
-shrink and the pass count must not drop by more than `tolerance`.  To
-move it, run CI with the `update-test262-baseline` input, download the
-`test262-full-results` artifact, and commit the regenerated file.
-Until that file exists the check no-ops, so the ratchet only gets
-teeth when you commit one — after which a regression reddens CI, and
-because `release.yml` runs the same matrix, blocks a release.
+shrink and the pass count must not drop by more than `tolerance`.
+When a run beats the committed floor, the report rewrites the file
+unprompted and says so — every improving run's
+`test262-full-results` artifact carries a ready-to-commit baseline,
+and committing it is the (deliberately manual) act that raises the
+floor.  Lowering it — accepting a regression, e.g. after a scope
+change — requires running CI with the `update-test262-baseline`
+input.  A regression without that reddens CI, and because
+`release.yml` runs the same matrix, blocks a release.
 
 The baseline is a Linux x86_64 number, like the lane expectations
 files it sits alongside: regenerate each on the platform that checks

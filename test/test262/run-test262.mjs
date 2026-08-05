@@ -569,7 +569,7 @@ function cmdReport(opts) {
 // with --update-baseline.
 function checkBaseline(opts, { evaluated, passed }) {
     const file = opts.baseline;
-    const now = { evaluated, pass: passed, tolerance: 0 };
+    const now = { evaluated, pass: passed, tolerance: 0 }; // tolerance carried from the prior file below
     if (opts["update-baseline"]) {
         const prior = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
         now.tolerance = prior.tolerance ?? 0;
@@ -590,6 +590,7 @@ function checkBaseline(opts, { evaluated, passed }) {
     }
     const base = JSON.parse(fs.readFileSync(file, "utf8"));
     const tol = base.tolerance ?? 0;
+    now.tolerance = tol;
     const out = [`## Baseline`, "", `baseline ${base.pass}/${base.evaluated} (tolerance ${tol})`, ""];
     const fails = [];
     if (evaluated < base.evaluated)
@@ -601,8 +602,14 @@ function checkBaseline(opts, { evaluated, passed }) {
     }
     if (fails.length) process.exitCode = 1;
     else out.push(`- OK (pass ${passed - base.pass >= 0 ? "+" : ""}${passed - base.pass} vs baseline)`);
-    if (passed > base.pass)
-        out.push(`- ${passed - base.pass} more passing than the baseline — regenerate it with --update-baseline`);
+    // an improvement rewrites the file unprompted: raising the floor is
+    // what the ratchet is for, and the caller's artifact then always
+    // carries a ready-to-commit baseline.  Committing it stays a human
+    // act, and LOWERING the floor still requires --update-baseline.
+    if (!fails.length && (passed > base.pass || evaluated > base.evaluated)) {
+        fs.writeFileSync(file, JSON.stringify(now, null, 4) + "\n");
+        out.push(`- improved: wrote ${file} (${JSON.stringify(now)}) — commit it to raise the floor`);
+    }
     return out;
 }
 
