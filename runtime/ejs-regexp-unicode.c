@@ -782,12 +782,20 @@ static EJSBool v_class_set (VParse *vp, ClassSet *out) {
  * frees, or NULL with *err set. */
 jschar*
 _ejs_regexp_translate_pattern (const jschar *chars, uint32_t len, EJSBool unicode,
-                               EJSBool unicode_sets, uint32_t *out_len, const char **err)
+                               EJSBool unicode_sets, EJSBool dot_all,
+                               uint32_t *out_len, const char **err)
 {
     PatBuf out = { NULL, 0, 0 };
     EJSBool in_class = EJS_FALSE;
     EJSBool property_mode = unicode || unicode_sets;
     *err = NULL;
+
+    /* effective dot-matches-all at the current position: the /s flag,
+     * toggled by inline modifier groups ((?s:...), (?-s:...)).  One
+     * entry per open group so ')' restores the right state. */
+    EJSBool dot_stack[64];
+    uint32_t dot_depth = 0;
+    EJSBool dot_now = dot_all;
 
     for (uint32_t i = 0; i < len; ) {
         jschar c = chars[i];
@@ -811,6 +819,50 @@ _ejs_regexp_translate_pattern (const jschar *chars, uint32_t len, EJSBool unicod
         if (c != '\\') {
             if (c == '[' && !in_class) in_class = EJS_TRUE;
             else if (c == ']' && in_class) in_class = EJS_FALSE;
+            else if (c == '(' && !in_class) {
+                /* track group nesting for the inline-s state; a
+                 * modifier group ((?ims-ims: ...) toggles it for its
+                 * extent.  pcre applies the same semantics to any `.`
+                 * we leave bare, so tracking alone keeps us aligned. */
+                EJSBool entered = dot_now;
+                if (i + 1 < len && chars[i+1] == '?') {
+                    uint32_t j = i + 2;
+                    EJSBool removing = EJS_FALSE, adds = EJS_FALSE, removes = EJS_FALSE, wellformed = EJS_FALSE;
+                    for (; j < len; j++) {
+                        jschar m = chars[j];
+                        if (m == ':') { wellformed = EJS_TRUE; break; }
+                        if (m == '-' && !removing) { removing = EJS_TRUE; continue; }
+                        if (m == 'i' || m == 'm' || m == 's') {
+                            if (m == 's') { if (removing) removes = EJS_TRUE; else adds = EJS_TRUE; }
+                            continue;
+                        }
+                        break; /* (?=, (?!, (?<... — not a modifier group */
+                    }
+                    if (wellformed) {
+                        if (adds) entered = EJS_TRUE;
+                        if (removes) entered = EJS_FALSE;
+                    }
+                }
+                if (dot_depth < sizeof(dot_stack)/sizeof(dot_stack[0]))
+                    dot_stack[dot_depth] = dot_now;
+                dot_depth++;
+                dot_now = entered;
+            }
+            else if (c == ')' && !in_class) {
+                if (dot_depth > 0) {
+                    dot_depth--;
+                    if (dot_depth < sizeof(dot_stack)/sizeof(dot_stack[0]))
+                        dot_now = dot_stack[dot_depth];
+                }
+            }
+            else if (c == '.' && !in_class && !dot_now) {
+                // JS `.` excludes all four LineTerminators; pcre's
+                // excludes only \n.  (Under /s PCRE_DOTALL matches
+                // everything, where the engines agree.)
+                if (!buf_puts(&out, "[^\\u000A\\u000D\\u2028\\u2029]")) goto oom;
+                i++;
+                continue;
+            }
             if (!buf_putc(&out, c)) goto oom;
             i++;
             continue;

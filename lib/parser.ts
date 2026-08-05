@@ -262,9 +262,19 @@ export function parse(source: string, options?: ParseOptions): Program {
         });
     }
 
+    const sourceType = options?.sourceType ?? "script";
     const ast = acorn.parse(source, {
         ecmaVersion: "latest",
-        sourceType: options?.sourceType ?? "script",
+        sourceType,
+        // script-goal compiles keep module SYNTAX (the tester's harness
+        // wrappers import their spec; TLA works either way) while the
+        // sloppy parse admits what strict-by-module rejects (`yield` as
+        // an identifier, and friends) — --script has always meant
+        // script SEMANTICS, not a syntax subset.  Module parses must
+        // NOT get the option: it would also legalize `export` in
+        // nested positions the module grammar forbids.
+        allowImportExportEverywhere: sourceType === "script",
+        allowAwaitOutsideFunction: sourceType === "script",
         locations: true,
     });
     adaptTree(ast);

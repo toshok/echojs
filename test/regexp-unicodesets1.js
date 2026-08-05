@@ -50,3 +50,19 @@ for (const [pat, flags] of [
         console.log(e instanceof SyntaxError);
     }
 }
+
+// riders: dotAll, hasIndices (RegExp.escape is ES2025 — newer than the
+// baseline host, covered by test262 instead)
+console.log(/a.b/s.test("a\nb"));
+console.log(/a.b/.test("a\nb"));
+console.log(/a.b/.test("a b"));
+console.log(/a/s.dotAll, /a/.dotAll);
+console.log(JSON.stringify(/b(c)/d.exec("abcd").indices));
+console.log(JSON.stringify(/(x)?b/d.exec("ab").indices));
+console.log(/b/.exec("ab").indices === undefined);
+console.log(/a/d.hasIndices, /a/.hasIndices);
+console.log(/a/dgimsvy.flags);
+
+// sloppy scripts may use yield as an identifier
+var yield = 6;
+console.log(yield + 1);

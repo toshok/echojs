@@ -200,6 +200,8 @@ RegExpInitialize(ejsval obj, ejsval pattern, ejsval flags) {
         else if (chars[i] == 'y' && !re->sticky)     { re->sticky     = EJS_TRUE; continue; }
         else if (chars[i] == 'u' && !re->unicode)    { re->unicode    = EJS_TRUE; continue; }
         else if (chars[i] == 'v' && !re->unicodeSets) { re->unicodeSets = EJS_TRUE; continue; }
+        else if (chars[i] == 's' && !re->dotAll)     { re->dotAll     = EJS_TRUE; continue; }
+        else if (chars[i] == 'd' && !re->hasIndices) { re->hasIndices = EJS_TRUE; continue; }
         _ejs_throw_nativeerror_utf8 (EJS_SYNTAX_ERROR, "Invalid flag supplied to RegExp constructor");
     }
     if (re->unicode && re->unicodeSets)
@@ -233,7 +235,7 @@ RegExpInitialize(ejsval obj, ejsval pattern, ejsval flags) {
     const char *xlate_error;
     uint32_t xlate_len;
     jschar *xlated = _ejs_regexp_translate_pattern(chars, flat_pattern->length, re->unicode,
-                                                   re->unicodeSets, &xlate_len, &xlate_error);
+                                                   re->unicodeSets, re->dotAll, &xlate_len, &xlate_error);
     if (xlated == NULL)
         _ejs_throw_nativeerror_utf8 (EJS_SYNTAX_ERROR, xlate_error);
 
@@ -250,6 +252,7 @@ RegExpInitialize(ejsval obj, ejsval pattern, ejsval flags) {
     // rejects as invalid code points.
     if (re->unicode || re->unicodeSets) pcre_options |= PCRE_UTF16 | PCRE_NO_UTF16_CHECK;
     if (re->ignoreCase) pcre_options |= PCRE_CASELESS;
+    if (re->dotAll)     pcre_options |= PCRE_DOTALL;
     if (re->multiline)  pcre_options |= PCRE_MULTILINE;
     re->compiled_pattern = pcre16_compile(xlated,
                                           pcre_options,
@@ -447,6 +450,11 @@ RegExpBuiltinExec(ejsval R, ejsval S)
         }
     }
 #else
+    // pcre only writes ovec pairs for groups up to the highest one that
+    // participated; the rest keep whatever was there.  Pre-fill with -1
+    // (pcre's own unset marker) so trailing non-participating groups
+    // read as unset rather than as garbage.
+    for (uint32_t vi = 0; vi < sizeof(ovec)/sizeof(ovec[0]); vi++) ovec[vi] = -1;
     r = pcre16_exec(matcher, &extra, subject_chars, length, i,
                     PCRE_NO_UTF16_CHECK, ovec, sizeof(ovec)/sizeof(ovec[0]));
     if (r == PCRE_ERROR_NOMATCH) {
@@ -476,7 +484,12 @@ RegExpBuiltinExec(ejsval R, ejsval S)
         Put(R, _ejs_atom_lastIndex, NUMBER_TO_EJSVAL(e), EJS_TRUE);
     }
     // 20. Let n be the length of r's captures List. (This is the same value as 21.2.2.1's NcapturingParens.)
-    int n = r - 1;
+    // NcapturingParens comes from the compiled pattern: pcre16_exec's
+    // return counts only through the highest PARTICIPATING group, so
+    // /(a)(x)?/ matching "a" would otherwise lose the trailing capture
+    // slot entirely instead of reporting it undefined.
+    int n = 0;
+    pcre16_fullinfo((pcre16*)re->compiled_pattern, NULL, PCRE_INFO_CAPTURECOUNT, &n);
 
     // 21. Let A be the result of the abstract operation ArrayCreate(n + 1).
     ejsval A = _ejs_array_new(n+1, EJS_FALSE);
@@ -498,7 +511,9 @@ RegExpBuiltinExec(ejsval R, ejsval S)
         ejsval capturedValue;
 
         // b. If captureI is undefined, then let capturedValue be undefined.
-        if (ovec[i*2] == ovec[i*2+1]) {
+        // (unset groups are -1/-1 after the pre-fill; empty matches are
+        // start==end too and the empty substring is the same value)
+        if (ovec[i*2] < 0 || ovec[i*2] == ovec[i*2+1]) {
             capturedValue = _ejs_undefined;
         }
         else {
@@ -512,6 +527,30 @@ RegExpBuiltinExec(ejsval R, ejsval S)
         }
         // e. Perform CreateDataProperty(A, ToString(i) , capturedValue).
         EJS_DENSE_ARRAY_ELEMENTS(A)[i] = capturedValue;
+    }
+    // 30. (d flag) MakeMatchIndicesIndexPairArray: indices[i] is the
+    // [start, end] pair of capture i (undefined where the group didn't
+    // participate — pcre reports those as -1).  groups is undefined
+    // until named groups exist.
+    if (re->hasIndices) {
+        ejsval indices = _ejs_array_new(n+1, EJS_FALSE);
+        for (int i = 0; i <= n; i ++) {
+            if (i > 0 && ovec[i*2] < 0) {
+                EJS_DENSE_ARRAY_ELEMENTS(indices)[i] = _ejs_undefined;
+                continue;
+            }
+            ejsval pair = _ejs_array_new(2, EJS_FALSE);
+            EJS_DENSE_ARRAY_ELEMENTS(pair)[0] = NUMBER_TO_EJSVAL(ovec[i*2]);
+            EJS_DENSE_ARRAY_ELEMENTS(pair)[1] = NUMBER_TO_EJSVAL(ovec[i*2+1]);
+            EJS_DENSE_ARRAY_ELEMENTS(indices)[i] = pair;
+        }
+        // CreateDataProperty, not Set — a setter planted on
+        // Array.prototype.indices must not observe this
+        uint32_t data_prop = EJS_PROP_FLAGS_WRITABLE | EJS_PROP_FLAGS_ENUMERABLE | EJS_PROP_FLAGS_CONFIGURABLE |
+                             EJS_PROP_FLAGS_WRITABLE_SET | EJS_PROP_FLAGS_ENUMERABLE_SET | EJS_PROP_FLAGS_CONFIGURABLE_SET |
+                             EJS_PROP_FLAGS_VALUE_SET;
+        _ejs_object_define_value_property (indices, _ejs_atom_groups, _ejs_undefined, data_prop);
+        _ejs_object_define_value_property (A, _ejs_atom_indices, indices, data_prop);
     }
     // 30. Return A.
     return A;
@@ -642,6 +681,16 @@ static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_unicodeSets) {
     return BOOLEAN_TO_EJSVAL(re->unicodeSets);
 }
 
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_dotAll) {
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
+    return BOOLEAN_TO_EJSVAL(re->dotAll);
+}
+
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_hasIndices) {
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
+    return BOOLEAN_TO_EJSVAL(re->hasIndices);
+}
+
 static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_source) {
     EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
     return re->pattern;
@@ -658,17 +707,16 @@ static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_flags) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "get Regexp.prototype.flags called with non-object 'this'");
     
     // 3. Let result be the empty String.
-    char result_buf[8];
+    char result_buf[10];
     memset (result_buf, 0, sizeof(result_buf));
     char* p = result_buf;
 
 
-    // 4. Let global be ToBoolean(Get(R, "global")).
-    // 5. ReturnIfAbrupt(global).
+    // spec order: d g i m s u v y
+    EJSBool hasIndices = ToEJSBool(Get(R, _ejs_atom_hasIndices));
+    if (hasIndices) *p++ = 'd';
+
     EJSBool global = ToEJSBool(Get(R, _ejs_atom_global));
-
-
-    // 6. If global is true, then append "g" as the last code unit of result.
     if (global) *p++ = 'g';
 
     // 7. Let ignoreCase be ToBoolean(Get(R, "ignoreCase")).
@@ -685,6 +733,9 @@ static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_flags) {
     // 12. If multiline is true, then append "m" as the last code unit of result.
     if (multiline) *p++ = 'm';
 
+    EJSBool dotAll = ToEJSBool(Get(R, _ejs_atom_dotAll));
+    if (dotAll) *p++ = 's';
+
     // spec order: unicode "u", then unicodeSets "v", then sticky "y"
     EJSBool unicode = ToEJSBool(Get(R, _ejs_atom_unicode));
     if (unicode) *p++ = 'u';
@@ -700,6 +751,82 @@ static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_flags) {
 
 static EJS_NATIVE_FUNC(_ejs_RegExp_get_species) {
     return _ejs_RegExp;
+}
+
+// ES2025 22.2.5.1 RegExp.escape ( S )
+// EncodeForRegExpEscape over the code points of S: syntax characters
+// and "/" get a backslash; a leading ASCII alphanumeric, the other
+// punctuators, whitespace and lone surrogates get hex escapes; the
+// rest passes through.
+static EJSBool escape_is_ws (uint32_t cp) {
+    switch (cp) {
+        case 0x9: case 0xA: case 0xB: case 0xC: case 0xD: case 0x20:
+        case 0xA0: case 0x1680: case 0x202F: case 0x205F: case 0x3000:
+        case 0x2028: case 0x2029: case 0xFEFF:
+            return EJS_TRUE;
+    }
+    return cp >= 0x2000 && cp <= 0x200A;
+}
+
+static EJS_NATIVE_FUNC(_ejs_RegExp_escape) {
+    ejsval S = argc > 0 ? args[0] : _ejs_undefined;
+    // 1. If S is not a String, throw a TypeError (no coercion).
+    if (!EJSVAL_IS_STRING(S))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "RegExp.escape requires a string");
+
+    EJSPrimString *flat = _ejs_string_flatten(S);
+    jschar *chars = flat->data.flat;
+    uint32_t len = flat->length;
+    // worst case 6 units per input unit ("\uXXXX")
+    jschar *out = (jschar*)malloc((len * 6 + 1) * sizeof(jschar));
+    uint32_t o = 0;
+
+    for (uint32_t i = 0; i < len; ) {
+        uint32_t cp = chars[i];
+        uint32_t adv = 1;
+        if (cp >= 0xD800 && cp < 0xDC00 && i + 1 < len &&
+            chars[i+1] >= 0xDC00 && chars[i+1] <= 0xDFFF) {
+            cp = 0x10000 + (((cp - 0xD800) << 10) | (chars[i+1] - 0xDC00));
+            adv = 2;
+        }
+
+        EJSBool leading_alnum = (o == 0) &&
+            ((cp >= '0' && cp <= '9') || (cp >= 'A' && cp <= 'Z') || (cp >= 'a' && cp <= 'z'));
+        EJSBool syntax = cp < 0x80 && strchr("^$\\.*+?()[]{}|/", (int)cp) != NULL;
+        EJSBool punct = cp < 0x80 && strchr(",-=<>#&!%:;@~'`\"", (int)cp) != NULL;
+        EJSBool lone_surrogate = cp >= 0xD800 && cp <= 0xDFFF;
+
+        // ControlEscape: \t \n \v \f \r keep their letter spellings
+        const char *ctl = NULL;
+        switch (cp) {
+            case 0x9: ctl = "\\t"; break;
+            case 0xA: ctl = "\\n"; break;
+            case 0xB: ctl = "\\v"; break;
+            case 0xC: ctl = "\\f"; break;
+            case 0xD: ctl = "\\r"; break;
+        }
+        if (ctl) {
+            out[o++] = (jschar)ctl[0];
+            out[o++] = (jschar)ctl[1];
+        } else if (syntax) {
+            out[o++] = '\\';
+            out[o++] = (jschar)cp;
+        } else if (leading_alnum || punct || escape_is_ws(cp) || lone_surrogate) {
+            char tmp[16];
+            if (cp <= 0xFF) snprintf(tmp, sizeof(tmp), "\\x%02x", cp);
+            else if (cp <= 0xFFFF) snprintf(tmp, sizeof(tmp), "\\u%04x", cp);
+            else snprintf(tmp, sizeof(tmp), "\\u%04x\\u%04x",
+                          0xD800 + ((cp - 0x10000) >> 10), 0xDC00 + ((cp - 0x10000) & 0x3FF));
+            for (char *t = tmp; *t; t++) out[o++] = (jschar)*t;
+        } else {
+            for (uint32_t k = 0; k < adv; k++) out[o++] = chars[i + k];
+        }
+        i += adv;
+    }
+
+    ejsval rv = _ejs_string_new_ucs2_len(out, o);
+    free(out);
+    return rv;
 }
 
 // ES6 21.2.5.6
@@ -1199,6 +1326,8 @@ _ejs_regexp_init(ejsval global)
     _ejs_gc_add_root (&_ejs_RegExp_prototype_exec_closure);
     _ejs_RegExp_prototype_exec_closure = PROTO_METHOD_VAL(exec);
 
+    OBJ_METHOD(escape);
+
     PROTO_METHOD(test);
     PROTO_METHOD(toString);
 
@@ -1210,6 +1339,8 @@ _ejs_regexp_init(ejsval global)
     PROTO_GETTER(sticky);
     PROTO_GETTER(unicode);
     PROTO_GETTER(unicodeSets);
+    PROTO_GETTER(dotAll);
+    PROTO_GETTER(hasIndices);
     PROTO_GETTER(flags);
 
 #undef OBJ_METHOD
