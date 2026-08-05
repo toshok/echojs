@@ -156,10 +156,60 @@ const nGc = emitTable("_ejs_unicode_gc_values", gc);
 const nSc = emitTable("_ejs_unicode_sc_values", sc);
 const nScx = emitTable("_ejs_unicode_scx_values", scx);
 
+// ---- properties of strings (v-flag only) ----
+// Each is a set of sequences.  Single-code-point members join a range
+// set (they behave as ordinary class members); multi-code-point ones
+// are packed [len, units...]* sorted longest-first, the order an
+// alternation must try them in.
+out.push(`typedef struct { const char *name; const EJSUnicodeRange *ranges; uint32_t nranges; const uint16_t *strings; uint32_t nstrings; } EJSUnicodeStringProperty;`);
+out.push(``);
+let nSeqStrings = 0, seqUnits = 0;
+const seqRows = [];
+for (const name of [...index.Sequence_Property].sort()) {
+    const entries = req(`${PKG}/Sequence_Property/${name}/index.js`);
+    const singles = [], multis = [];
+    for (const s of entries) {
+        const cps = [...s];
+        if (cps.length === 1) singles.push(cps[0].codePointAt(0));
+        else multis.push(s);
+    }
+    singles.sort((a, b) => a - b);
+    const rid = `_ejs_ucd_seq_${name}_ranges`;
+    const ranges = toRanges(singles);
+    totalRanges += ranges.length;
+    out.push(`static const EJSUnicodeRange ${rid}[] = { /* ${ranges.length} */`);
+    const rrows = ranges.map(([a, b]) => `{${a},${b}}`);
+    for (let i = 0; i < rrows.length; i += 8) out.push("    " + rrows.slice(i, i + 8).join(",") + ",");
+    if (!ranges.length) out.push("    {0,0}, /* placeholder: empty */");
+    out.push(`};`);
+    // longest-first, then code-unit order, so emission order is stable
+    multis.sort((a, b) => b.length - a.length || (a < b ? -1 : a > b ? 1 : 0));
+    const units = [];
+    for (const s of multis) {
+        units.push(s.length);
+        for (let i = 0; i < s.length; i++) units.push(s.charCodeAt(i));
+    }
+    const sid = `_ejs_ucd_seq_${name}_strings`;
+    out.push(`static const uint16_t ${sid}[] = { /* ${multis.length} strings, ${units.length} units */`);
+    for (let i = 0; i < units.length; i += 16) out.push("    " + units.slice(i, i + 16).join(",") + ",");
+    if (!units.length) out.push("    0, /* placeholder: empty */");
+    out.push(`};`);
+    seqRows.push({ name, rid, nr: ranges.length, sid, ns: multis.length });
+    nSeqStrings += multis.length;
+    seqUnits += units.length;
+}
+out.push(`static const EJSUnicodeStringProperty _ejs_unicode_string_properties[] = {`);
+for (const r of seqRows.sort((a, b) => (a.name < b.name ? -1 : 1)))
+    out.push(`    { "${r.name}", ${r.rid}, ${r.nr}, ${r.sid}, ${r.ns} },`);
+out.push(`};`);
+out.push(`static const uint32_t _ejs_unicode_string_properties_count = ${seqRows.length};`);
+out.push(``);
+
 out.push(`#endif /* _ejs_unicode_tables_h_ */`);
 process.stdout.write(out.join("\n") + "\n");
 
 console.error(
     `tables: lone ${nLone}, gc ${nGc}, sc ${nSc}, scx ${nScx}; ` +
-    `${rangesByKey.size} range sets, ${totalRanges} ranges (${(totalRanges * 8 / 1024).toFixed(0)}KB)`
+    `${rangesByKey.size} range sets, ${totalRanges} ranges (${(totalRanges * 8 / 1024).toFixed(0)}KB); ` +
+    `${seqRows.length} string properties, ${nSeqStrings} strings (${(seqUnits * 2 / 1024).toFixed(0)}KB)`
 );

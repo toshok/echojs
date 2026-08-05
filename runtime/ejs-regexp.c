@@ -199,8 +199,11 @@ RegExpInitialize(ejsval obj, ejsval pattern, ejsval flags) {
         else if (chars[i] == 'm' && !re->multiline)  { re->multiline  = EJS_TRUE; continue; }
         else if (chars[i] == 'y' && !re->sticky)     { re->sticky     = EJS_TRUE; continue; }
         else if (chars[i] == 'u' && !re->unicode)    { re->unicode    = EJS_TRUE; continue; }
+        else if (chars[i] == 'v' && !re->unicodeSets) { re->unicodeSets = EJS_TRUE; continue; }
         _ejs_throw_nativeerror_utf8 (EJS_SYNTAX_ERROR, "Invalid flag supplied to RegExp constructor");
     }
+    if (re->unicode && re->unicodeSets)
+        _ejs_throw_nativeerror_utf8 (EJS_SYNTAX_ERROR, "RegExp flags cannot contain both u and v");
 
     // 9. If BMP is true, then
     // a. Parse P using the grammars in 21.2.1 and interpreting each
@@ -230,7 +233,7 @@ RegExpInitialize(ejsval obj, ejsval pattern, ejsval flags) {
     const char *xlate_error;
     uint32_t xlate_len;
     jschar *xlated = _ejs_regexp_translate_pattern(chars, flat_pattern->length, re->unicode,
-                                                   &xlate_len, &xlate_error);
+                                                   re->unicodeSets, &xlate_len, &xlate_error);
     if (xlated == NULL)
         _ejs_throw_nativeerror_utf8 (EJS_SYNTAX_ERROR, xlate_error);
 
@@ -245,7 +248,7 @@ RegExpInitialize(ejsval obj, ejsval pattern, ejsval flags) {
     // regexes match per code unit, and patterns legitimately contain
     // lone surrogates (parser identifier tables) that PCRE_UTF16
     // rejects as invalid code points.
-    if (re->unicode)    pcre_options |= PCRE_UTF16 | PCRE_NO_UTF16_CHECK;
+    if (re->unicode || re->unicodeSets) pcre_options |= PCRE_UTF16 | PCRE_NO_UTF16_CHECK;
     if (re->ignoreCase) pcre_options |= PCRE_CASELESS;
     if (re->multiline)  pcre_options |= PCRE_MULTILINE;
     re->compiled_pattern = pcre16_compile(xlated,
@@ -400,7 +403,7 @@ RegExpBuiltinExec(ejsval R, ejsval S)
     // XXX
 
     // 14. If flags contains "u" then let fullUnicode be true, else let fullUnicode be false.
-    EJSBool fullUnicode = re->unicode;
+    EJSBool fullUnicode = re->unicode || re->unicodeSets;
 
     // 15. Let matchSucceeded be false.
     EJSBool matchSucceeded = EJS_FALSE;
@@ -634,6 +637,11 @@ static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_unicode) {
     return BOOLEAN_TO_EJSVAL(re->unicode);
 }
 
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_unicodeSets) {
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
+    return BOOLEAN_TO_EJSVAL(re->unicodeSets);
+}
+
 static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_source) {
     EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
     return re->pattern;
@@ -650,7 +658,7 @@ static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_flags) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "get Regexp.prototype.flags called with non-object 'this'");
     
     // 3. Let result be the empty String.
-    char result_buf[6];
+    char result_buf[8];
     memset (result_buf, 0, sizeof(result_buf));
     char* p = result_buf;
 
@@ -677,21 +685,16 @@ static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_flags) {
     // 12. If multiline is true, then append "m" as the last code unit of result.
     if (multiline) *p++ = 'm';
 
-    // 13. Let sticky be ToBoolean(Get(R, "sticky")).
-    // 14. ReturnIfAbrupt(sticky).
-    EJSBool sticky = ToEJSBool(Get(R, _ejs_atom_sticky));
-
-    // 15. If sticky is true, then append "y" as the last code unit of result.
-    if (sticky) *p++ = 'y';
-
-    // 16. Let unicode be ToBoolean(Get(R, "unicode")).
-    // 17. ReturnIfAbrupt(unicode).
+    // spec order: unicode "u", then unicodeSets "v", then sticky "y"
     EJSBool unicode = ToEJSBool(Get(R, _ejs_atom_unicode));
-
-    // 18. If unicode is true, then append "u" as the last code unit of result.
     if (unicode) *p++ = 'u';
 
-    // 19. Return result.
+    EJSBool unicodeSets = ToEJSBool(Get(R, _ejs_atom_unicodeSets));
+    if (unicodeSets) *p++ = 'v';
+
+    EJSBool sticky = ToEJSBool(Get(R, _ejs_atom_sticky));
+    if (sticky) *p++ = 'y';
+
     return _ejs_string_new_utf8(result_buf);
 }
 
@@ -1206,6 +1209,7 @@ _ejs_regexp_init(ejsval global)
     PROTO_GETTER(source);
     PROTO_GETTER(sticky);
     PROTO_GETTER(unicode);
+    PROTO_GETTER(unicodeSets);
     PROTO_GETTER(flags);
 
 #undef OBJ_METHOD

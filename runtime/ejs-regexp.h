@@ -21,6 +21,7 @@ typedef struct {
 
     EJSBool sticky;
     EJSBool unicode;
+    EJSBool unicodeSets;
 
     int lastIndex;
 
@@ -45,7 +46,7 @@ ejsval _ejs_regexp_new_utf8(const char *pattern, const char *flags);
 // Returns a malloc'd NUL-terminated buffer the caller frees, or NULL
 // with *err set.
 jschar* _ejs_regexp_translate_pattern(const jschar *chars, uint32_t len, EJSBool unicode,
-                                      uint32_t *out_len, const char **err);
+                                      EJSBool unicode_sets, uint32_t *out_len, const char **err);
 
 ejsval _ejs_regexp_replace(ejsval str, ejsval search, ejsval replace);
 
