@@ -224,6 +224,16 @@ RegExpInitialize(ejsval obj, ejsval pattern, ejsval flags) {
     EJSPrimString *flat_pattern = _ejs_string_flatten(P);
     chars = flat_pattern->data.flat;
 
+    // property escapes (\p{...}) expand to explicit classes before
+    // pcre sees the pattern \u2014 pcre has no ECMAScript property model
+    // (ejs-regexp-unicode.c)
+    const char *xlate_error;
+    uint32_t xlate_len;
+    jschar *xlated = _ejs_regexp_translate_pattern(chars, flat_pattern->length, re->unicode,
+                                                   &xlate_len, &xlate_error);
+    if (xlated == NULL)
+        _ejs_throw_nativeerror_utf8 (EJS_SYNTAX_ERROR, xlate_error);
+
     const char *pcre_error;
     int pcre_erroffset;
 
@@ -238,10 +248,11 @@ RegExpInitialize(ejsval obj, ejsval pattern, ejsval flags) {
     if (re->unicode)    pcre_options |= PCRE_UTF16 | PCRE_NO_UTF16_CHECK;
     if (re->ignoreCase) pcre_options |= PCRE_CASELESS;
     if (re->multiline)  pcre_options |= PCRE_MULTILINE;
-    re->compiled_pattern = pcre16_compile(chars,
+    re->compiled_pattern = pcre16_compile(xlated,
                                           pcre_options,
                                           &pcre_error, &pcre_erroffset,
                                           pcre16_tables);
+    free (xlated);
     if (re->compiled_pattern == NULL) {
         _ejs_log ("pcre rejected /%s/: %s (offset %d)\n",
                   ucs2_to_utf8(chars), pcre_error, pcre_erroffset);
@@ -447,13 +458,14 @@ RegExpBuiltinExec(ejsval R, ejsval S)
     int e = ovec[1];
 
     // 18. If fullUnicode is true, then
-    if (fullUnicode) {
-        //     a. e is an index into the Input character list, derived from S, matched by matcher. Let eUTF be the smallest
-        //        index into S that corresponds to the character at element e of Input. If e is greater than the length of
-        //        Input, then eUTF is 1 + the number of code units in S.
-        //     b. Let e be eUTF.
-        EJS_NOT_IMPLEMENTED();
-    }
+    //     a. e is an index into the Input character list, derived from S, matched by matcher. Let eUTF be the smallest
+    //        index into S that corresponds to the character at element e of Input. If e is greater than the length of
+    //        Input, then eUTF is 1 + the number of code units in S.
+    //     b. Let e be eUTF.
+    // The conversion is spec bookkeeping for an abstract matcher whose
+    // Input is code POINTS under fullUnicode; pcre16 matches over the
+    // UTF-16 subject directly, so ovec offsets are already code-unit
+    // indices into S and e needs no adjustment.
     // 19. If global is true or sticky is true,
     if (global || sticky) {
         // a. Let putStatus be the result of Put(R, "lastIndex", e, true).
@@ -487,18 +499,13 @@ RegExpBuiltinExec(ejsval R, ejsval S)
             capturedValue = _ejs_undefined;
         }
         else {
-            // c. Else if fullUnicode is true,
-            if (fullUnicode) {
-                // i. Assert: captureI is a List of code points.
-                // ii. Let capturedValue be a string whose code units are the UTF-16Encoding (10.1.1) of the code points of capture.
-                EJS_NOT_IMPLEMENTED();
-            }
-            // d. Else, fullUnicode is false,
-            else {
-                //    i. Assert: captureI is a List of code units.
-                //    ii. Let capturedValue be a string consisting of the code units of captureI.
-                capturedValue = _ejs_string_new_substring(S, ovec[i*2], ovec[i*2+1]-ovec[i*2]);
-            }
+            // c./d. under either fullUnicode value the capture is the
+            // span of S the group matched — pcre's ovec holds code-unit
+            // offsets into the UTF-16 subject whatever the flags, so
+            // the spec's code-point/code-unit re-encoding dance
+            // (UTF-16Encoding of the captured code points) is the same
+            // substring either way.
+            capturedValue = _ejs_string_new_substring(S, ovec[i*2], ovec[i*2+1]-ovec[i*2]);
         }
         // e. Perform CreateDataProperty(A, ToString(i) , capturedValue).
         EJS_DENSE_ARRAY_ELEMENTS(A)[i] = capturedValue;

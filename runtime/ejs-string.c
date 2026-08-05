@@ -259,17 +259,18 @@ utf16_to_utf8_char (const jschar* utf16, char* utf8, int *utf16_adv)
     }
     if (ucs2 >= 0x800 && ucs2 <= 0xFFFF) {
         if (ucs2 >= 0xD800 && ucs2 <= 0xDFFF) {
-            // surrogate pair
+            // a high surrogate followed by a low one is a pair; any
+            // other surrogate unit is lone and becomes U+FFFD (these
+            // conversions feed logging, where replacement beats
+            // aborting).  The +1 read is safe: flat strings are
+            // NUL-terminated, and NUL is not a low surrogate.
             jschar ucs2_2 = *(utf16 + 1);
-            uint32_t combined = 0x10000 + (((ucs2 - 0xD800) << 10) | (ucs2_2 - 0xDC00));
-
-            utf8[0] = 0xF0 | (combined >> 18);
-            utf8[1] = 0x80 | ((combined >> 12) & 0x3F);
-            utf8[2] = 0x80 | ((combined >> 6) & 0x3F);
-            utf8[3] = 0x80 | ((combined & 0x3F));
-
-            *utf16_adv = 2;
-            return 4;
+            if (ucs2 < 0xDC00 && ucs2_2 >= 0xDC00 && ucs2_2 <= 0xDFFF) {
+                uint32_t combined = 0x10000 + (((ucs2 - 0xD800) << 10) | (ucs2_2 - 0xDC00));
+                *utf16_adv = 2;
+                return unicode_cp_to_utf8 (combined, utf8);
+            }
+            ucs2 = 0xFFFD;
         }
 
         utf8[0] = ((ucs2 >> 12)       ) | 0xE0;
@@ -280,29 +281,41 @@ utf16_to_utf8_char (const jschar* utf16, char* utf8, int *utf16_adv)
     EJS_NOT_IMPLEMENTED();
 }
 
+// the full 1-4 byte encoder, for callers that hold a real code point
+// (uri escaping combines surrogate pairs before encoding)
+int
+unicode_cp_to_utf8 (uint32_t cp, char *utf8)
+{
+    if (cp < 0x80) {
+        utf8[0] = (char)cp;
+        return 1;
+    }
+    if (cp < 0x800) {
+        utf8[0] = (cp >> 6)   | 0xC0;
+        utf8[1] = (cp & 0x3F) | 0x80;
+        return 2;
+    }
+    if (cp <= 0xFFFF) {
+        utf8[0] = ((cp >> 12)       ) | 0xE0;
+        utf8[1] = ((cp >> 6 ) & 0x3F) | 0x80;
+        utf8[2] = ((cp      ) & 0x3F) | 0x80;
+        return 3;
+    }
+    utf8[0] = 0xF0 | (cp >> 18);
+    utf8[1] = 0x80 | ((cp >> 12) & 0x3F);
+    utf8[2] = 0x80 | ((cp >> 6) & 0x3F);
+    utf8[3] = 0x80 | (cp & 0x3F);
+    return 4;
+}
+
+// single code UNIT: a lone surrogate has no UTF-8 spelling, so it
+// becomes U+FFFD — these conversions feed logging and error messages,
+// where replacement beats aborting
 int
 ucs2_to_utf8_char (jschar ucs2, char *utf8)
 {
-    if (ucs2 < 0x80) {
-        utf8[0] = (char)ucs2;
-        return 1;
-    }
-    if (ucs2 >= 0x80  && ucs2 < 0x800) {
-        utf8[0] = (ucs2 >> 6)   | 0xC0;
-        utf8[1] = (ucs2 & 0x3F) | 0x80;
-        return 2;
-    }
-    if (ucs2 >= 0x800 && ucs2 < 0xFFFF) {
-        if (ucs2 >= 0xD800 && ucs2 <= 0xDFFF) {
-            EJS_NOT_IMPLEMENTED();
-        }
-
-        utf8[0] = ((ucs2 >> 12)       ) | 0xE0;
-        utf8[1] = ((ucs2 >> 6 ) & 0x3F) | 0x80;
-        utf8[2] = ((ucs2      ) & 0x3F) | 0x80;
-        return 3;
-    }
-    EJS_NOT_IMPLEMENTED();
+    if (ucs2 >= 0xD800 && ucs2 <= 0xDFFF) ucs2 = 0xFFFD;
+    return unicode_cp_to_utf8 (ucs2, utf8);
 }
 
 char*
@@ -342,9 +355,10 @@ ucs2_to_utf8_buf (const jschar *str, char* buf, size_t buf_size)
 
     const jschar *p = str;
     char *c = buf;
+    int utf16_adv;
 
     while (*p) {
-        int adv = ucs2_to_utf8_char (*p, c);
+        int adv = utf16_to_utf8_char (p, c, &utf16_adv);
         if (adv < 1) {
             // more here XXX
             break;
@@ -353,9 +367,9 @@ ucs2_to_utf8_buf (const jschar *str, char* buf, size_t buf_size)
         if (c - buf > buf_size)
             return NULL;
 
-        p++;
-        len --;
-        if (len == 0)
+        p += utf16_adv;
+        len -= utf16_adv;
+        if (len <= 0)
             break;
     }
 
@@ -2968,6 +2982,17 @@ _ejs_string_to_utf8(EJSPrimString* primstr)
             char error_buf[256];
             snprintf (error_buf, sizeof(error_buf), "error converting ucs2 to utf8, index %d\n", i);
             return strdup(error_buf);
+        }
+        // a surrogate pair encodes as one 4-byte code point; a lone
+        // surrogate falls through to ucs2_to_utf8_char's U+FFFD
+        if (ucs2 >= 0xD800 && ucs2 < 0xDC00 && i + 1 < primstr->length) {
+            jschar lo = _ejs_string_char_code_at(primstr, i + 1);
+            if (lo >= 0xDC00 && lo <= 0xDFFF) {
+                uint32_t combined = 0x10000 + (((ucs2 - 0xD800) << 10) | (lo - 0xDC00));
+                p += unicode_cp_to_utf8 (combined, p);
+                i++;
+                continue;
+            }
         }
         int adv = ucs2_to_utf8_char (ucs2, p);
         if (adv < 1) {

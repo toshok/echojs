@@ -86,7 +86,12 @@ expectations.
 
 1. **`\p`/`\P` under `/u`** — table generator + translation of
    `\p{...}` inside and outside classes; fix the literal-null bug.
-   ~450 tests.
+   ~450 tests.  **DONE**: property-escapes slice 164→565 of 613.
+   The residue is the engine-fidelity tail: ~25 tests matching `\P{X}`
+   against lone-surrogate subjects (pcre's UTF-16 walker refuses
+   them), the surrogate-endpoint classes (`\p{Cs}`), and the v-only
+   properties-of-strings.  Those wait for stage 2 / the engine
+   endgame, not for more tables.
 2. **`v` flag** — flag plumbing + class-set grammar (nested classes,
    `--`/`&&` desugared at translation time, properties-of-strings as
    sequence alternations).  ~115 tests.

@@ -916,10 +916,12 @@ export class ScopeAnalysis {
     walkExpr(n: e.Expression | e.SpreadElement): void {
         switch (n.type) {
             case "Literal":
-                // object-valued literals are regexes (lowerable) or
-                // engine-specific oddities (fall back early)
+                // object-valued literals are regexes (lowerable, and
+                // identified by the syntactic regex field — value is
+                // null when the compiler's host engine rejects the
+                // pattern) or engine-specific oddities (fall back early)
                 if (n.value !== null && typeof n.value === "object") {
-                    if (typeof n.value.source !== "string")
+                    if (!n.regex)
                         throw LowerNotSupported(`literal ${typeof n.value}`, n.loc);
                 }
                 return;
