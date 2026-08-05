@@ -1,0 +1,283 @@
+# The buck2 bootstrap for ONE platform, as a reusable workflow.  The
+# platform list lives in the callers: ci.yml invokes this from a matrix
+# on every push/PR, release.yml as explicit per-platform jobs on a
+# version tag (its smoke jobs depend on individual platforms, which a
+# matrix leg can't offer).
+#
+# Sequential targets; buck2 shares artifacts between them, so the stage
+# ladder (stage1 builds feed stage2/3) costs one traversal:
+#
+#   test-eir     EIR unit tests (node-hosted)
+#   test-stage0  full suite against the node-hosted compiler
+#   test-stage1  suite against the self-compiled compiler
+#   test-stage2  suite against stage1's self-compile
+#   test-stage3  suite + the stage2/stage3 byte-identity fixed point
+#
+# then test262, the dist tarball with its smoke tests, and the package
+# smokes, uploading an echojs-dist-<platform> artifact.
+#
+# What varies between platforms is either the OS (brew vs apt, and the
+# homebrew smoke that only exists on macOS) or an input.  test262
+# branches on test262-suite: "reduced" runs the curated lane as a
+# step, "full" hands the stage1 workroot to the sharded whole-suite
+# run (test262-full.yml, called below).  The sharded run is a job
+# rather than a step because it needs runners of its own, and it hangs
+# off THIS platform's build — no other platform's failure holds it
+# up.
+name: build-and-test
+
+on:
+  workflow_call:
+    inputs:
+      platform:
+        description: names the job and the dist artifact (e.g. linux-x86_64)
+        type: string
+        required: true
+      runner:
+        description: the runner label to build on
+        type: string
+        required: true
+      buck-config:
+        description: extra buck2 flags, e.g. --config llvm.prefix=...
+        type: string
+        default: ""
+      typecheck:
+        description: run the TypeScript typecheck (platform-independent, so one platform does it)
+        type: boolean
+        default: false
+      test262-suite:
+        description: '"reduced" (the curated lane, against lane-expectations) or "full" (the whole suite, sharded, against this build)'
+        type: string
+        default: reduced
+      lane-expectations:
+        description: the expectations file the lane checks (platform-specific)
+        type: string
+        default: expectations.txt
+      update-lane-expectations:
+        description: regenerate the lane expectations file and upload it as an artifact
+        type: boolean
+        default: false
+      update-test262-baseline:
+        description: rewrite full-baseline.json from the sharded run
+        type: boolean
+        default: false
+
+jobs:
+  bootstrap:
+    # the caller supplies the platform half of the check name (its job
+    # name or matrix leg); this half names the stage ladder
+    name: bootstrap
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 150
+    steps:
+      # fail loudly on a typo'd suite name — a silent mismatch would
+      # skip conformance entirely
+      - name: validate test262-suite
+        run: |
+          case "${{ inputs.test262-suite }}" in
+            full|reduced) ;;
+            *) echo "::error::test262-suite must be 'full' or 'reduced', got '${{ inputs.test262-suite }}'"; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install llvm
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm
+          "$(brew --prefix llvm)/bin/llvm-config" --version
+          echo "LLVM_PREFIX=$(brew --prefix llvm)" >> "$GITHUB_ENV"
+
+      - name: Install packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential cmake libunwind-dev libuv1-dev
+
+      # puts /usr/lib/llvm-22/bin on PATH (prelude's cxx toolchain wants
+      # a bare clang++ there) and seeds the cache the test262 shards
+      # restore from, so they don't each install a toolchain
+      - uses: ./.github/actions/setup-llvm
+        if: runner.os == 'Linux'
+        with:
+          save: "true"
+
+      - name: llvm prefix
+        if: runner.os == 'Linux'
+        run: |
+          llvm-config --version
+          echo "LLVM_PREFIX=/usr/lib/llvm-22" >> "$GITHUB_ENV"
+
+      # the facebook/buck2 `latest` release binary, same as before —
+      # the action just owns the platform selection and unpacking
+      - uses: dtolnay/install-buck2@latest
+      - run: buck2 --version
+
+      # the node version is unpinned: the value-based harness serializes
+      # logged values itself (test/harness-console-shim.js) on both the
+      # node and ejs sides, so baselines don't depend on node's inspect
+      # format (verified: 22.4.0 and 22.23.2 generate byte-identical
+      # baselines)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - name: npm ci
+        run: npm ci
+
+      # the node-hosted (stage0) compiler drives llvm through this
+      # node-gyp native addon; buck picks up the built artifact
+      - name: Build the node-llvm addon
+        run: ./node-llvm/build-addon.sh "$LLVM_PREFIX"
+
+      - name: TypeScript typecheck
+        if: inputs.typecheck
+        run: |
+          node node_modules/typescript/bin/tsc -p tsconfig.json
+          node node_modules/typescript/bin/tsc -p test --noEmit
+
+      - name: buck2 bootstrap matrix
+        run: |
+          buck2 build ${{ inputs.buck-config }} \
+            //:test-eir \
+            //:test-stage0 \
+            //:test-stage1 \
+            //:test-stage2 \
+            //:test-stage3
+
+      # the test262 lane: a per-test smoke against the pinned suite SHA,
+      # checked against this platform's expectations file (crash and
+      # timeout classes vary by platform, so each lane platform owns
+      # one).  The comprehensive number is the sharded full suite on the
+      # test262-full platform.  With update-lane-expectations the lane
+      # regenerates the file instead of checking and the next step
+      # uploads it — the bootstrap path for a platform that doesn't have
+      # one yet, and the refresh path after feature work.  The
+      # comprehensive number lives on the test262-suite=full platform.
+      - name: test262 lane
+        if: inputs.test262-suite == 'reduced'
+        run: |
+          git init -q "$RUNNER_TEMP/test262"
+          git -C "$RUNNER_TEMP/test262" fetch -q --depth 1 \
+            https://github.com/tc39/test262.git "$(cat test/test262/suite.sha)"
+          git -C "$RUNNER_TEMP/test262" checkout -q FETCH_HEAD
+          # the workroot is assembled here rather than left to lane.sh's
+          # no---ejs fallback so buck-config reaches buck2: lane.sh
+          # assembles configless, which on Linux is a different (broken)
+          # configuration than the matrix above built
+          ./test/test262/assemble-workroot.sh "$RUNNER_TEMP/workroot" \
+            ${{ inputs.buck-config }}
+          ./test/test262/lane.sh --suite "$RUNNER_TEMP/test262" --jobs 6 \
+            --ejs "$RUNNER_TEMP/workroot" \
+            --expectations "test/test262/${{ inputs.lane-expectations }}" \
+            ${{ inputs.update-lane-expectations && '--update' || '' }}
+
+      - uses: actions/upload-artifact@v4
+        if: inputs.test262-suite == 'reduced' && inputs.update-lane-expectations
+        with:
+          name: lane-expectations-${{ inputs.platform }}
+          path: test/test262/${{ inputs.lane-expectations }}
+          if-no-files-found: error
+
+      # what the shards below run against: the stage1 workroot
+      # (srcdir-tree + lib/generated + ./ejs, already built above — this
+      # only copies buck's outputs) and the pinned suite, fetched once
+      # here instead of on every shard
+      - name: test262 workroot + suite
+        if: inputs.test262-suite == 'full'
+        run: |
+          ./test/test262/assemble-workroot.sh "$RUNNER_TEMP/workroot" \
+            ${{ inputs.buck-config }}
+          tar -C "$RUNNER_TEMP/workroot" -czf workroot.tar.gz .
+          git init -q "$RUNNER_TEMP/test262"
+          git -C "$RUNNER_TEMP/test262" fetch -q --depth 1 \
+            https://github.com/tc39/test262.git "$(cat test/test262/suite.sha)"
+          git -C "$RUNNER_TEMP/test262" checkout -q FETCH_HEAD
+          tar -C "$RUNNER_TEMP" --exclude .git -czf suite.tar.gz test262
+
+      - uses: actions/upload-artifact@v4
+        if: inputs.test262-suite == 'full'
+        with:
+          name: test262-inputs
+          path: |
+            workroot.tar.gz
+            suite.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0 # both are already gzipped
+
+      # the relocatable dist artifact + its installed-layout smoke test;
+      # the stage builds above are shared, so this only adds the repack
+      # + smoke compile
+      - name: dist artifact
+        run: |
+          buck2 build ${{ inputs.buck-config }} //:test-dist
+          buck2 build ${{ inputs.buck-config }} //:dist --out dist-out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: echojs-dist-${{ inputs.platform }}
+          path: dist-out/*.tar.gz
+          if-no-files-found: error
+
+      # package smokes.  The formula comes from the tarball just built
+      # (file:// url) via a throwaway local tap; the npm wrapper
+      # installs through its EJS_NPM_TARBALL override.  release.yml
+      # points both at hosted release assets instead.
+      - name: package smoke (homebrew + npm)
+        if: runner.os == 'macOS'
+        run: |
+          brew tap-new --no-git toshok/echojs-ci
+          ./packaging/homebrew/make-formula.sh \
+            --tarball dist-out/echojs-*.tar.gz \
+            --out "$(brew --repository)/Library/Taps/toshok/homebrew-echojs-ci/Formula/echojs.rb"
+          brew install toshok/echojs-ci/echojs
+          echo 'console.log(`ok ${[1,2].map((x) => x + 1).join("")}`)' > "$RUNNER_TEMP/smoke.js"
+          "$(brew --prefix)/bin/ejs" -q -o "$RUNNER_TEMP/smoke.exe" "$RUNNER_TEMP/smoke.js"
+          test "$("$RUNNER_TEMP/smoke.exe")" = "ok 23"
+          brew test echojs
+          brew uninstall echojs
+
+          cd "$RUNNER_TEMP"
+          npm pack "$GITHUB_WORKSPACE/packaging/npm"
+          mkdir npm-smoke && cd npm-smoke
+          npm init -y > /dev/null
+          EJS_NPM_TARBALL="$(echo "$GITHUB_WORKSPACE"/dist-out/echojs-*.tar.gz)" \
+            npm install --no-fund --no-audit ../pirouette-echojs-*.tgz
+          ./node_modules/.bin/ejs -q -o smoke.exe ../smoke.js
+          test "$(./smoke.exe)" = "ok 23"
+
+      # the npm wrapper against the tarball just built (the prefix
+      # installer is smoke-tested inside //:test-dist)
+      - name: package smoke (npm)
+        if: runner.os == 'Linux'
+        run: |
+          cd "$RUNNER_TEMP"
+          npm pack "$GITHUB_WORKSPACE/packaging/npm"
+          mkdir npm-smoke && cd npm-smoke
+          npm init -y > /dev/null
+          EJS_NPM_TARBALL="$(echo "$GITHUB_WORKSPACE"/dist-out/echojs-*.tar.gz)" \
+            npm install --no-fund --no-audit ../pirouette-echojs-*.tgz
+          echo 'console.log(`ok ${[1,2].map((x) => x + 1).join("")}`)' > smoke.js
+          ./node_modules/.bin/ejs -q -o smoke.exe smoke.js
+          test "$(./smoke.exe)" = "ok 23"
+
+      - name: Surface test logs on failure
+        if: failure()
+        run: |
+          find buck-out/v2 -name "test-*.log" -newer package.json 2>/dev/null | while read -r f; do
+            echo "=== $f ==="
+            tail -60 "$f"
+          done || true
+
+  # the whole suite, sharded across its own runners, against the
+  # workroot the build just uploaded.  needs only this platform's
+  # build, so a red arch elsewhere neither holds it up nor skips it.
+  test262-full:
+    needs: bootstrap
+    if: inputs.test262-suite == 'full'
+    uses: ./.github/workflows/test262-full.yml
+    with:
+      update-baseline: ${{ inputs.update-test262-baseline }}

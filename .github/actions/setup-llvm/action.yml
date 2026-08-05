@@ -1,0 +1,65 @@
+# Put an apt.llvm.org toolchain on PATH, from the actions cache when one
+# is warm.  The sharded test262 workflow needs the same llvm on a dozen
+# runners at once; installing it from apt.llvm.org on each is a couple of
+# minutes and a dozen chances for an external mirror to fail, so one job
+# installs it, packs /usr/lib/llvm-<version>, and saves it for the rest.
+#
+# Caches are branch-scoped: a save on a PR branch is invisible to other
+# PRs, so the entry that matters is the one written by a push to main.
+# Every job falls back to installing when the restore misses or the
+# restored toolchain does not run, so a cold or evicted cache only costs
+# time.
+name: setup-llvm
+description: llvm on PATH, cached across jobs
+
+inputs:
+  version:
+    description: llvm major version
+    default: "22"
+  save:
+    description: pack and save the toolchain when this job installed it (one job per run)
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - id: restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ runner.temp }}/llvm-${{ inputs.version }}.tar
+        key: llvm-${{ inputs.version }}-${{ runner.os }}-${{ runner.arch }}
+
+    - id: setup
+      shell: bash
+      run: |
+        set -euo pipefail
+        TAR="$RUNNER_TEMP/llvm-${{ inputs.version }}.tar"
+        PREFIX="/usr/lib/llvm-${{ inputs.version }}"
+        ok=0
+        if [ -f "$TAR" ]; then
+          sudo tar -C / -xf "$TAR"
+          # a cache entry packed on a different runner image can be
+          # missing a system library it links against — prove the
+          # toolchain runs before trusting it
+          if "$PREFIX/bin/llc" --version >/dev/null 2>&1 &&
+             "$PREFIX/bin/clang++" --version >/dev/null 2>&1; then ok=1; fi
+          [ "$ok" = 1 ] || echo "::warning::cached llvm-${{ inputs.version }} did not run; installing"
+        fi
+        if [ "$ok" = 0 ]; then
+          curl -sSf https://apt.llvm.org/llvm.sh -o "$RUNNER_TEMP/llvm.sh"
+          chmod +x "$RUNNER_TEMP/llvm.sh"
+          sudo "$RUNNER_TEMP/llvm.sh" ${{ inputs.version }}
+          echo "installed=true" >> "$GITHUB_OUTPUT"
+        fi
+        echo "$PREFIX/bin" >> "$GITHUB_PATH"
+
+    - if: inputs.save == 'true' && steps.setup.outputs.installed == 'true'
+      shell: bash
+      # uncompressed: actions/cache zstds the entry on the way up
+      run: sudo tar -C / -cf "$RUNNER_TEMP/llvm-${{ inputs.version }}.tar" "usr/lib/llvm-${{ inputs.version }}"
+
+    - if: inputs.save == 'true' && steps.setup.outputs.installed == 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.temp }}/llvm-${{ inputs.version }}.tar
+        key: llvm-${{ inputs.version }}-${{ runner.os }}-${{ runner.arch }}
