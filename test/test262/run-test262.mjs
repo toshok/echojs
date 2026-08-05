@@ -24,6 +24,7 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import { pathToFileURL } from "node:url";
 
 // ---------- frontmatter ----------
 // Minimal parser for the YAML subset test262 frontmatter actually uses:
@@ -130,10 +131,24 @@ function collectTests(suiteDir, capBuiltins, strideLanguage = 1) {
 // could conceivably pass".
 const NEEDS_COMPILER = /(^|[^.\w])(eval|Function)\s*\(/;
 const NEEDS_AGENT = /\$262\s*\.\s*agent/;
+// `with` is dynamic scope: every name inside the block resolves against
+// a runtime object, which is the same property eval has — bindings that
+// cannot be known at compile time.  Anchored to statement position
+// (line start) because a bare word-boundary match drowns in prose —
+// assertion messages ("called with (undefined, ...)"), `with` as a
+// method name (arr.with(i, v), get with()).  A same-line `else with`
+// slips through, which errs the safe way: a missed skip leaves a
+// failing test in the denominator rather than hiding a passing one.
+const NEEDS_WITH = /^[ \t]*with\s*\(/m;
 const UNSUPPORTED_FEATURES = new Set(["cross-realm", "ShadowRealm", "dynamic-import"]);
-// whole trees devoted to eval semantics; their tests reach eval through
-// indirection the source scan below does not see
-const UNSUPPORTED_DIRS = ["test/language/eval-code/", "test/annexB/language/eval-code/", "test/built-ins/eval/"];
+// whole trees devoted to eval/with semantics; their tests reach the
+// construct through indirection the source scan below does not see
+const UNSUPPORTED_DIRS = new Map([
+    ["test/language/eval-code/", "eval"],
+    ["test/annexB/language/eval-code/", "eval"],
+    ["test/built-ins/eval/", "eval"],
+    ["test/language/statements/with/", "with"],
+]);
 
 const stripFrontmatter = (src) => src.replace(/\/\*---[\s\S]*?---\*\//, "");
 
@@ -155,10 +170,11 @@ function harnessNeedingHost(suiteDir) {
 }
 
 // null if the test is in scope; otherwise a short tag naming what it
-// needs (recorded on the row, so the report can break the skips down)
-function unsupportedReason(suiteDir, rel, src, meta) {
+// needs (recorded on the row, so the report can break the skips down).
+// Exported for offline reclassification of recorded runs.
+export function unsupportedReason(suiteDir, rel, src, meta) {
     if (meta.flags.includes("CanBlockIsFalse")) return "agent";
-    if (UNSUPPORTED_DIRS.some((d) => rel.startsWith(d))) return "eval";
+    for (const [d, tag] of UNSUPPORTED_DIRS) if (rel.startsWith(d)) return tag;
     const feat = meta.features.find((f) => UNSUPPORTED_FEATURES.has(f));
     if (feat) return feat;
     const inc = meta.includes.find((h) => harnessNeedingHost(suiteDir).has(h));
@@ -166,6 +182,7 @@ function unsupportedReason(suiteDir, rel, src, meta) {
     const body = stripFrontmatter(src);
     if (NEEDS_COMPILER.test(body)) return "eval";
     if (NEEDS_AGENT.test(body)) return "agent";
+    if (NEEDS_WITH.test(body)) return "with";
     return null;
 }
 
@@ -579,11 +596,17 @@ function checkBaseline(opts, { evaluated, passed }) {
     return out;
 }
 
-const [cmd, ...rest] = process.argv.slice(2);
-const opts = parseArgs(rest);
-if (cmd === "run") await cmdRun(opts);
-else if (cmd === "report") cmdReport(opts);
-else {
-    console.error("usage: run-test262.mjs run|report [options]  (see file header)");
-    process.exit(2);
+// CLI dispatch only when run directly — the classifier exports above
+// are importable without side effects (offline reclassification)
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+    const [cmd, ...rest] = process.argv.slice(2);
+    const opts = parseArgs(rest);
+    if (cmd === "run") await cmdRun(opts);
+    else if (cmd === "report") cmdReport(opts);
+    else {
+        console.error("usage: run-test262.mjs run|report [options]  (see file header)");
+        process.exit(2);
+    }
 }
+

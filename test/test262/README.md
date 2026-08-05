@@ -100,8 +100,8 @@ node test/test262/run-test262.mjs report --in results.jsonl --md report.md
 - `intl402/` (no `Intl`) and `staging/` (not normative) — out of scope.
 
 The whole suite is `--stride-language 1 --cap-builtins all`: ~48.7k
-tests, of which ~3.3k are skipped as out of scope for AOT (below) and
-~45.5k are evaluated.  `--shard K/N` runs slice K of N over a sorted
+tests, of which ~3.6k are skipped as out of scope for AOT (below) and
+~45.2k are evaluated.  `--shard K/N` runs slice K of N over a sorted
 list, so N runners partition the selection without coordinating.
 
 ## Out of scope for AOT
@@ -115,10 +115,11 @@ the pass rate and never enter `expectations.txt`.  A test is out of
 scope when it
 
 - is tagged `cross-realm`, `ShadowRealm`, or `dynamic-import`;
-- lives under `language/eval-code/`, `annexB/language/eval-code/`, or
-  `built-ins/eval/`;
-- calls `eval(...)` or `Function(...)` in its body, or reaches
-  `$262.agent`;
+- lives under `language/eval-code/`, `annexB/language/eval-code/`,
+  `built-ins/eval/`, or `language/statements/with/`;
+- calls `eval(...)` or `Function(...)` in its body, uses a `with`
+  statement (dynamic scope — the same compile-time-unknowable bindings
+  as eval), or reaches `$262.agent`;
 - includes a harness file that does either — `fnGlobalObject.js` is
   `Function("return this;")()`, so its dependents are out too.  That
   set is derived from the suite, not listed, so it tracks SHA bumps.

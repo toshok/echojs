@@ -505,7 +505,6 @@ fail-parse test/language/expressions/assignment/dstr/obj-id-init-yield-ident-val
 fail-runtime test/language/expressions/assignment/dstr/obj-prop-elem-init-let.js
 fail-runtime test/language/expressions/assignment/dstr/obj-prop-put-let.js
 fail-parse test/language/expressions/assignmenttargettype/simple-basic-identifierreference-await.js
-fail-parse test/language/expressions/async-generator/unscopables-with-in-nested-fn.js
 fail-parse test/language/expressions/await/await-in-global.js
 fail-runtime test/language/expressions/class/async-gen-method/dflt-params-ref-self.js
 fail-parse test/language/expressions/class/class-name-ident-await.js
@@ -522,8 +521,6 @@ fail-runtime test/language/expressions/class/elements/nested-private-derived-cls
 fail-runtime test/language/expressions/class/elements/private-derived-cls-indirect-eval-err-contains-supercall-2.js
 fail-runtime test/language/expressions/class/gen-method-static/dflt-params-ref-self.js
 fail-runtime test/language/expressions/class/restricted-properties.js
-fail-parse test/language/expressions/compound-assignment/S11.13.2_A5.2_T2.js
-fail-parse test/language/expressions/compound-assignment/S11.13.2_A5.8_T2.js
 fail-runtime test/language/expressions/compound-assignment/S11.13.2_A7.4_T1.js
 fail-compile test/language/expressions/delete/S11.4.1_A2.1.js
 fail-parse test/language/expressions/dynamic-import/import-defer/import-defer-transitive-async-module/promise-prototype-then-not-called.js
@@ -540,8 +537,6 @@ fail-runtime test/language/expressions/object/fn-name-fn.js
 fail-async test/language/expressions/object/method-definition/async-gen-yield-star-sync-next.js
 fail-parse test/language/expressions/object/method-definition/static-init-await-binding-generator.js
 fail-runtime test/language/expressions/optional-chaining/optional-chain-prod-expression.js
-fail-parse test/language/expressions/postfix-decrement/S11.3.2_A5_T1.js
-fail-parse test/language/expressions/prefix-decrement/S11.4.5_A5_T1.js
 fail-runtime test/language/expressions/prefix-increment/S11.4.4_A6_T1.js
 fail-compile test/language/expressions/super/prop-dot-cls-ref-strict.js
 fail-runtime test/language/expressions/super/prop-expr-cls-this-uninit.js
@@ -602,14 +597,5 @@ fail-runtime test/language/statements/using/function-local-closure-get-before-in
 fail-runtime test/language/statements/using/puts-initializer-on-top-of-disposableresourcestack-multiple-bindings.js
 fail-parse test/language/statements/variable/arguments-fn-non-strict.js
 fail-parse test/language/statements/variable/dstr/ary-ptrn-elem-id-static-init-await-valid.js
-fail-parse test/language/statements/with/12.10-0-10.js
-fail-parse test/language/statements/with/S12.10_A1.11_T4.js
-fail-parse test/language/statements/with/S12.10_A1.4_T2.js
-fail-parse test/language/statements/with/S12.10_A1.8_T2.js
-fail-parse test/language/statements/with/S12.10_A3.11_T4.js
-fail-parse test/language/statements/with/S12.10_A3.4_T3.js
-fail-parse test/language/statements/with/S12.10_A3.8_T3.js
-fail-parse test/language/statements/with/has-binding-call-with-proxy-env.js
-fail-parse test/language/statements/with/scope-var-close.js
 fail-runtime test/language/types/boolean/S8.3_A1_T1.js
 fail-parse test/language/types/reference/S8.7_A5_T2.js
