@@ -10,7 +10,7 @@
 //     --suite  <test262 checkout> \
 //     --ejs    <workroot with ./ejs + srcdir layout> \
 //     [--jobs N] [--cap-builtins 3|all] [--stride-language 1] [--filter substr] \
-//     [--shard K/N] \
+//     [--shard K/N] [--resume] \
 //     [--out results.jsonl] [--expectations file [--update-expectations]]
 //
 //   node test/test262/run-test262.mjs report --in results.jsonl [--md report.md] \
@@ -426,7 +426,17 @@ async function cmdRun(opts) {
         tests = tests.slice().sort().filter((_t, i) => i % n === k);
     }
     const outPath = opts.out || "results.jsonl";
-    const out = fs.createWriteStream(outPath);
+    // --resume: skip tests the output file already has rows for and
+    // append — picks an interrupted run back up where it died
+    if (opts.resume && fs.existsSync(outPath)) {
+        const done = new Set(
+            fs.readFileSync(outPath, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l).test)
+        );
+        const before = tests.length;
+        tests = tests.filter((t) => !done.has(path.relative(cfg.suite, t)));
+        console.log(`resume: ${done.size} rows present, ${before - tests.length} skipped`);
+    }
+    const out = fs.createWriteStream(outPath, opts.resume ? { flags: "a" } : {});
     console.log(`${tests.length} tests, ${cfg.jobs} jobs -> ${outPath}`);
 
     let next = 0,
