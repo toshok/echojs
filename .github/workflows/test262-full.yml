@@ -1,8 +1,8 @@
 # The whole test262 suite, sharded across parallel runners, as a
 # reusable workflow.  It has no triggers of its own: build-and-test.yml
-# calls it on the platform whose test262-full input is set, once that
-# platform's build finishes, so it runs inside the same workflow run
-# and can download the artifact that build uploaded.
+# calls it on the platform whose test262-suite input is "full", once
+# that platform's build finishes, so it runs inside the same workflow
+# run and can download the artifact that build uploaded.
 #
 # Nothing here builds the compiler.  That build uploads the stage1
 # workroot it already built plus the pinned suite checkout; every
@@ -28,7 +28,7 @@ env:
   # the shard matrix must list exactly 0..SHARDS-1.  Drift is loud in
   # both directions: a short list fails the collect job's completeness
   # check, a long one is rejected by --shard K/N.
-  SHARDS: "12"
+  SHARDS: "16"
 
 jobs:
   shard:
@@ -38,7 +38,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] # 0..SHARDS-1
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] # 0..SHARDS-1
     steps:
       # the runner scripts only — the compiler arrives prebuilt, so no
       # submodules

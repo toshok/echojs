@@ -1,15 +1,15 @@
 # EchoJS CI: the root of every build, and the place the platform list
-# lives.  One matrixed call of build-and-test.yml (the reusable
-# per-platform build) — legs are independent (fail-fast off), each
-# reports under its platform name, and per-platform behavior is data in
-# the matrix entry rather than a separate job.  release.yml runs the
-# same builds on a version tag, but as explicit jobs: its smoke jobs
-# depend on individual platforms, and needs can't name a matrix leg.
+# lives.  One explicit call of build-and-test.yml (the reusable
+# per-platform build) per platform — explicit jobs rather than a
+# matrix so each platform is a top-level entry in the run display
+# (matrix legs of a reusable call all fold into one group).
+# release.yml makes the same calls on a version tag.
 #
-# test262 runs both ways, and which way is a per-platform input: the
-# curated lane in-job on macOS, against expectations.txt, and the whole
-# suite sharded off the x86_64 build, which build-and-test.yml
-# dispatches itself so it waits on that build and nothing else.
+# test262-suite is a per-platform input: macOS and linux-arm64 run the
+# reduced lane in-job, each against its own expectations file, and the
+# whole suite runs sharded off the x86_64 build, which
+# build-and-test.yml dispatches itself so it waits on that build and
+# nothing else.
 name: CI
 
 on:
@@ -22,39 +22,42 @@ on:
         description: rewrite test262 full-baseline.json from this run
         type: boolean
         default: false
+      update-lane-expectations:
+        description: regenerate the per-platform lane expectations files (uploaded as artifacts)
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-and-test:
-    name: ${{ matrix.platform }}
-    strategy:
-      # a red platform is information; don't let it cancel the others
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-arm64
-            runner: macos-15
-            # platform-independent, so exactly one platform pays for it
-            typecheck: true
-            # expectations.txt is generated on this platform
-            test262-lane: true
-          - platform: linux-arm64
-            runner: ubuntu-24.04-arm
-            buck-config: --config llvm.prefix=/usr/lib/llvm-22
-          - platform: linux-x86_64
-            runner: ubuntu-24.04
-            buck-config: --config llvm.prefix=/usr/lib/llvm-22
-            # the build the sharded suite runs against
-            test262-full: true
+  macos-arm64:
     uses: ./.github/workflows/build-and-test.yml
     with:
-      platform: ${{ matrix.platform }}
-      runner: ${{ matrix.runner }}
-      buck-config: ${{ matrix.buck-config || '' }}
-      typecheck: ${{ matrix.typecheck || false }}
-      test262-lane: ${{ matrix.test262-lane || false }}
-      test262-full: ${{ matrix.test262-full || false }}
-      update-test262-baseline: ${{ (matrix.test262-full && inputs.update-test262-baseline) || false }}
+      platform: macos-arm64
+      runner: macos-15
+      # platform-independent, so exactly one platform pays for it
+      typecheck: true
+      test262-suite: reduced
+      update-lane-expectations: ${{ inputs.update-lane-expectations || false }}
+
+  linux-arm64:
+    uses: ./.github/workflows/build-and-test.yml
+    with:
+      platform: linux-arm64
+      runner: ubuntu-24.04-arm
+      buck-config: --config llvm.prefix=/usr/lib/llvm-22
+      test262-suite: reduced
+      lane-expectations: expectations-linux-arm64.txt
+      update-lane-expectations: ${{ inputs.update-lane-expectations || false }}
+
+  linux-x86_64:
+    uses: ./.github/workflows/build-and-test.yml
+    with:
+      platform: linux-x86_64
+      runner: ubuntu-24.04
+      buck-config: --config llvm.prefix=/usr/lib/llvm-22
+      # the build the sharded suite runs against
+      test262-suite: full
+      update-test262-baseline: ${{ inputs.update-test262-baseline || false }}

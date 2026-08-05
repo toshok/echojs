@@ -62,9 +62,7 @@ jobs:
             exit 1
           fi
 
-  # the same per-platform builds ci.yml runs, but as explicit jobs
-  # rather than ci.yml's matrix: smoke-linux/smoke-macos below need
-  # individual platforms, and needs can't name a matrix leg
+  # the same per-platform calls ci.yml makes
   macos-arm64:
     needs: version-check
     uses: ./.github/workflows/build-and-test.yml
@@ -72,7 +70,7 @@ jobs:
       platform: macos-arm64
       runner: macos-15
       typecheck: true
-      test262-lane: true
+      test262-suite: reduced
 
   linux-arm64:
     needs: version-check
@@ -81,6 +79,8 @@ jobs:
       platform: linux-arm64
       runner: ubuntu-24.04-arm
       buck-config: --config llvm.prefix=/usr/lib/llvm-22
+      test262-suite: reduced
+      lane-expectations: expectations-linux-arm64.txt
 
   linux-x86_64:
     needs: version-check
@@ -89,7 +89,7 @@ jobs:
       platform: linux-x86_64
       runner: ubuntu-24.04
       buck-config: --config llvm.prefix=/usr/lib/llvm-22
-      test262-full: true
+      test262-suite: full
 
   publish:
     needs: [macos-arm64, linux-arm64, linux-x86_64]
