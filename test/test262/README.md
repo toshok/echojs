@@ -6,9 +6,10 @@ classifying every outcome.  Three uses:
 - **Probe**: any selection, reported by feature/area — the
   exhaustiveness check behind the payoff list.
 - **CI lane**: `lane.sh` — a small fixed selection against the pinned
-  suite SHA (`suite.sha`), checked against `expectations.txt`.  CI
-  (the macOS build-and-test job) fails on any regression (expected-pass
-  test failing) or stale expectation (expected-fail test passing).
+  suite SHA (`suite.sha`), checked against a per-platform expectations
+  file.  CI runs it on macOS and linux-arm64 and fails on any
+  regression (expected-pass test failing) or stale expectation
+  (expected-fail test passing).
 - **Full suite**: `.github/workflows/test262-full.yml` — every
   in-scope test, sharded across parallel Linux runners on each push
   and PR, ratcheted against `full-baseline.json`.
@@ -23,21 +24,30 @@ git -C /tmp/test262 checkout "$(cat test/test262/suite.sha)"
 ```
 
 Without `--ejs` the script assembles a workroot from buck2 outputs
-(stage1).  The lane selection is every 6th `test/language/**` test
-(proportional across directories), 2 per `built-ins` leaf directory,
-and all of `harness/` — sized for a CI runner; shrink the stride
-toward 1 as features land.  `expectations.txt` is checked by
-membership (a listed test may fail any way; an unlisted one must
-pass); `skip` entries mark environment-sensitive tests whose outcome
-is ignored.  After feature work, rerun with `--update` and commit the
-diff — the shrinking file is the conformance ratchet.  Bumping
-`suite.sha` requires an `--update` run in the same commit.
+(stage1).  The lane selection is every 18th `test/language/**` test
+(proportional across directories), 1 per `built-ins` leaf directory,
+and all of `harness/` — a per-test smoke that rides along in a
+platform's build job; the comprehensive number is the sharded full
+suite.  The expectations file is checked by membership (a listed test
+may fail any way; an unlisted one must pass); `skip` entries mark
+environment-sensitive tests whose outcome is ignored.  After feature
+work, rerun with `--update` and commit the diff.  Bumping `suite.sha`
+requires an `--update` run in the same commit.
+
+Each lane platform owns an expectations file — `expectations.txt`
+(macOS arm64, the dev platform, the default) and
+`expectations-linux-arm64.txt` — because crash and timeout classes
+vary by platform even where semantics don't.  Regenerate on the
+platform that checks it: locally with `--update` for macOS, or run CI
+via workflow_dispatch with `update-lane-expectations` and commit the
+uploaded `lane-expectations-<platform>` artifact.
 
 ## The full suite
 
 `test262-full.yml` is a reusable workflow with no triggers of its own:
-`build-and-test.yml` calls it on the platform whose `test262-full` input is
-set — Linux x86_64 — once that platform's build is done, so it runs
+`build-and-test.yml` calls it on the platform whose `test262-suite`
+input is `full` — Linux x86_64 — once that platform's build is done,
+so it runs
 inside the same workflow run, waits on no other platform, and nothing
 builds the compiler twice.  That build uploads its stage1 workroot and
 the suite checkout, the shard matrix extracts that archive and runs
@@ -56,9 +66,9 @@ Until that file exists the check no-ops, so the ratchet only gets
 teeth when you commit one — after which a regression reddens CI, and
 because `release.yml` runs the same matrix, blocks a release.
 
-The baseline is a Linux number and `expectations.txt` is a macOS one.
-Semantics don't vary by platform, but `fail-crash`, `compile-timeout`
-and `run-timeout` can, so regenerate each where it runs.
+The baseline is a Linux x86_64 number, like the lane expectations
+files it sits alongside: regenerate each on the platform that checks
+it.
 
 ## Running the probe
 

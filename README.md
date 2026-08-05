@@ -104,14 +104,15 @@ Promises, and the current standard library (`Object.entries`,
 iterator helpers, `globalThis`, ...).
 
 Conformance is measured against
-[test262](https://github.com/tc39/test262): a curated CI lane passes
-~77%, and the full suite runs sharded on every push and PR, with
+[test262](https://github.com/tc39/test262): the full suite (every test
+an AOT engine could pass) runs sharded on every push and PR at ~73%
+pass, ratcheted so it can't regress, with
 [docs/language-plan.md](docs/language-plan.md) tracking the remainder.
-Out of scope for an ahead-of-time compiler, and excluded from those
-rates: `eval` and `new Function` (no runtime code generation), dynamic
-`import()`, and cross-realm host objects (`ShadowRealm`).  A few divergences from node are pinned on
-purpose (Annex B block-function hoisting, `toLocaleString` ICU
-rounding).
+Out of scope for an ahead-of-time compiler, and excluded from that
+rate: `eval` and `new Function` (no runtime code generation), dynamic
+`import()`, and cross-realm host objects (`ShadowRealm`).  A few
+divergences from node are pinned on purpose (Annex B block-function
+hoisting, `toLocaleString` ICU rounding).
 
 Two suites guard all of this: a 460+-program suite whose expected
 output comes from node, and the compiler compiling itself (~50k lines
