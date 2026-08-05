@@ -89,6 +89,7 @@ shared_sources = [
     "ejs-proxy.c",
     "ejs-recording.c",
     "ejs-reflect.c",
+    "ejs-regexp-unicode.c",
     "ejs-regexp.c",
     "ejs-require.c",
     "ejs-resources.c",

@@ -107,9 +107,10 @@ function dumpModule(filename: string, mode: string, eir_module: Module): void {
 }
 
 // only primitive literals fold; regex literals are objects and need
-// runtime construction
+// runtime construction — and a rejected regex literal has value null,
+// so the regex field is what identifies them, not the value
 function isFoldableLiteral(n: e.Expression | null | undefined): n is e.Literal {
-    return !!n && n.type === "Literal" && (n.value === null || typeof n.value !== "object");
+    return !!n && n.type === "Literal" && !n.regex && (n.value === null || typeof n.value !== "object");
 }
 
 // the module-slot reference map: local name -> { module, slot, constval?,

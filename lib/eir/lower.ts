@@ -775,6 +775,21 @@ class LowerFunction {
     }
 
     literal(n: e.Literal): Inst {
+        // a regex literal: fresh RegExp per evaluation.  Checked before
+        // the null-literal case, and lowered from the syntactic n.regex:
+        // n.value is acorn's host-constructed RegExp, which is null
+        // whenever the COMPILER's engine rejects the pattern — a /v
+        // literal used to fall through to constNull here and evaluate
+        // to null (and rebuilding flags from value's booleans would
+        // drop any flag that engine predates).  The runtime's own
+        // RegExp throws a SyntaxError at evaluation if the pattern is
+        // bad.
+        if (n.regex !== undefined && n.regex !== null) {
+            return this.b.emit("make_regexp", [], {
+                source: n.regex.pattern,
+                flags: n.regex.flags,
+            });
+        }
         if (n.value === null) return this.b.constNull();
         switch (typeof n.value) {
             case "number":
@@ -783,22 +798,6 @@ class LowerFunction {
                 return this.b.constAtom(n.value);
             case "boolean":
                 return this.b.constBool(n.value);
-            case "object": {
-                // a regex literal: fresh RegExp per evaluation, like the
-                // legacy visitLiteral
-                if (typeof n.value.source !== "string")
-                    throw LowerNotSupported(`literal ${typeof n.value}`, n.loc);
-                let flags =
-                    (n.value.global ? "g" : "") +
-                    (n.value.multiline ? "m" : "") +
-                    (n.value.ignoreCase ? "i" : "") +
-                    (n.value.sticky ? "y" : "") +
-                    (n.value.unicode ? "u" : "");
-                return this.b.emit("make_regexp", [], {
-                    source: n.value.source,
-                    flags: flags,
-                });
-            }
             default:
                 throw LowerNotSupported(`literal ${typeof n.value}`, n.loc);
         }
@@ -1604,7 +1603,11 @@ class LowerFunction {
         let export_info = ref.module_info.exports.get(name);
         if (!export_info || export_info.promoted) return null; // promoted slots are private
         let cv = export_info.constval;
-        if (cv && cv.type === "Literal" && (cv.value === null || typeof cv.value !== "object"))
+        // regex literals never fold here even though a rejected one has
+        // value === null: make_regexp builds a FRESH object per
+        // evaluation, and folding would mint one per reference site
+        // where the export must be a single identity
+        if (cv && cv.type === "Literal" && !cv.regex && (cv.value === null || typeof cv.value !== "object"))
             return this.literal(cv);
         return this.b.emit("module_slot_load", [], {
             module: ref.exotic,

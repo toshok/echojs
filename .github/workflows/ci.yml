@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       update-test262-baseline:
-        description: rewrite test262 full-baseline.json from this run
+        description: force-rewrite test262 full-baseline.json even when this run is worse (improvements rewrite it automatically)
         type: boolean
         default: false
       update-lane-expectations:

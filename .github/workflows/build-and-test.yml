@@ -58,7 +58,7 @@ on:
         type: boolean
         default: false
       update-test262-baseline:
-        description: rewrite full-baseline.json from the sharded run
+        description: force-rewrite full-baseline.json even when the sharded run is worse (improvements rewrite it automatically)
         type: boolean
         default: false
 

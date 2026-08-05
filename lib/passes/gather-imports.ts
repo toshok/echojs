@@ -389,11 +389,14 @@ function parseFile(filename: string, content: string, options: CompilerOptions):
         // silently miscompile (e.g. `async m() {}` object methods
         // compiled to nonsense).  a program that doesn't parse must fail
         // loudly here.  sourceType "module" is what makes import/export
-        // parse at all and, per spec, makes the parse strict.
+        // parse at all and, per spec, makes the parse strict — which is
+        // exactly why --script must NOT use it: a sloppy script may use
+        // `yield` as an identifier, octal-ish escapes, and the rest of
+        // what a module-goal (strict) parse rejects as early errors.
         return parser.parse(content, {
             loc: true,
             raw: true,
-            sourceType: "module",
+            sourceType: options.script ? "script" : "module",
             parser: options.parser,
         });
     } catch (err) {

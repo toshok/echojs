@@ -237,6 +237,7 @@
     { "Date.parse", 1 },
     { "Date.UTC", 7 },
     { "RegExp", 2 },
+    { "RegExp.escape", 1 },
     { "RegExp.prototype.exec", 1 },
     { "RegExp.prototype.compile", 2 },
     { "RegExp.prototype.toString", 0 },

@@ -7,6 +7,8 @@ export interface AcornOptions {
     ecmaVersion: number | "latest";
     sourceType?: "script" | "module";
     locations?: boolean;
+    allowImportExportEverywhere?: boolean;
+    allowAwaitOutsideFunction?: boolean;
 }
 
 export interface AcornNode {

@@ -62,6 +62,11 @@ export interface Literal extends BaseNode {
     type: "Literal";
     value: string | number | boolean | null | RegExp;
     raw?: string;
+    // regexp literals only: the syntactic pattern/flags.  Lowering uses
+    // this rather than `value` — acorn builds `value` with the host's
+    // RegExp constructor and nulls it when that throws, so it reflects
+    // what the COMPILER's host engine accepts, not what the pattern says.
+    regex?: { pattern: string; flags: string };
 }
 
 export interface TemplateLiteral extends BaseNode {

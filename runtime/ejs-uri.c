@@ -74,8 +74,10 @@ Encode (ejsval string, ejsval unescaped)
             }
 
             /* iv. Let Octets be the array of octets resulting by applying the UTF-8 transformation to V, and let L be the array size. */
+            /* V is a full code point (astral once a pair was combined
+             * above), so it takes the 4-byte-capable encoder */
             char octets[4];
-            int32_t L = ucs2_to_utf8_char (V, octets);
+            int32_t L = unicode_cp_to_utf8 (V, octets);
 
             /* v. Let j be 0. */
             int32_t j = 0;
@@ -87,8 +89,10 @@ Encode (ejsval string, ejsval unescaped)
 
                 /* 2. Let S be a String containing three code units “%XY” where XY are two uppercase hexadecimal
                  * digits encoding the value of jOctet. */
-                char buff[4];
-                sprintf(buff, "%%%X", jOctet);
+                char buff[8];
+                /* unsigned: a continuation byte in a signed char would
+                 * sign-extend into "%FFFFFFC3" */
+                sprintf(buff, "%%%X", (unsigned char)jOctet);
                 ejsval S = _ejs_string_new_utf8 (buff);
 
                 /* 3. Let R be a new String value computed by concatenating the previous value of R and S. */
