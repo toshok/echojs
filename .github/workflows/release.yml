@@ -1,6 +1,11 @@
-# EchoJS release pipeline.  Runs when a v<semver> tag is
-# pushed (prepare-release.sh makes the tag; pushing it is the human
-# act that starts this).  A release is:
+# EchoJS release pipeline, two event-driven phases in one file.  Both
+# phases MUST live in this file: npm trusted publishing validates
+# owner/repo + the workflow filename (release.yml) against the
+# trusted-publisher config on npmjs.com, so renaming this file or
+# moving the publish step to another workflow breaks publishing.
+#
+# Phase 1 — a v<semver> tag is pushed (prepare-release.sh makes the
+# tag; pushing it is the first of the two human acts):
 #
 #   version-check   the tag, package.json, the npm wrapper, and the
 #                   CHANGELOG all agree
@@ -13,28 +18,36 @@
 #   publish         a DRAFT GitHub release holding the three tarballs,
 #                   the generated homebrew formula (hosted urls), and
 #                   the npm wrapper tgz; changelog section = notes.
-#                   Publishing the draft is the go-live act (draft
-#                   asset urls are not public, so the formula and npm
-#                   postinstall only resolve once it's published).
-#                   The tap push runs iff HOMEBREW_TAP_TOKEN is
-#                   configured.  npm publish uses OIDC trusted
-#                   publishing (docs.npmjs.com/trusted-publishers) —
-#                   no token; npmjs trusts THIS workflow file
-#                   (owner/repo + filename release.yml are what the
-#                   trusted-publisher config matches, so renaming
-#                   this file breaks publishing) — gated on the
-#                   NPM_TRUSTED_PUBLISHING repo variable being "true"
-#                   so releases stay green until the publisher is
-#                   configured on npmjs.com.
+#                   The draft is the staging release: draft asset urls
+#                   are not public, and nothing outside GitHub points
+#                   at it yet.
 #   smoke-*         clean-machine proof: a bare ubuntu container and a
 #                   fresh macos runner install ONLY the tarball + the
 #                   documented prerequisites, then compile and run a
 #                   program through the installed layout.
+#
+# Phase 2 — the human publishes the draft (the second and last human
+# act: the web UI's Publish button, or
+# `gh release edit vX.Y.Z --draft=false`):
+#
+#   go-live         fires on release:published, once the asset urls
+#                   resolve publicly.  Verifies they do, pushes the
+#                   formula to the tap (iff HOMEBREW_TAP_TOKEN is
+#                   configured), npm-publishes the wrapper via OIDC
+#                   trusted publishing
+#                   (docs.npmjs.com/trusted-publishers) — no token —
+#                   gated on the NPM_TRUSTED_PUBLISHING repo variable
+#                   being "true" so releases stay green until the
+#                   publisher is configured on npmjs.com, and proves
+#                   the result by installing the just-published
+#                   package from the registry.
 name: Release
 
 on:
   push:
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -43,7 +56,10 @@ concurrency:
   group: release-${{ github.ref }}
 
 jobs:
+  # phase 1 hangs off version-check, so this event gate skips the
+  # whole build/draft chain on release:published
   version-check:
+    if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -96,15 +112,8 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-      id-token: write # OIDC token for npm trusted publishing
     steps:
       - uses: actions/checkout@v4
-
-      # trusted publishing needs npm >= 11.5.1 on node >= 22.14
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - run: npm install -g npm@latest && npm --version
 
       - uses: actions/download-artifact@v4
         with:
@@ -144,12 +153,65 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # re-runs replace a leftover draft; an already-PUBLISHED
+          # release means go-live happened — refuse to clobber it
+          if DRAFT="$(gh release view "$GITHUB_REF_NAME" --json isDraft -q .isDraft 2>/dev/null)"; then
+            if [ "$DRAFT" != "true" ]; then
+              echo "::error::release $GITHUB_REF_NAME is already published"
+              exit 1
+            fi
+            gh release delete "$GITHUB_REF_NAME" --yes
+          fi
           gh release create "$GITHUB_REF_NAME" \
             --draft \
             --verify-tag \
             --title "echojs ${GITHUB_REF_NAME#v}" \
             --notes-file notes.md \
             assets/*
+
+  # phase 2: the outward-facing publishes, running only after the
+  # human made the draft public — before that the asset urls the
+  # formula and the npm postinstall download from do not resolve
+  go-live:
+    if: github.event_name == 'release' && !github.event.release.prerelease
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write # OIDC token for npm trusted publishing
+    steps:
+      # release events carry the tag ref, so this checks out the
+      # released tree — the wrapper directory npm publish reads
+      - uses: actions/checkout@v4
+
+      # trusted publishing needs npm >= 11.5.1 on node >= 22.14
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install -g npm@latest && npm --version
+
+      - name: the released assets resolve publicly
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          case "$GITHUB_REF_NAME" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::$GITHUB_REF_NAME is not a release tag"; exit 1 ;;
+          esac
+          V="$(node -p "require('./packaging/npm/package.json').version")"
+          if [ "$V" != "$TAG" ]; then
+            echo "::error::the tagged tree's npm wrapper says $V but the release tag says $TAG"
+            exit 1
+          fi
+          for triple in arm64-macos arm64-linux x86_64-linux; do
+            URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/v$TAG/echojs-$TAG-$triple.tar.gz"
+            echo "checking $URL"
+            curl -sfLI -o /dev/null "$URL" || {
+              echo "::error::$URL does not resolve — is the release missing assets?"
+              exit 1
+            }
+          done
+          gh release download "$GITHUB_REF_NAME" --pattern echojs.rb --dir assets
 
       # both publish legs are shell-gated on their secrets: absent
       # secret = loudly-skipped step, not a broken release
@@ -173,8 +235,9 @@ jobs:
       # OIDC trusted publishing: no token, npm exchanges this job's
       # id-token for short-lived credentials and generates provenance
       # attestations automatically.  Publishes the package DIRECTORY
-      # (same bits as the attached tgz — both come from packaging/npm
-      # at this ref) so provenance sees the build context.
+      # (same bits as the tgz attached to the release — both come from
+      # packaging/npm at this ref) so provenance sees the build
+      # context.
       - name: npm publish (trusted publishing)
         env:
           TP_ENABLED: ${{ vars.NPM_TRUSTED_PUBLISHING }}
@@ -185,6 +248,30 @@ jobs:
             exit 0
           fi
           npm publish ./packaging/npm --access public
+
+      # end-to-end proof of the go-live: install what the registry now
+      # serves (postinstall downloads and unpacks the public tarball,
+      # failing loudly if anything is off).  Retries cover registry
+      # propagation lag right after publish.
+      - name: install the published package from the registry
+        env:
+          TP_ENABLED: ${{ vars.NPM_TRUSTED_PUBLISHING }}
+        run: |
+          if [ "$TP_ENABLED" != "true" ]; then
+            echo "npm publish was skipped — nothing to install"
+            exit 0
+          fi
+          TAG="${GITHUB_REF_NAME#v}"
+          for i in $(seq 1 10); do
+            if npm install -g "@pirouette/echojs@$TAG"; then
+              command -v ejs
+              exit 0
+            fi
+            echo "not installable yet (attempt $i) — waiting for registry propagation"
+            sleep 15
+          done
+          echo "::error::@pirouette/echojs@$TAG did not become installable"
+          exit 1
 
   # a machine that has never seen the repo: only the tarball + the
   # README's documented prerequisites

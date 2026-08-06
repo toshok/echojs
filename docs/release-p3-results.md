@@ -46,29 +46,38 @@ tag is the human act that starts the pipeline.
    homebrew formula against the hosted asset URL (sha from the real
    tarball), `npm pack`s the wrapper, extracts the tag's CHANGELOG
    section as notes, and creates a **draft** GitHub release carrying
-   tarballs + formula + wrapper tgz.  Publishing the draft is the
-   go-live act — draft asset URLs aren't public, so the formula and
-   the npm postinstall only resolve after that click.  Two
-   shell-gated legs, each loudly skipped when unconfigured rather
-   than breaking the release: the formula push to
-   `toshok/homebrew-echojs` (iff `HOMEBREW_TAP_TOKEN` is set — a git
-   push needs a credential), and `npm publish` via **OIDC trusted
-   publishing** (docs.npmjs.com/trusted-publishers): no token at all —
-   the job has `id-token: write`, npm ≥ 11.5.1 exchanges the GitHub
-   OIDC token for short-lived credentials, and provenance
-   attestations are generated automatically.  Gated on the
-   `NPM_TRUSTED_PUBLISHING` repo *variable* being `true`, flipped
-   after the trusted publisher is configured on npmjs.com.  Two
-   load-bearing details: the publisher config matches owner/repo +
-   the workflow *filename* (`release.yml` — renaming the file breaks
-   publishing; the publish step must also live in this workflow, not
-   a reusable one, since validation checks the calling workflow), and
-   the wrapper's `repository` field must match the repo exactly
+   tarballs + formula + wrapper tgz.  The draft is the staging
+   release: draft asset URLs aren't public, and nothing outside
+   GitHub points at it yet.  Re-runs replace a leftover draft; an
+   already-published release makes the job refuse.
+4. **go-live** — publishing the draft (web UI, or `gh release edit
+   vX.Y.Z --draft=false`) is the go-live click, and the only human
+   act after the tag push.  It fires the `release: published` leg of
+   the same workflow, which verifies the asset URLs now resolve
+   publicly, then runs the two outward publishes — each shell-gated
+   and loudly skipped when unconfigured rather than breaking the
+   release: the formula push to `toshok/homebrew-echojs` (iff
+   `HOMEBREW_TAP_TOKEN` is set — a git push needs a credential), and
+   `npm publish` via **OIDC trusted publishing**
+   (docs.npmjs.com/trusted-publishers): no token at all — the job has
+   `id-token: write`, npm ≥ 11.5.1 exchanges the GitHub OIDC token
+   for short-lived credentials, and provenance attestations are
+   generated automatically.  Gated on the `NPM_TRUSTED_PUBLISHING`
+   repo *variable* being `true`, flipped after the trusted publisher
+   is configured on npmjs.com.  Two load-bearing details: the
+   publisher config matches owner/repo + the workflow *filename*
+   (`release.yml` — renaming the file, or moving the publish to
+   another workflow, breaks publishing; both event legs live in the
+   one file for this reason), and the wrapper's `repository` field
+   must match the repo exactly
    (`git+https://github.com/toshok/echojs.git` + `directory:
    packaging/npm`).  The publish uses the package directory, not the
    tgz, so provenance sees the build context; `publishConfig.access:
-   public` is baked into the wrapper's package.json.
-4. **smoke-linux / smoke-macos** — the clean-machine proof the plan
+   public` is baked into the wrapper's package.json.  The job ends by
+   `npm install -g`-ing the just-published version from the registry
+   (with retries for propagation lag) — end-to-end proof the public
+   package installs.
+5. **smoke-linux / smoke-macos** — the clean-machine proof the plan
    asked for: a bare `ubuntu:24.04` container (both arches) and a
    fresh macos runner that never see the repo install only the
    tarball plus the README's documented prerequisites (apt.llvm.org
@@ -99,7 +108,8 @@ invoked), since postinstall's cwd is the package directory.
 
 1. `./packaging/prepare-release.sh 0.2.0` && `git push origin HEAD v0.2.0`
 2. wait for the Release workflow: green matrix + draft release + smokes
-3. publish the draft release (this makes formula/npm URLs real)
+3. publish the draft release — CI's go-live job takes it from there
+   (asset-url check, tap push, npm publish, registry install proof)
 4. optional, once: create `toshok/homebrew-echojs` and set
    `HOMEBREW_TAP_TOKEN` — until then the formula rides on the release
    page
@@ -113,9 +123,6 @@ invoked), since postinstall's cwd is the package directory.
 
 ## Follow-ons
 
-- The publish job re-runs are not idempotent (`gh release create`
-  fails if the draft already exists) — delete the draft before
-  re-running, or teach the step `gh release view || create`.
 - The linux smoke pins apt.llvm.org's llvm-22 spelling; when the
   toolchain major moves, dist-info already carries it — the smoke
   could read EJS_LLVM_MAJOR from the tarball instead of hardcoding.

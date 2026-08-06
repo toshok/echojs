@@ -69,6 +69,7 @@ git --no-pager log --oneline -1
 echo
 echo "next:"
 echo "    git push origin HEAD \"v$VERSION\"    # runs the release pipeline"
-echo "the pipeline drafts the GitHub release; publishing it (and the"
-echo "OIDC npm publish / tap push, if configured) is described in"
-echo "docs/release-p3-results.md"
+echo "the pipeline builds, tests, and drafts the GitHub release with all"
+echo "assets attached; publishing the draft is the go-live click, after"
+echo "which CI pushes the tap formula and npm-publishes the wrapper"
+echo "(docs/release-p3-results.md has the details)"
