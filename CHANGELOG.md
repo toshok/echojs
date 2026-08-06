@@ -14,6 +14,8 @@ packaged artifacts + a clean-machine install smoke — see
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-05
+
 ### Changed
 
 - **Programs compile under the ECMAScript Module goal by default**:
