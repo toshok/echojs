@@ -185,107 +185,41 @@ static EJS_NATIVE_FUNC(_ejs_Number_prototype_toFixed) {
 #endif
 }
 
-// ECMA262: 20.1.3.5 Number.prototype.toPrecision ( precision ) 
+// ECMA262: 20.1.3.5 Number.prototype.toPrecision ( precision )
 static EJS_NATIVE_FUNC(_ejs_Number_prototype_toPrecision) {
-    EJS_NOT_IMPLEMENTED();
-#if notyet
     ejsval precision = _ejs_undefined;
     if (argc > 0) precision = args[0];
 
-    // 1. Let x be thisNumberValue(this value). 
-    // 2. ReturnIfAbrupt(x). 
+    // 1. Let x be thisNumberValue(this value).
     double x = thisNumberValue(*_this);
 
-    // 3. If precision is undefined, return ToString(x). 
+    // 2. If precision is undefined, return ToString(x).
     if (EJSVAL_IS_UNDEFINED(precision))
-        return ToString(x);
+        return ToString(NUMBER_TO_EJSVAL(x));
 
-    // 4. Let p be ToInteger(precision). 
-    // 5. ReturnIfAbrupt(p). 
-    int64_t = ToInteger(precision);
+    // 3. Let p be ToIntegerOrInfinity(precision).
+    double pd = ToDouble(precision);
+    if (isnan(pd)) pd = 0;
+    pd = trunc(pd);
 
-    // 6. If x is NaN, return the String "NaN". 
+    // 4. If x is not finite, return Number::toString(x).
     if (isnan(x))
         return _ejs_atom_NaN;
+    if (!isfinite(x))
+        return x < 0 ? _ejs_atom_NegativeInfinity : _ejs_atom_Infinity;
 
-    // 7. Let s be the empty String. 
-    ejsval s = _ejs_atom_empty;
+    // 5. If p < 1 or p > 100, throw a RangeError exception.
+    if (pd < 1 || pd > 100)
+        _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "toPrecision() argument must be between 1 and 100");
+    int prec = (int)pd;
 
-    // 8. If x < 0, then 
-    if (x < 0) {
-        //    a. Let s be "-". 
-        s = _ejs_atom_minus;
-        //    b. Let x = –x. 
-        x = -x;
-    }
-    // 9. If x = +∞, then 
-    int classified = fpclassify(x);
-    if (classified == FP_INFINITE) {
-        //    a. Return the concatenation of the Strings s and "Infinity". 
-        return _ejs_string_concat (s, _ejs_atom_Infinity);
-    }
-
-    // 10. If p < 1 or p > 21, throw a RangeError exception. 
-    if (p < 1 || p > 21) {
-        _ejs_throw_nativeerror_utf8 (EJS_RANGE_ERROR, "precision must be in the range of 1 <= p <= 21");
-    }
-
-    double e;
-
-    // 11. If x = 0, then 
-    if (x == 0) {
-        //     a. Let m be the String consisting of p occurrences of the code unit 0x0030 (the Unicode character ‘0’). 
-        m = zeros[p];
-
-        //     b. Let e = 0. 
-        e = 0;
-    }
-    // 12. Else x != 0, 
-    else {
-        //     a. Let e and n be integers such that 10^(p–1) <= n < 10^p and for which the exact mathematical value of n * 10^(e–p+1) – x is as close to zero as possible.
-        //        If there are two such sets of e and n, pick the e and n for which n * 10^(e–p+1) is larger. 
-        //     b. Let m be the String consisting of the digits of the decimal representation of n (in order, with no leading zeroes). 
-        //     c. If e < –6 or e >= p, then 
-        //        i. Assert: e != 0 
-        //        ii. Let a be the first element of m, and let b be the remaining p–1 elements of m. 
-        //        iii. Let m be the concatenation of the three Strings a, ".", and b. 
-        //        iv. If e > 0, then 
-        if (e > 0)
-            //           1. Let c = "+". 
-            c = "+";
-        //        v. Else e < 0, 
-        else {
-            //           1. Let c = "-". 
-            c = "-";
-            //           2. Let e = –e. 
-            e = -e;
-        }
-        //        vi. Let d be the String consisting of the digits of the decimal representation of e (in order, with no leading zeroes). 
-        //        vii. Return the concatenation of the five Strings s, m, "e", c, and d. 
-        return _ejs_string_concatv (s, m, _ejs_string_new_utf8("e"), c, d, _ejs_null);
-    }
-    // 13. If e = p–1, then return the concatenation of the Strings s and m. 
-    if (e == p - 1)
-        return _ejs_string_concat(s, m);
-    // 14. If e >= 0, then 
-    if (e >= 0) {
-        //     a. Let m be the concatenation of the first e+1 elements of m, the code unit 0x002E (Unicode character ‘.’), and the remaining p– (e+1) elements of m. 
-    }
-    // 15. Else e < 0, 
-    else {
-        //     a. Let m be the concatenation of the String "0.", –(e+1) occurrences of code unit 0x0030 (the Unicode character ‘0’), and the String m. 
-        int z = -(e+1);
-        ejsval zstr;
-        if (z > 0 && z <= 21)
-            zstr = zeros[z];
-        else
-            EJS_NOT_IMPLEMENTED(); // create a string z 0's long
-
-        m = _ejs_string_concatv(zerodot, zstr, m, _ejs_null);
-    }
-    // 16. Return the concatenation of the Strings s and m.
-    return _ejs_string_concat(s, m);
-#endif
+    // double-conversion's EcmaScriptConverter implements the exact ES
+    // ToPrecision digit generation (correct decimal rounding + the
+    // exponent-form thresholds)
+    extern void _ejs_dtoa_precision(double d, int precision, char* buf, size_t buf_size);
+    char out[128];
+    _ejs_dtoa_precision(x, prec, out, sizeof(out));
+    return _ejs_string_new_utf8(out);
 }
 
 static EJS_NATIVE_FUNC(_ejs_Number_isFinite) {
@@ -343,10 +277,9 @@ static EJS_NATIVE_FUNC(_ejs_Number_isInteger) {
         return _ejs_false;
 
     // 3. Let integer be ToInteger(number).
-    int integer = ToInteger(number);
-
     // 4. If integer is not equal to number, return false.
-    if (integer != number_)
+    // trunc, not an integer type: number_ can exceed any C integer range
+    if (trunc(number_) != number_)
         return _ejs_false;
 
     // 5. Otherwise, return true.
@@ -372,14 +305,13 @@ static EJS_NATIVE_FUNC(_ejs_Number_isSafeInteger) {
         return _ejs_false;
 
     // 3. Let integer be ToInteger(number).
-    int64_t integer = ToInteger(number);
-
     // 4. If integer is not equal to number, return false.
-    if (integer != number_)
+    // trunc, not an integer type: number_ can exceed any C integer range
+    if (trunc(number_) != number_)
         return _ejs_false;
 
     // 5. If abs(integer) ≤ 2^53-1, then return true.
-    if (llabs(integer) <= EJS_MAX_SAFE_INTEGER)
+    if (fabs(number_) <= (double)EJS_MAX_SAFE_INTEGER)
         return _ejs_true;
 
     // 6. Otherwise, return false.

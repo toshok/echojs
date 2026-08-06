@@ -1471,6 +1471,55 @@ static EJS_NATIVE_FUNC(_ejs_Object_getOwnPropertyDescriptor) {
     return FromPropertyDescriptor(desc);
 }
 
+// ES2017 19.1.2.9 Object.getOwnPropertyDescriptors ( O )
+static EJS_NATIVE_FUNC(_ejs_Object_getOwnPropertyDescriptors) {
+    ejsval O = _ejs_undefined;
+    if (argc > 0) O = args[0];
+
+    ejsval obj = ToObject(O);
+    EJSObject* O_ = EJSVAL_TO_OBJECT(obj);
+
+    ejsval descriptors = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
+
+#define ADD_DESC(k) EJS_MACRO_START                                     \
+        ejsval _key = (k);                                              \
+        EJSPropertyDesc* _desc = OP(EJSVAL_TO_OBJECT(obj),GetOwnProperty)(obj, _key, NULL); \
+        if (_desc)                                                      \
+            _ejs_object_define_value_property(descriptors, _key, FromPropertyDescriptor(_desc), \
+                                              EJS_PROP_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE); \
+    EJS_MACRO_END
+
+    if (EJSVAL_IS_ARRAY(obj)) {
+        ejsval names = _ejs_array_new(0, EJS_FALSE);
+        _ejs_array_push_own_index_names(obj, names);
+        for (int i = 0; i < EJS_ARRAY_LEN(names); i++)
+            ADD_DESC(EJS_DENSE_ARRAY_ELEMENTS(names)[i]);
+        ADD_DESC(_ejs_atom_length);
+    }
+    else if (EJSVAL_IS_STRING_OBJECT(obj)) {
+        ejsval prim = ((EJSString*)O_)->primStr;
+        for (int64_t i = 0; i < EJSVAL_TO_STRLEN(prim); i++)
+            ADD_DESC(ToString(NUMBER_TO_EJSVAL(i)));
+        ADD_DESC(_ejs_atom_length);
+    }
+
+    uint32_t O_shape = EJS_OBJECT_SHAPE(O_);
+    if (O_shape != EJS_SHAPE_DICT) {
+        uint32_t nfields = _ejs_shape_field_count(O_shape);
+        ejsval names[256];
+        _ejs_shape_fields (O_shape, names);
+        for (uint32_t i = 0; i < nfields; i++)
+            ADD_DESC(names[i]);
+        return descriptors;
+    }
+
+    for (_EJSPropertyMapEntry* s = O_->map->head_insert; s; s = s->next_insert)
+        ADD_DESC(s->name);
+
+#undef ADD_DESC
+    return descriptors;
+}
+
 // ECMA262: 19.1.2.7 Object.getOwnPropertyNames ( O )
 static EJS_NATIVE_FUNC(_ejs_Object_getOwnPropertyNames) {
     ejsval O = _ejs_undefined;
@@ -2597,6 +2646,7 @@ _ejs_object_init (ejsval global)
     OBJ_METHOD(getPrototypeOf);
     OBJ_METHOD(setPrototypeOf);
     OBJ_METHOD(getOwnPropertyDescriptor);
+    OBJ_METHOD(getOwnPropertyDescriptors);
     OBJ_METHOD(getOwnPropertyNames);
     OBJ_METHOD(getOwnPropertySymbols);
     OBJ_METHOD(create);

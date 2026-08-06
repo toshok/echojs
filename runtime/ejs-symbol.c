@@ -2,6 +2,8 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
+#include <stdlib.h>
+
 #include "ejs-symbol.h"
 #include "ejs-gc.h"
 #include "ejs-error.h"
@@ -9,44 +11,67 @@
 #include "ejs-string.h"
 #include "ejs-ops.h"
 
-// ECMA262: 19.4.2.2 Symbol.for ( key ) 
+// the GlobalSymbolRegistry List (19.4.2.2): a linked list of
+// malloc'd nodes so the ejsvals have stable addresses for gc roots
+typedef struct EJSSymbolRegistryEntry {
+    ejsval key EJSVAL_ALIGNMENT;    // string
+    ejsval symbol EJSVAL_ALIGNMENT;
+    struct EJSSymbolRegistryEntry* next;
+} EJSSymbolRegistryEntry;
+
+static EJSSymbolRegistryEntry* symbol_registry;
+
+// ECMA262: 19.4.2.2 Symbol.for ( key )
 static EJS_NATIVE_FUNC(_ejs_Symbol_for) {
-#if notyet
     ejsval key = _ejs_undefined;
     if (argc > 0) key = args[0];
 
-    // 1. Let stringKey be ToString(key). 
-    // 2. ReturnIfAbrupt(stringKey). 
+    // 1. Let stringKey be ToString(key).
+    // 2. ReturnIfAbrupt(stringKey).
     ejsval stringKey = ToString(key);
-#endif
-    
-    // 3. For each element e of the GlobalSymbolRegistry List, 
-    // a. If SameValue(e.[[key]], stringKey) is true, then return e.[[symbol]]. 
-    // 4. Assert: GlobalSymbolRegistry does not current contain an entry for stringKey. 
-    // 5. Let newSymbol be a new unique Symbol value whose [[Description]] is stringKey. 
-    ejsval newSymbol = _ejs_null; // XXX
 
-    // 6. Append the record { [[key]]: stringKey, [[symbol]]: newSymbol) to the GlobalSymbolRegistry List. 
-    // 7. Return newSymbol. 
+    // 3. For each element e of the GlobalSymbolRegistry List,
+    // a. If SameValue(e.[[key]], stringKey) is true, then return e.[[symbol]].
+    for (EJSSymbolRegistryEntry* e = symbol_registry; e; e = e->next) {
+        if (SameValue(e->key, stringKey))
+            return e->symbol;
+    }
+
+    // 4. Assert: GlobalSymbolRegistry does not current contain an entry for stringKey.
+    // 5. Let newSymbol be a new unique Symbol value whose [[Description]] is stringKey.
+    ejsval newSymbol = _ejs_symbol_new(stringKey);
+
+    // 6. Append the record { [[key]]: stringKey, [[symbol]]: newSymbol) to the GlobalSymbolRegistry List.
+    EJSSymbolRegistryEntry* entry = (EJSSymbolRegistryEntry*)calloc(1, sizeof(EJSSymbolRegistryEntry));
+    entry->key = stringKey;
+    entry->symbol = newSymbol;
+    _ejs_gc_add_root (&entry->key);
+    _ejs_gc_add_root (&entry->symbol);
+    entry->next = symbol_registry;
+    symbol_registry = entry;
+
+    // 7. Return newSymbol.
     return newSymbol;
 }
 
-// ECMA262: 19.4.2.7 Symbol.keyFor ( sym ) 
+// ECMA262: 19.4.2.7 Symbol.keyFor ( sym )
 static EJS_NATIVE_FUNC(_ejs_Symbol_keyFor) {
     ejsval sym = _ejs_undefined;
     if (argc > 0) sym = args[0];
 
-    // 1. If Type(sym) is not Symbol, then throw a TypeError exception. 
+    // 1. If Type(sym) is not Symbol, then throw a TypeError exception.
     if (!EJSVAL_IS_SYMBOL(sym))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Symbol.keyFor called with non-symbol argument");
-        
-    // 2. For each element e of the GlobalSymbolRegistry List (see 19.4.2.2), 
-    //    a. If SameValue(e.[[symbol]], sym) is true, then return e.[[key]]. 
-    // 3. Assert: GlobalSymbolRegistry does not current contain an entry for sym. 
 
-    // XXX
+    // 2. For each element e of the GlobalSymbolRegistry List (see 19.4.2.2),
+    //    a. If SameValue(e.[[symbol]], sym) is true, then return e.[[key]].
+    for (EJSSymbolRegistryEntry* e = symbol_registry; e; e = e->next) {
+        if (SameValue(e->symbol, sym))
+            return e->key;
+    }
 
-    // 4. Return undefined. 
+    // 3. Assert: GlobalSymbolRegistry does not current contain an entry for sym.
+    // 4. Return undefined.
     return _ejs_undefined;
 }
 
