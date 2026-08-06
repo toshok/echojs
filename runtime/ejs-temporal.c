@@ -2549,6 +2549,54 @@ round_i128_to_increment(ejs_i128 v, ejs_i128 increment, RoundingMode mode)
     return chosen * increment;
 }
 
+// correctly-rounded double of the exact rational num/den (den > 0).
+// Casting quotient and remainder separately and adding rounds twice,
+// which is observably wrong for Duration.total's exact-value semantics.
+static double
+i128_div_to_double(ejs_i128 num, ejs_i128 den)
+{
+    if (num == 0) return 0.0;
+    EJSBool neg = num < 0;
+    unsigned __int128 a = (unsigned __int128)(neg ? -num : num);
+    unsigned __int128 d = (unsigned __int128)den;
+    unsigned __int128 q = a / d;
+    if (a % d == 0) {
+        double dq = (double)q; // exact-integer case: one rounding
+        return neg ? -dq : dq;
+    }
+    int bl = 0;
+    for (unsigned __int128 t = q; t != 0; t >>= 1) bl++;
+    if (bl <= 54) {
+        // widen until the integer quotient carries at least 55
+        // significant bits, so one explicit rounding decides the result
+        int extra = 0;
+        while (EJS_TRUE) {
+            q = a / d;
+            bl = 0;
+            for (unsigned __int128 t = q; t != 0; t >>= 1) bl++;
+            if (bl >= 55) break;
+            a <<= 1;
+            extra++;
+        }
+        int k = bl - 53;
+        unsigned __int128 tail = q & ((((unsigned __int128)1) << k) - 1);
+        unsigned __int128 half = ((unsigned __int128)1) << (k - 1);
+        unsigned __int128 m = q >> k;
+        if (tail > half || (tail == half && (a % d != 0 || (m & 1) != 0)))
+            m += 1;
+        double r = ldexp((double)(uint64_t)m, k - extra);
+        return neg ? -r : r;
+    }
+    // quotient already wider than a double's significand: the cast
+    // rounds ties to even, which is only wrong on an exact tie that the
+    // nonzero remainder breaks upward
+    int k = bl - 53;
+    unsigned __int128 tail = q & ((((unsigned __int128)1) << k) - 1);
+    unsigned __int128 half = ((unsigned __int128)1) << (k - 1);
+    double dq = (tail == half) ? (double)(q + half) : (double)q;
+    return neg ? -dq : dq;
+}
+
 // RoundNumberToIncrementAsIfPositive: negative values round in the
 // same lexical direction as positive ones (trunc behaves as floor)
 static ejs_i128
@@ -2645,6 +2693,8 @@ typedef struct FieldsBag {
 #define BAG_YM     (1 << 4)  // year+month(+code) only
 #define BAG_MD     (1 << 5)  // month(+code)+day+year
 
+static int64_t parse_full_offset_string(ejsval str);
+
 // PrepareCalendarFields: reads the selected fields in alphabetical
 // order with per-field conversions
 static void
@@ -2689,6 +2739,9 @@ read_fields_bag(ejsval item, int which, FieldsBag* bag)
             ejsval prim = EJSVAL_IS_OBJECT(v) ? ToPrimitive(v, TO_PRIM_HINT_STRING) : v;
             if (!EJSVAL_IS_STRING(prim))
                 _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "offset must be a string");
+            // ToOffsetString: syntax is validated as part of the field
+            // conversion, before any later field is read
+            (void)parse_full_offset_string(prim);
             bag->offset = prim;
             bag->has_offset = EJS_TRUE;
         }
@@ -3084,20 +3137,53 @@ duration_time_ns(DurationFields* f)
 
 typedef struct {
     int digits;          // 0..9 fixed; -1 = auto; -2 = minute
+    int unit;            // smallestUnit ordinal 0=year..9=nanosecond; -1 absent
     ejs_i128 increment;  // ns
     RoundingMode mode;
 } SecPrecision;
 
-static const char* const time_unit_names[] = {
-    "minute", "minutes", "second", "seconds", "millisecond", "milliseconds",
-    "microsecond", "microseconds", "nanosecond", "nanoseconds"
+static const char* const all_unit_names[] = {
+    "year", "years", "month", "months", "week", "weeks", "day", "days",
+    "hour", "hours", "minute", "minutes", "second", "seconds",
+    "millisecond", "milliseconds", "microsecond", "microseconds",
+    "nanosecond", "nanoseconds"
 };
 
-// reads fractionalSecondDigits, roundingMode, smallestUnit (spec order)
+// deferred algorithmic validation of the smallestUnit read by
+// get_sec_precision: any unit name reads cleanly, but only
+// minute..nanosecond are meaningful for seconds-precision formatting.
+// Callers invoke this after reading their remaining options so every
+// option's observable read happens before this can throw.
+static void
+sec_precision_apply_unit(SecPrecision* p)
+{
+    if (p->unit >= 0) {
+        if (p->unit < 5) // year..hour
+            _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "smallestUnit is not allowed here");
+        switch (p->unit) {
+        case 5: p->digits = -2; break; // minute
+        case 6: p->digits = 0; break;
+        case 7: p->digits = 3; break;
+        case 8: p->digits = 6; break;
+        default: p->digits = 9; break;
+        }
+    }
+    if (p->digits == -1) p->increment = 1;
+    else if (p->digits == -2) p->increment = 60000000000LL;
+    else if (p->digits == 0) p->increment = 1000000000LL;
+    else {
+        p->increment = 1;
+        for (int i = 0; i < 9 - p->digits; i++) p->increment *= 10;
+    }
+}
+
+// reads fractionalSecondDigits, roundingMode, smallestUnit (spec order);
+// pair with sec_precision_apply_unit before using the result
 static void
 get_sec_precision(ejsval options, SecPrecision* p)
 {
     p->digits = -1;
+    p->unit = -1;
     p->increment = 1;
     p->mode = ROUND_TRUNC;
     if (EJSVAL_IS_UNDEFINED(options))
@@ -3118,23 +3204,8 @@ get_sec_precision(ejsval options, SecPrecision* p)
         }
     }
     p->mode = get_rounding_mode_option(options, ROUND_TRUNC);
-    int su = get_string_option(options, "smallestUnit", time_unit_names, 10, -1);
-    if (su >= 0) {
-        switch (su / 2) {
-        case 0: p->digits = -2; break; // minute
-        case 1: p->digits = 0; break;
-        case 2: p->digits = 3; break;
-        case 3: p->digits = 6; break;
-        case 4: p->digits = 9; break;
-        }
-    }
-    if (p->digits == -1) p->increment = 1;
-    else if (p->digits == -2) p->increment = 60000000000LL;
-    else if (p->digits == 0) p->increment = 1000000000LL;
-    else {
-        p->increment = 1;
-        for (int i = 0; i < 9 - p->digits; i++) p->increment *= 10;
-    }
+    int su = get_string_option(options, "smallestUnit", all_unit_names, 20, -1);
+    p->unit = su >= 0 ? su / 2 : -1;
 }
 
 // format HH:MM[:SS[.frac]] under a SecPrecision (time already rounded)
@@ -3380,6 +3451,7 @@ static EJS_NATIVE_FUNC(_ejs_TemporalPlainTime_prototype_toString) {
     ejsval options = get_options_object(argc > 0 ? args[0] : _ejs_undefined);
     SecPrecision p;
     get_sec_precision(options, &p);
+    sec_precision_apply_unit(&p);
     ejs_i128 t = time_fields_to_ns(pt->hour, pt->minute, pt->second, pt->millisecond, pt->microsecond, pt->nanosecond);
     t = round_i128_to_increment(t, p.increment, p.mode);
     t = i128_floormod(t, NS_PER_DAY);
@@ -3569,6 +3641,7 @@ static EJS_NATIVE_FUNC(_ejs_TemporalPlainDateTime_prototype_toString) {
     int show_cal = get_calendar_name_option(options);
     SecPrecision p;
     get_sec_precision(options, &p);
+    sec_precision_apply_unit(&p);
     // round the full datetime so carries propagate into the date
     int64_t days = _ejs_temporal_iso_date_to_epoch_days(pdt->year, pdt->month, pdt->day);
     ejs_i128 total = ((ejs_i128)days) * NS_PER_DAY
@@ -3959,8 +4032,6 @@ static EJS_NATIVE_FUNC(_ejs_TemporalInstant_prototype_toString) {
     ejsval options = get_options_object(argc > 0 ? args[0] : _ejs_undefined);
     SecPrecision p;
     get_sec_precision(options, &p);
-    if (p.digits == -2)
-        p.increment = 60000000000LL;
     int64_t offset_ns = 0;
     EJSBool show_z = EJS_TRUE;
     if (!EJSVAL_IS_UNDEFINED(options)) {
@@ -3971,6 +4042,7 @@ static EJS_NATIVE_FUNC(_ejs_TemporalInstant_prototype_toString) {
             show_z = EJS_FALSE;
         }
     }
+    sec_precision_apply_unit(&p);
     ejs_i128 rounded = round_i128_as_if_positive(in->epoch_ns, p.increment, p.mode);
     if (rounded < EJS_TEMPORAL_NS_MIN_INSTANT || rounded > EJS_TEMPORAL_NS_MAX_INSTANT)
         _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "instant out of range");
@@ -4279,6 +4351,7 @@ static EJS_NATIVE_FUNC(_ejs_TemporalZonedDateTime_prototype_toString) {
     int show_cal = get_calendar_name_option(options);
     SecPrecision p;
     p.digits = -1;
+    p.unit = -1;
     p.increment = 1;
     p.mode = ROUND_TRUNC;
     if (!EJSVAL_IS_UNDEFINED(options)) {
@@ -4299,25 +4372,11 @@ static EJS_NATIVE_FUNC(_ejs_TemporalZonedDateTime_prototype_toString) {
     static const char* const offsetvals[] = { "auto", "never" };
     int show_offset = get_string_option(options, "offset", offsetvals, 2, 0) == 0;
     p.mode = get_rounding_mode_option(options, ROUND_TRUNC);
-    int su = get_string_option(options, "smallestUnit", time_unit_names, 10, -1);
-    if (su >= 0) {
-        switch (su / 2) {
-        case 0: p.digits = -2; break;
-        case 1: p.digits = 0; break;
-        case 2: p.digits = 3; break;
-        case 3: p.digits = 6; break;
-        case 4: p.digits = 9; break;
-        }
-    }
-    if (p.digits == -1) p.increment = 1;
-    else if (p.digits == -2) p.increment = 60000000000LL;
-    else if (p.digits == 0) p.increment = 1000000000LL;
-    else {
-        p.increment = 1;
-        for (int i = 0; i < 9 - p.digits; i++) p.increment *= 10;
-    }
+    int su = get_string_option(options, "smallestUnit", all_unit_names, 20, -1);
+    p.unit = su >= 0 ? su / 2 : -1;
     static const char* const tzvals[] = { "auto", "never", "critical" };
     int show_tz = get_string_option(options, "timeZoneName", tzvals, 3, 0);
+    sec_precision_apply_unit(&p);
     return zdt_to_string_impl(zdt, &p, show_cal, show_offset, show_tz);
 }
 
@@ -4607,6 +4666,10 @@ relative_apply_duration(const RelativeTo* rel, const DurationFields* f,
         add_iso_date(y0, m0, d0, f->years, f->months, f->weeks, f->days, EJS_TRUE, &ry, &rm, &rd);
         ejs_i128 local = iso_datetime_to_epoch_ns(ry, rm, rd, h, mi, sec, ms, us, ns);
         ejs_i128 epoch = zone_epoch_from_local(rel->time_zone, local, 0) + duration_time_ns((DurationFields*)f);
+        // AddZonedDateTime: the shifted instant must stay within the
+        // representable epoch range
+        if (epoch < EJS_TEMPORAL_NS_MIN_INSTANT || epoch > EJS_TEMPORAL_NS_MAX_INSTANT)
+            _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "instant out of range");
         *total_ns = epoch - rel->epoch_ns;
         int64_t off2 = tz_offset_ns(rel->time_zone, epoch);
         int32_t th, tmi, ts, tms, tus, tns;
@@ -4680,6 +4743,14 @@ static EJS_NATIVE_FUNC(_ejs_TemporalDuration_compare) {
         && a.hours == b.hours && a.minutes == b.minutes && a.seconds == b.seconds
         && a.ms == b.ms && a.us == b.us && a.ns == b.ns)
         return NUMBER_TO_EJSVAL(0.0);
+    // both purely time-scaled: exact comparison, no starting point (so
+    // a relativeTo at the representable edges cannot throw)
+    if (a.years == 0 && a.months == 0 && a.weeks == 0 && a.days == 0
+        && b.years == 0 && b.months == 0 && b.weeks == 0 && b.days == 0) {
+        ejs_i128 an = duration_time_ns(&a);
+        ejs_i128 bn = duration_time_ns(&b);
+        return NUMBER_TO_EJSVAL(an < bn ? -1.0 : (an > bn ? 1.0 : 0.0));
+    }
     if (rel.kind == 0) {
         if (a.years != 0 || b.years != 0 || a.months != 0 || b.months != 0 || a.weeks != 0 || b.weeks != 0)
             _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "comparing durations with calendar units requires relativeTo");
@@ -4870,6 +4941,7 @@ static EJS_NATIVE_FUNC(_ejs_TemporalDuration_prototype_toString) {
     ejsval options = get_options_object(argc > 0 ? args[0] : _ejs_undefined);
     SecPrecision p;
     get_sec_precision(options, &p);
+    sec_precision_apply_unit(&p);
     if (p.digits == -2)
         _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "smallestUnit must be 'second' or smaller");
     return duration_to_string(d, p.digits, p.mode, p.increment);
@@ -5060,8 +5132,10 @@ typedef struct {
     TUnit largest, smallest;
     double increment;
     RoundingMode mode;
-    EJSBool check_bounds; // zoned contexts: nudge bounds must be
-                          // representable dates
+    EJSBool zoned;           // day boundaries go through the zone
+    ejsval time_zone;        // zoned only
+    ejs_i128 start_epoch_ns; // zoned: exact epoch of the start point
+    ejs_i128 dest_epoch_ns;  // zoned: exact epoch of the end point
 } DiffSettings;
 
 // GetDifferenceSettings.  unit_min/unit_max bound the allowed group
@@ -5073,7 +5147,10 @@ get_difference_settings(ejsval options, EJSBool is_since,
                         TUnit fallback_smallest, TUnit largest_default,
                         DiffSettings* out)
 {
-    out->check_bounds = EJS_FALSE;
+    out->zoned = EJS_FALSE;
+    out->time_zone = _ejs_undefined;
+    out->start_epoch_ns = 0;
+    out->dest_epoch_ns = 0;
     TUnit largest = get_unit_option(options, "largestUnit", EJS_TRUE);
     double increment = get_rounding_increment_option(options);
     RoundingMode mode = get_rounding_mode_option(options, ROUND_TRUNC);
@@ -5127,6 +5204,12 @@ balance_time_duration(ejs_i128 total_ns, TUnit largest, int negate_result)
         }
     }
     double s = neg ? -1 : 1;
+    // TemporalDurationFromInternal: each component is the float64
+    // rounding of its mathematical value, which can push the total past
+    // the limit even when the exact ns quantity was in range
+    if (!is_valid_duration(0, 0, 0, s * f[0], s * f[1], s * f[2], s * f[3],
+                           s * f[4], s * f[5], s * f[6]))
+        _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "duration out of range");
     return _ejs_temporal_duration_new(0, 0, 0, s * f[0], s * f[1], s * f[2], s * f[3],
                                       s * f[4], s * f[5], s * f[6]);
 }
@@ -5327,8 +5410,6 @@ difference_iso_date(int32_t y1, int32_t m1, int32_t d1, int32_t y2, int32_t m2, 
 
 // NudgeToCalendarUnit (date-only): round the final calendar unit using
 // day-count progress between the bounding whole-unit dates.
-static EJSBool round_date_duration_check_bounds = EJS_FALSE;
-
 static void
 round_date_duration(int32_t y1, int32_t m1, int32_t d1, int32_t y2, int32_t m2, int32_t d2,
                     ejs_i128 time_remainder_ns, // extra sub-day time toward date2 (signed)
@@ -5501,6 +5582,25 @@ static EJS_NATIVE_FUNC(_ejs_TemporalPlainDate_prototype_since) {
                                argc > 1 ? args[1] : _ejs_undefined, EJS_TRUE);
 }
 
+// DifferencePlainDateTimeWithRounding/WithTotal share this preamble:
+// equal endpoints yield zero before the representability check, and
+// everything else requires both endpoint datetimes within the ISO
+// datetime limits.  Returns EJS_TRUE for the equal (zero) case.
+static EJSBool
+plain_diff_endpoints(int32_t y1, int32_t m1, int32_t d1, ejs_i128 t1,
+                     int32_t y2, int32_t m2, int32_t d2, ejs_i128 t2)
+{
+    if (y1 == y2 && m1 == m2 && d1 == d2 && t1 == t2)
+        return EJS_TRUE;
+    ejs_i128 lo = EJS_TEMPORAL_NS_MIN_INSTANT - NS_PER_DAY;
+    ejs_i128 hi = EJS_TEMPORAL_NS_MAX_INSTANT + NS_PER_DAY;
+    ejs_i128 l1 = ((ejs_i128)_ejs_temporal_iso_date_to_epoch_days(y1, m1, d1)) * NS_PER_DAY + t1;
+    ejs_i128 l2 = ((ejs_i128)_ejs_temporal_iso_date_to_epoch_days(y2, m2, d2)) * NS_PER_DAY + t2;
+    if (l1 <= lo || l1 >= hi || l2 <= lo || l2 >= hi)
+        _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "date-time out of range");
+    return EJS_FALSE;
+}
+
 // core datetime difference over raw ISO fields; t1/t2 are
 // times-of-day in ns.  Fills a signed DurationFields.
 static void
@@ -5509,6 +5609,8 @@ datetime_diff_to_duration(int32_t y1, int32_t m1, int32_t d1, ejs_i128 t1,
                           const DiffSettings* s, DurationFields* out)
 {
     memset(out, 0, sizeof(*out));
+    if (!s->zoned && plain_diff_endpoints(y1, m1, d1, t1, y2, m2, d2, t2))
+        return;
     if (s->largest >= TUNIT_HOUR) {
         ejs_i128 total = (((ejs_i128)_ejs_temporal_iso_date_to_epoch_days(y2, m2, d2)
                            - _ejs_temporal_iso_date_to_epoch_days(y1, m1, d1)) * NS_PER_DAY)
@@ -5532,6 +5634,70 @@ datetime_diff_to_duration(int32_t y1, int32_t m1, int32_t d1, ejs_i128 t1,
         out->seconds = sg * f[3]; out->ms = sg * f[4]; out->us = sg * f[5]; out->ns = sg * f[6];
         return;
     }
+    if (s->zoned && s->smallest >= TUNIT_HOUR) {
+        // DifferenceZonedDateTime + NudgeToZonedTime: the day the time
+        // remainder lives in is measured through the zone, so its length
+        // varies and its boundaries must be representable instants
+        int sign = s->dest_epoch_ns < s->start_epoch_ns ? -1 : 1;
+        ejs_i128 wall_time_diff = t2 - t1;
+        int correction = 0;
+        if (wall_time_diff != 0 && ((wall_time_diff > 0) ? 1 : -1) == -sign)
+            correction = 1;
+        int max_correction = sign > 0 ? 2 : 1;
+        int64_t d2_days = _ejs_temporal_iso_date_to_epoch_days(y2, m2, d2);
+        int64_t inter_days = d2_days;
+        ejs_i128 inter_epoch = 0, time_exact = 0;
+        EJSBool found = EJS_FALSE;
+        for (; correction <= max_correction; correction++) {
+            inter_days = d2_days - (int64_t)correction * sign;
+            ejs_i128 inter_local = (ejs_i128)inter_days * NS_PER_DAY + t1;
+            inter_epoch = zone_epoch_from_local(s->time_zone, inter_local, 0);
+            time_exact = s->dest_epoch_ns - inter_epoch;
+            if (time_exact == 0 || ((time_exact > 0) ? 1 : -1) != -sign) {
+                found = EJS_TRUE;
+                break;
+            }
+        }
+        if (!found)
+            _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "inconsistent time zone offsets");
+        int32_t iy, im, id;
+        _ejs_temporal_epoch_days_to_iso_date(inter_days, &iy, &im, &id);
+        double years, months, weeks, days;
+        difference_iso_date(y1, m1, d1, iy, im, id, s->largest, &years, &months, &weeks, &days);
+        ejs_i128 rounded = time_exact;
+        if (!(s->smallest == TUNIT_NANO && s->increment == 1)) {
+            ejs_i128 day_end_local = ((ejs_i128)inter_days + sign) * NS_PER_DAY + t1;
+            ejs_i128 day_end_epoch = zone_epoch_from_local(s->time_zone, day_end_local, 0);
+            ejs_i128 day_span = day_end_epoch - inter_epoch;
+            ejs_i128 unit_len = (ejs_i128)(int64_t)s->increment * unit_ns(s->smallest);
+            rounded = round_i128_to_increment(time_exact, unit_len, s->mode);
+            ejs_i128 beyond = rounded - day_span;
+            if (beyond == 0 || ((beyond > 0) ? 1 : -1) == sign) {
+                // rounded to or past the day boundary: take the day and
+                // re-round the overshoot; the extra day can bubble
+                // through the larger date units
+                rounded = round_i128_to_increment(beyond, unit_len, s->mode);
+                int32_t by, bm, bd;
+                _ejs_temporal_epoch_days_to_iso_date(inter_days + sign, &by, &bm, &bd);
+                difference_iso_date(y1, m1, d1, by, bm, bd, s->largest,
+                                    &years, &months, &weeks, &days);
+            }
+        }
+        EJSBool tneg = rounded < 0;
+        ejs_i128 t = tneg ? -rounded : rounded;
+        double f[6];
+        f[0] = (double)(t / 3600000000000LL); t %= 3600000000000LL;
+        f[1] = (double)(t / 60000000000LL); t %= 60000000000LL;
+        f[2] = (double)(t / 1000000000LL); t %= 1000000000LL;
+        f[3] = (double)(t / 1000000LL); t %= 1000000LL;
+        f[4] = (double)(t / 1000LL);
+        f[5] = (double)(t % 1000LL);
+        double tsgn = tneg ? -1 : 1;
+        out->years = years; out->months = months; out->weeks = weeks; out->days = days;
+        out->hours = tsgn * f[0]; out->minutes = tsgn * f[1]; out->seconds = tsgn * f[2];
+        out->ms = tsgn * f[3]; out->us = tsgn * f[4]; out->ns = tsgn * f[5];
+        return;
+    }
     // date+time difference: borrow a day if the time part opposes the sign
     int32_t ay2 = y2, am2 = m2, ad2 = d2;
     ejs_i128 time_diff = t2 - t1;
@@ -5542,22 +5708,27 @@ datetime_diff_to_duration(int32_t y1, int32_t m1, int32_t d1, ejs_i128 t1,
         time_diff += (ejs_i128)date_sign * NS_PER_DAY;
     }
     if (s->smallest >= TUNIT_HOUR) {
+        // NudgeToDayOrTime: the leftover days join the time part at 24
+        // hours each and the whole quantity rounds as one value, so a
+        // tie's parity is judged on the combined total
         double years, months, weeks, days;
         difference_iso_date(y1, m1, d1, ay2, am2, ad2, s->largest,
                             &years, &months, &weeks, &days);
-        ejs_i128 rounded = round_i128_to_increment(time_diff,
+        ejs_i128 total = (ejs_i128)(int64_t)days * NS_PER_DAY + time_diff;
+        ejs_i128 rounded = round_i128_to_increment(total,
                                                    (ejs_i128)(int64_t)s->increment * unit_ns(s->smallest), s->mode);
-        // rounding can carry into a full day; the extra day may bubble
-        // through months and years, so re-derive the date duration from
-        // the shifted end point
-        if (rounded == NS_PER_DAY || rounded == -NS_PER_DAY) {
+        ejs_i128 rdays = rounded / NS_PER_DAY;
+        rounded %= NS_PER_DAY;
+        if ((double)(int64_t)rdays != days) {
+            // the day count moved; re-derive the date duration from the
+            // shifted end point so the change bubbles through months
+            // and years
             int64_t shifted = _ejs_temporal_iso_date_to_epoch_days(ay2, am2, ad2)
-                + (rounded > 0 ? 1 : -1);
+                + ((int64_t)rdays - (int64_t)days);
             int32_t by, bm, bd;
             _ejs_temporal_epoch_days_to_iso_date(shifted, &by, &bm, &bd);
             difference_iso_date(y1, m1, d1, by, bm, bd, s->largest,
                                 &years, &months, &weeks, &days);
-            rounded = 0;
         }
         EJSBool neg = rounded < 0;
         ejs_i128 t = neg ? -rounded : rounded;
@@ -5578,6 +5749,23 @@ datetime_diff_to_duration(int32_t y1, int32_t m1, int32_t d1, ejs_i128 t1,
     if (s->smallest == TUNIT_DAY) {
         difference_iso_date(y1, m1, d1, ay2, am2, ad2, s->largest,
                             &years, &months, &weeks, &days);
+        if (s->zoned) {
+            // NudgeToCalendarUnit computes both increment-aligned
+            // bounding days through the zone regardless of which one
+            // rounding picks, so either bound being unrepresentable
+            // throws
+            int bsign = days > 0 ? 1 : (days < 0 ? -1
+                : (time_diff < 0 ? -1 : 1));
+            double r1d = trunc(days / s->increment) * s->increment;
+            double r2d = r1d + s->increment * bsign;
+            int32_t byy, bmm, bdd;
+            add_iso_date_unchecked(y1, m1, d1, years, months, weeks, 0, &byy, &bmm, &bdd);
+            int64_t base = _ejs_temporal_iso_date_to_epoch_days(byy, bmm, bdd);
+            zone_epoch_from_local(s->time_zone,
+                                  ((ejs_i128)(base + (int64_t)r1d)) * NS_PER_DAY + t1, 0);
+            zone_epoch_from_local(s->time_zone,
+                                  ((ejs_i128)(base + (int64_t)r2d)) * NS_PER_DAY + t1, 0);
+        }
         ejs_i128 dns = (ejs_i128)(int64_t)days * NS_PER_DAY + time_diff;
         dns = round_i128_to_increment(dns, (ejs_i128)(int64_t)s->increment * NS_PER_DAY, s->mode);
         double rdays = (double)(int64_t)(dns / NS_PER_DAY);
@@ -5591,11 +5779,9 @@ datetime_diff_to_duration(int32_t y1, int32_t m1, int32_t d1, ejs_i128 t1,
         }
     } else {
         ejs_i128 leftover;
-        round_date_duration_check_bounds = s->check_bounds;
         round_date_duration(y1, m1, d1, ay2, am2, ad2, time_diff,
                             s->smallest, s->increment, s->mode, s->largest,
                             &years, &months, &weeks, &days, &leftover);
-        round_date_duration_check_bounds = EJS_FALSE;
     }
     out->years = years; out->months = months; out->weeks = weeks; out->days = days;
 }
@@ -5896,7 +6082,8 @@ static EJS_NATIVE_FUNC(_ejs_TemporalDuration_prototype_round) {
         return balance_time_duration(rounded, largest, 0);
     }
     DiffSettings s = { .largest = largest, .smallest = smallest, .increment = increment, .mode = mode,
-                       .check_bounds = rel.kind == 2 ? EJS_TRUE : EJS_FALSE };
+                       .zoned = rel.kind == 2, .time_zone = rel.time_zone,
+                       .start_epoch_ns = rel.epoch_ns, .dest_epoch_ns = rel.epoch_ns + total_ns };
     DurationFields out;
     datetime_diff_to_duration(rel.year, rel.month, rel.day,
                               rel.kind == 2 ? rel.local_time_ns : 0,
@@ -5954,10 +6141,7 @@ static EJS_NATIVE_FUNC(_ejs_TemporalDuration_prototype_total) {
         ejs_i128 total = duration_time_ns((DurationFields*)&(DurationFields){
             0, 0, 0, 0, d->hours, d->minutes, d->seconds, d->milliseconds, d->microseconds, d->nanoseconds })
             + ((ejs_i128)d->days) * NS_PER_DAY;
-        int64_t per = unit_ns(unit);
-        ejs_i128 q = total / per;
-        ejs_i128 r = total % per;
-        return NUMBER_TO_EJSVAL((double)(int64_t)q + (double)(int64_t)r / (double)per);
+        return NUMBER_TO_EJSVAL(i128_div_to_double(total, unit_ns(unit)));
     }
     DurationFields df = { d->years, d->months, d->weeks, d->days, d->hours,
                           d->minutes, d->seconds, d->milliseconds, d->microseconds, d->nanoseconds };
@@ -5965,14 +6149,15 @@ static EJS_NATIVE_FUNC(_ejs_TemporalDuration_prototype_total) {
     ejs_i128 t_time, total_ns;
     relative_apply_duration(&trel, &df, &ty, &tm, &td, &t_time, &total_ns);
     if (unit >= TUNIT_HOUR || (unit == TUNIT_DAY && trel.kind == 1)) {
-        int64_t per = unit_ns(unit);
-        ejs_i128 q = total_ns / per;
-        ejs_i128 r = total_ns % per;
-        return NUMBER_TO_EJSVAL((double)(int64_t)q + (double)(int64_t)r / (double)per);
+        if (trel.kind == 1
+            && plain_diff_endpoints(trel.year, trel.month, trel.day, 0, ty, tm, td, t_time))
+            return NUMBER_TO_EJSVAL(0.0);
+        return NUMBER_TO_EJSVAL(i128_div_to_double(total_ns, unit_ns(unit)));
     }
     // calendar unit (or zoned days): whole count + exact fraction
     DiffSettings s = { .largest = unit, .smallest = unit, .increment = 1, .mode = ROUND_TRUNC,
-                       .check_bounds = trel.kind == 2 ? EJS_TRUE : EJS_FALSE };
+                       .zoned = trel.kind == 2, .time_zone = trel.time_zone,
+                       .start_epoch_ns = trel.epoch_ns, .dest_epoch_ns = trel.epoch_ns + total_ns };
     DurationFields out;
     datetime_diff_to_duration(trel.year, trel.month, trel.day,
                               trel.kind == 2 ? trel.local_time_ns : 0,
@@ -5984,14 +6169,18 @@ static EJS_NATIVE_FUNC(_ejs_TemporalDuration_prototype_total) {
     case TUNIT_WEEK: whole = out.weeks; break;
     default: whole = out.days; break;
     }
-    int sign = total_ns > 0 ? 1 : (total_ns < 0 ? -1 : 0);
-    if (sign == 0)
-        return NUMBER_TO_EJSVAL(0.0);
+    // sign of a zero duration is positive: the whole-unit bounds are
+    // still computed (and can throw at the representable edges)
+    int sign = total_ns < 0 ? -1 : 1;
     ejs_i128 r1 = relative_units_ns(&trel, unit, whole);
     ejs_i128 r2 = relative_units_ns(&trel, unit, whole + sign);
-    double frac = (r2 == r1) ? 0
-        : (double)(int64_t)(total_ns - r1) / (double)(int64_t)(r2 - r1);
-    return NUMBER_TO_EJSVAL(whole + sign * frac);
+    ejs_i128 num = total_ns - r1;
+    ejs_i128 den = r2 - r1;
+    if (den == 0)
+        return NUMBER_TO_EJSVAL(whole);
+    if (den < 0) { den = -den; num = -num; }
+    // whole + sign*(num/den) as one exact rational, rounded once
+    return NUMBER_TO_EJSVAL(i128_div_to_double((ejs_i128)whole * den + sign * num, den));
 }
 
 // ZonedDateTime until/since/round/withPlainTime; PlainDate/PlainDateTime
@@ -6025,7 +6214,10 @@ zdt_diff_impl(ejsval zdtval, ejsval other_like, ejsval options, EJSBool is_since
     ZDTFields f1, f2;
     zdt_fields(zdt, &f1);
     zdt_fields(other, &f2);
-    s.check_bounds = EJS_TRUE;
+    s.zoned = EJS_TRUE;
+    s.time_zone = zdt->time_zone;
+    s.start_epoch_ns = zdt->epoch_ns;
+    s.dest_epoch_ns = other->epoch_ns;
     DurationFields out;
     datetime_diff_to_duration(f1.year, f1.month, f1.day,
                               time_fields_to_ns(f1.hour, f1.minute, f1.second,
