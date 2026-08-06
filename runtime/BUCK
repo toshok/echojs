@@ -98,6 +98,7 @@ shared_sources = [
     "ejs-stream.c",
     "ejs-string.c",
     "ejs-symbol.c",
+    "ejs-temporal.c",
     "ejs-timers.c",
     "ejs-typedarrays.c",
     "ejs-types.c",

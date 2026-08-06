@@ -1,4 +1,3 @@
-// xfail: not implemented fully yet
 
 console.log(Math.PI.toPrecision(1));
 console.log(Math.PI.toPrecision(2));

@@ -42,8 +42,9 @@ compiler excludes, by design: `eval`/`Function()` constructor, `with`,
 CONFORMANCE.md that enumerates the carve-outs; everything not carved
 out passes.  Decisions to make while writing that document:
 
-- **Temporal**: in or out for 1.0 (478 lane tests; huge surface —
-  cheaper post-selfhost, see 2.0).
+- **Temporal**: IN — implemented natively in C (runtime/ejs-temporal.c,
+  2026-08; toshok's call, overriding the earlier post-selfhost framing).
+  Gate: 100% of the 4,603 test262 built-ins/Temporal tests.
 - **Lane scope**: widen the runner beyond sloppy-only (strict-mode
   double runs) and unskip modules (the .js-suffix fix already
   unlocked most of the 824 module skips).
@@ -58,12 +59,13 @@ intrinsics (selfhost-plan.md).
 Prefer **incremental** over big-bang: land the lowered-JS builtins
 mechanism early (possibly during the 1.0 conformance push), then write
 new builtins once, in JS, instead of twice.  Candidate first tenants:
-the newest C surface (iterator helpers, Set methods, DisposableStack)
-and — if in scope — Temporal, which should never be written in C.
+the newest C surface (iterator helpers, Set methods, DisposableStack).
+(Temporal was originally slated here but landed as C in 0.x — a future
+port to lowered JS is optional, not owed.)
 
 Sequencing note: if the mechanism proves out early, the 1.0
 conformance tail gets cheaper, and 2.0 becomes a migration checklist
 instead of a rewrite.
 
 ## TODO for toshok:
-Things I deliberately left for your pass: whether the 0.x perf milestones get version numbers (0.4/0.5?), concrete benchmark numbers for "competitive" (I only cited the baselines already recorded in the docs), and the Temporal in/out call — those are your decisions to ink in.
+Things I deliberately left for your pass: whether the 0.x perf milestones get version numbers (0.4/0.5?), concrete benchmark numbers for "competitive" (I only cited the baselines already recorded in the docs), — those are your decisions to ink in.  (The Temporal in/out call is now inked: in, as native C.)
