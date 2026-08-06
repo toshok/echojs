@@ -33,6 +33,7 @@
 #include "ejs-string.h"
 #include "ejs-symbol.h"
 #include "ejs-bigint.h"
+#include "ejs-temporal.h"
 #include "ejs-timers.h"
 #include "ejs-typedarrays.h"
 #include "ejs-uri.h"
@@ -117,6 +118,14 @@ _ejs_init_classes()
     _ejs_Class_initialize (&_ejs_StringIterator_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Symbol_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_BigInt_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_TemporalInstant_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_TemporalPlainDate_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_TemporalPlainTime_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_TemporalPlainDateTime_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_TemporalPlainYearMonth_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_TemporalPlainMonthDay_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_TemporalZonedDateTime_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_TemporalDuration_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_ArrayBuffer_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Timer_specops, &_ejs_Object_specops);
 
@@ -424,6 +433,7 @@ _ejs_init(int argc, char** argv)
     _ejs_number_init(_ejs_global);
     _ejs_regexp_init(_ejs_global);
     _ejs_date_init(_ejs_global);
+    _ejs_temporal_init(_ejs_global);
     _ejs_json_init(_ejs_global);
     _ejs_math_init(_ejs_global);
     _ejs_uri_init(_ejs_global);
