@@ -3008,6 +3008,74 @@ _ejs_string_to_utf8(EJSPrimString* primstr)
     return buf;
 }
 
+/* global intern table for static string literals.  every module carries its
+   own EJSPrimString global per literal, so the same property name compiled
+   into N modules is N distinct pointers; interning at registration time
+   collapses them to one canonical primstring, making pointer equality the
+   common case for property-name comparison (shape transitions, property
+   maps, ===).  entries are static allocations (runtime atoms + emitted
+   module literals) — never GC'd, so the table takes no roots. */
+static EJSPrimString** literal_interns;
+static uint32_t literal_interns_count;
+static uint32_t literal_interns_capacity; // power of two
+
+static EJSBool
+literal_intern_eq (EJSPrimString* a, EJSPrimString* b)
+{
+    if (a->length != b->length) return EJS_FALSE;
+    if (a->hash != b->hash) return EJS_FALSE;
+    return memcmp (a->data.flat, b->data.flat, a->length * sizeof(jschar)) == 0;
+}
+
+static EJSPrimString*
+literal_intern (EJSPrimString* str)
+{
+    if (literal_interns_count + 1 > literal_interns_capacity - (literal_interns_capacity >> 2)) {
+        uint32_t old_capacity = literal_interns_capacity;
+        EJSPrimString** old = literal_interns;
+
+        literal_interns_capacity = old_capacity ? old_capacity * 2 : 8192;
+        literal_interns = (EJSPrimString**)calloc(literal_interns_capacity, sizeof(EJSPrimString*));
+
+        uint32_t mask = literal_interns_capacity - 1;
+        for (uint32_t i = 0; i < old_capacity; i++) {
+            if (!old[i]) continue;
+            uint32_t slot = (uint32_t)old[i]->hash & mask;
+            while (literal_interns[slot])
+                slot = (slot + 1) & mask;
+            literal_interns[slot] = old[i];
+        }
+        free(old);
+    }
+
+    uint32_t mask = literal_interns_capacity - 1;
+    uint32_t slot = _ejs_primstring_hash(str) & mask;
+    while (literal_interns[slot]) {
+        if (literal_intern_eq (literal_interns[slot], str))
+            return literal_interns[slot];
+        slot = (slot + 1) & mask;
+    }
+    literal_interns[slot] = str;
+    literal_interns_count++;
+    return str;
+}
+
+/* seed the intern table with the runtime's static atoms so module literals
+   with the same content resolve to the runtime's pointer */
+void
+_ejs_string_intern_static_atoms (void)
+{
+#undef EJS_ATOM
+#undef EJS_ATOM2
+/* token-paste directly in both macros: EJS_ATOM(stdout) must not expand its
+   argument (stdout/stderr are macros in stdio.h) */
+#define EJS_ATOM(atom) literal_intern (EJSVAL_TO_STRING_IMPL(_ejs_atom_##atom));
+#define EJS_ATOM2(atom,atom_name) literal_intern (EJSVAL_TO_STRING_IMPL(_ejs_atom_##atom_name));
+#include "ejs-atoms.h"
+#undef EJS_ATOM
+#undef EJS_ATOM2
+}
+
 void
 _ejs_string_init_literal (const char *name, ejsval *val, EJSPrimString* str, jschar* ucs2_data, int32_t length)
 {
@@ -3015,7 +3083,7 @@ _ejs_string_init_literal (const char *name, ejsval *val, EJSPrimString* str, jsc
     str->hash = 0;
     str->gc_header = (EJS_STRING_FLAT|EJS_PRIMSTR_HAS_OOL_BUFFER_MASK) << EJS_GC_USER_FLAGS_SHIFT;
     str->data.flat = ucs2_data;
-    *val = STRING_TO_EJSVAL(str);
+    *val = STRING_TO_EJSVAL(literal_intern(str));
 }
 
 char*

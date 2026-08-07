@@ -113,6 +113,10 @@ jschar _ejs_string_ucs2_at (EJSPrimString* primstr, uint32_t offset);
 
 uint32_t _ejs_string_hash (ejsval str);
 
+// seed the literal intern table with the runtime's static atoms (called once
+// from _ejs_init, after _ejs_init_static_strings)
+void _ejs_string_intern_static_atoms (void);
+
 int ucs2_to_utf8_char (jschar ucs2, char *utf8);
 int unicode_cp_to_utf8 (uint32_t cp, char *utf8);
 char* _ejs_string_to_utf8(EJSPrimString* primstr);

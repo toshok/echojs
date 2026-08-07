@@ -385,6 +385,7 @@ _ejs_init(int argc, char** argv)
 
     // initialize our atoms before anything else
     _ejs_init_static_strings();
+    _ejs_string_intern_static_atoms();
 
     _ejs_gc_init();
     _ejs_exception_init();
