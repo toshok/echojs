@@ -3410,24 +3410,49 @@ _ejs_array_push_own_index_names (ejsval array, ejsval out)
     }
 }
 
+// propertyName -> candidate array index without ToNumber: NUMBER keys keep
+// the integral-double test; STRING keys parse the canonical digits-only
+// form in place, so named properties ("length", "push", ...) never pay a
+// strtod.  Non-canonical numeric spellings ("3.0", " 3", "0x3") are NOT
+// indexes (ES6 canonical-numeric-index rule) and take the ordinary
+// property path.
+static EJSBool
+array_index_of_property_name (ejsval propertyName, int* idx_out)
+{
+    if (EJSVAL_IS_NUMBER(propertyName)) {
+        double n = EJSVAL_TO_NUMBER(propertyName);
+        if (floor(n) != n)
+            return EJS_FALSE;
+        *idx_out = (int)n;
+        return EJS_TRUE;
+    }
+    if (!EJSVAL_IS_STRING(propertyName))
+        return EJS_FALSE;
+    EJSPrimString* str = EJSVAL_TO_STRING(propertyName);
+    int32_t len = str->length;
+    if (len == 0 || len > 10) // INT32_MAX is 10 digits
+        return EJS_FALSE;
+    const jschar* chars = _ejs_primstring_flatten(str)->data.flat;
+    if (len > 1 && chars[0] == '0')
+        return EJS_FALSE;
+    int64_t v = 0;
+    for (int32_t i = 0; i < len; i++) {
+        jschar c = chars[i];
+        if (c < '0' || c > '9')
+            return EJS_FALSE;
+        v = v * 10 + (c - '0');
+    }
+    if (v > INT32_MAX)
+        return EJS_FALSE;
+    *idx_out = (int)v;
+    return EJS_TRUE;
+}
+
 static ejsval
 _ejs_array_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
 {
-    // check if propertyName is an integer, or a string that we can convert to an int
-    EJSBool is_index = EJS_FALSE;
-    ejsval idx_val;
     int idx;
-    
-    if (!EJSVAL_IS_SYMBOL(propertyName)) {
-        idx_val = ToNumber(propertyName);
-        if (EJSVAL_IS_NUMBER(idx_val)) {
-            double n = EJSVAL_TO_NUMBER(idx_val);
-            if (floor(n) == n) {
-                idx = (int)n;
-                is_index = EJS_TRUE;
-            }
-        }
-    }
+    EJSBool is_index = array_index_of_property_name (propertyName, &idx);
 
     if (is_index && idx >= 0 && idx < EJS_ARRAY_LEN(obj)) {
         ejsval rv = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
@@ -3446,7 +3471,7 @@ _ejs_array_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
     }
 
     // we also handle the length getter here
-    if (EJSVAL_IS_STRING(propertyName) && !ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) {
+    if (EJSVAL_IS_STRING(propertyName) && _ejs_string_eq (propertyName, _ejs_atom_length)) {
         return NUMBER_TO_EJSVAL (EJS_ARRAY_LEN(obj));
     }
 
@@ -3457,21 +3482,8 @@ _ejs_array_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
 static EJSPropertyDesc*
 _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval *exc)
 {
-    // check if propertyName is an integer, or a string that we can convert to an int
-    EJSBool is_index = EJS_FALSE;
-    ejsval idx_val;
     int idx;
-
-    if (!EJSVAL_IS_SYMBOL(propertyName)) {
-        idx_val = ToNumber(propertyName);
-        if (EJSVAL_IS_NUMBER(idx_val)) {
-            double n = EJSVAL_TO_NUMBER(idx_val);
-            if (floor(n) == n) {
-                idx = (int)n;
-                is_index = EJS_TRUE;
-            }
-        }
-    }
+    EJSBool is_index = array_index_of_property_name (propertyName, &idx);
 
     if (is_index) {
         if (idx >= 0 && idx < EJS_ARRAY_LEN(obj)) {
@@ -3498,7 +3510,7 @@ _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval *exc
     }
 
 
-    if (EJSVAL_IS_STRING(propertyName) && !ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) {
+    if (EJSVAL_IS_STRING(propertyName) && _ejs_string_eq (propertyName, _ejs_atom_length)) {
         EJSArray* arr = (EJSArray*)EJSVAL_TO_OBJECT(obj);
         _ejs_property_desc_set_value (&arr->array_length_desc, NUMBER_TO_EJSVAL(EJSARRAY_LEN(arr)));
         return &arr->array_length_desc;
@@ -3510,21 +3522,8 @@ _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval *exc
 static EJSBool
 _ejs_array_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver)
 {
-    // check if propertyName is a uint32, or a string that we can convert to an uint32
-    EJSBool is_index = EJS_FALSE;
-    ejsval idx_val;
     int idx;
-
-    if (!EJSVAL_IS_SYMBOL(propertyName)) {
-        idx_val = ToNumber(propertyName);
-        if (EJSVAL_IS_NUMBER(idx_val)) {
-            double n = EJSVAL_TO_NUMBER(idx_val);
-            if (floor(n) == n) {
-                idx = (int)n;
-                is_index = EJS_TRUE;
-            }
-        }
-    }
+    EJSBool is_index = array_index_of_property_name (propertyName, &idx);
 
     if (is_index) {
         if (EJSVAL_IS_DENSE_ARRAY(obj)) {
@@ -3555,7 +3554,7 @@ _ejs_array_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval recei
     }
 
     if (EJSVAL_IS_STRING(propertyName)) {
-        if (!ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) {
+        if (_ejs_string_eq (propertyName, _ejs_atom_length)) {
             // XXX more from 15.4.5.1 here
             int newLen = ToLength(val);
             int oldLen = EJS_ARRAY_LEN(obj);
@@ -3587,34 +3586,23 @@ _ejs_array_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval recei
 static EJSBool
 _ejs_array_specop_has_property (ejsval obj, ejsval propertyName)
 {
-    // check if propertyName is an integer, or a string that we can convert to an int
-    ejsval idx_val;
     int idx;
 
-    if (!EJSVAL_IS_SYMBOL(propertyName)) {
-        idx_val = ToNumber(propertyName);
-        if (EJSVAL_IS_NUMBER(idx_val)) {
-            double n = EJSVAL_TO_NUMBER(idx_val);
-            if (floor(n) == n) {
-                idx = (int)n;
-                if (idx >= 0 && idx < EJS_ARRAY_LEN(obj)) {
-                    ejsval element = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
-                    if (EJSVAL_IS_SPARSE_ARRAY(obj)) {
-                        ejsval* slot = sparse_element_addr ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx, EJS_FALSE);
-                        if (slot)
-                            element = *slot;
-                    }
-                    else {
-                        element = EJS_DENSE_ARRAY_ELEMENTS(obj)[idx];
-                    }
-                    // a hole is not an own property: fall through to
-                    // the ordinary lookup so inherited index
-                    // properties are found
-                    if (!EJSVAL_IS_ARRAY_HOLE_MAGIC(element))
-                        return EJS_TRUE;
-                }
-            }
+    if (array_index_of_property_name (propertyName, &idx)
+        && idx >= 0 && idx < EJS_ARRAY_LEN(obj)) {
+        ejsval element = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
+        if (EJSVAL_IS_SPARSE_ARRAY(obj)) {
+            ejsval* slot = sparse_element_addr ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx, EJS_FALSE);
+            if (slot)
+                element = *slot;
         }
+        else {
+            element = EJS_DENSE_ARRAY_ELEMENTS(obj)[idx];
+        }
+        // a hole is not an own property: fall through to the ordinary
+        // lookup so inherited index properties are found
+        if (!EJSVAL_IS_ARRAY_HOLE_MAGIC(element))
+            return EJS_TRUE;
     }
 
     // if we fail there, we fall back to the object impl below
@@ -3625,21 +3613,9 @@ _ejs_array_specop_has_property (ejsval obj, ejsval propertyName)
 static EJSBool
 _ejs_array_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
 {
-    // check if propertyName is a uint32, or a string that we can convert to an uint32
     int idx = -1;
-    ejsval idx_val;
 
-    if (!EJSVAL_IS_SYMBOL(propertyName)) {
-        idx_val = ToNumber(propertyName);
-        if (EJSVAL_IS_NUMBER(idx_val)) {
-            double n = EJSVAL_TO_NUMBER(idx_val);
-            if (floor(n) == n) {
-                idx = (int)n;
-            }
-        }
-    }
-
-    if (idx < 0)
+    if (!array_index_of_property_name (propertyName, &idx) || idx < 0)
         return _ejs_Object_specops.Delete (obj, propertyName, flag);
 
     // if it's outside the array bounds, do nothing
@@ -3659,22 +3635,8 @@ _ejs_array_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
 static EJSBool
 _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
 {
-    // check if propertyName is a uint32, or a string that we can convert to an uint32
-    EJSBool is_index = EJS_FALSE;
-    ejsval idx_val;
     int idx;
-
-    if (!EJSVAL_IS_SYMBOL(propertyName)) {
-        idx_val = ToNumber(propertyName);
-        if (EJSVAL_IS_NUMBER(idx_val)) {
-            double n = EJSVAL_TO_NUMBER(idx_val);
-            if (floor(n) == n) {
-                idx = (int)n;
-                if (idx >= 0)
-                    is_index = EJS_TRUE;
-            }
-        }
-    }
+    EJSBool is_index = array_index_of_property_name (propertyName, &idx) && idx >= 0;
 
     if (is_index) {
         // accessor descriptors don't fit array element storage: hole
@@ -3736,7 +3698,7 @@ _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPrope
     }
 
     if (EJSVAL_IS_STRING(propertyName)) {
-        if (!ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) {
+        if (_ejs_string_eq (propertyName, _ejs_atom_length)) {
             // attribute-only redefine (freeze/seal): leave the length alone
             if ((propertyDescriptor->flags & EJS_PROP_FLAGS_VALUE_SET) == 0)
                 return EJS_TRUE;
