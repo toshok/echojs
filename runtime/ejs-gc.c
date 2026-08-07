@@ -488,10 +488,21 @@ _ejs_gc_remember_slow(void* owner)
     GCObjectHeader* h = (GCObjectHeader*)owner;
     *h |= EJS_GC_HEADER_DIRTY;
     EJSHeapContext* c = &_ejs_heap;
-    if (EJS_LIKELY(c->remset_count < c->remset_capacity))
-        c->remset[c->remset_count++] = owner;
-    else
-        c->remset_overflowed = 1;
+    if (EJS_UNLIKELY(c->remset_count == c->remset_capacity)) {
+        // grow instead of overflowing: an overflow costs a FULL old-gen
+        // walk on the next minor — catastrophic per-minor work at
+        // oracle heap sizes.  The DIRTY bit dedups entries, so the
+        // buffer is bounded by the live dirty set.
+        int32_t newcap = c->remset_capacity * 2;
+        void** grown = (void**)realloc (c->remset, newcap * sizeof(void*));
+        if (!grown) {
+            c->remset_overflowed = 1; // genuine OOM: the old fallback
+            return;
+        }
+        c->remset = grown;
+        c->remset_capacity = newcap;
+    }
+    c->remset[c->remset_count++] = owner;
 }
 
 // the emitted barrier's out-of-line half: emit.ts inlines only the

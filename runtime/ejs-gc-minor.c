@@ -498,9 +498,12 @@ _ejs_gc_minor_collect(const char* reason)
     //    next cycle — the snapshot is what this cycle processes
     void** snapshot = _ejs_heap.remset;
     int snapshot_count = _ejs_heap.remset_count;
+    int32_t snapshot_capacity = _ejs_heap.remset_capacity;
     EJSBool snapshot_overflowed = _ejs_heap.remset_overflowed != 0;
     _ejs_heap.remset = heap_priv.remset_other;
+    _ejs_heap.remset_capacity = heap_priv.remset_other_capacity;
     heap_priv.remset_other = snapshot;
+    heap_priv.remset_other_capacity = snapshot_capacity;
     _ejs_heap.remset_count = 0;
     _ejs_heap.remset_overflowed = 0;
 
@@ -695,6 +698,28 @@ _ejs_gc_minor_collect(const char* reason)
     uint64_t usec = (tv1.tv_sec - tv0.tv_sec) * 1000000ULL + (tv1.tv_usec - tv0.tv_usec);
     heap_priv.minor_usec_total += usec;
     if (usec > heap_priv.minor_usec_max) heap_priv.minor_usec_max = usec;
+
+    // adaptive trigger: each minor pays fixed costs proportional to the
+    // LIVE population (sticky-pin replays, gc-frame chains, dirty
+    // rescans), not to the allocation window that triggered it.  When
+    // those costs dominate the mutator window (oracle-class heaps:
+    // thousands of generators, GB live sets), collecting every 1MB is a
+    // meltdown — grow the budget until the pause is amortized; shrink
+    // back toward the pause-friendly default when collections are cheap.
+    // An explicit EJS_GC_NURSERY_BUDGET pins the budget.
+    if (!heap_priv.young_budget_fixed) {
+        uint64_t start_us = tv0.tv_sec * 1000000ULL + tv0.tv_usec;
+        uint64_t end_us = tv1.tv_sec * 1000000ULL + tv1.tv_usec;
+        size_t budget_cap = ((size_t)heap_priv.nursery_arena_count * ARENA_SIZE) / 2;
+        if (heap_priv.last_minor_end_us) {
+            uint64_t mutator_us = start_us - heap_priv.last_minor_end_us;
+            if (usec * 4 > mutator_us && heap_priv.young_budget < budget_cap)
+                heap_priv.young_budget *= 2;        // pause >20% of wall
+            else if (usec * 32 < mutator_us && heap_priv.young_budget > 1024 * 1024)
+                heap_priv.young_budget /= 2;        // pause <3% of wall
+        }
+        heap_priv.last_minor_end_us = end_us;
+    }
     if (gc_paranoid)
         paranoid_sweep_check();
     if (gc_profile) {
@@ -791,7 +816,10 @@ nursery_init(void)
     // compile cost; 4MB buys self-compile ~3% at ~5ms p99)
     heap_priv.young_budget = 1024 * 1024;
     char* budget_env = getenv("EJS_GC_NURSERY_BUDGET");
-    if (budget_env) heap_priv.young_budget = (size_t)atoll(budget_env);
+    if (budget_env) {
+        heap_priv.young_budget = (size_t)atoll(budget_env);
+        heap_priv.young_budget_fixed = EJS_TRUE; // explicit = no adaptivity
+    }
     if (!nursery_enabled) return;
 
     // EJS_GC_NURSERY_ARENAS contiguous arenas (default 8 = 256MB of
@@ -826,5 +854,6 @@ nursery_init(void)
     _ejs_heap.remset = malloc (NURSERY_REMSET_CAPACITY * sizeof(void*));
     _ejs_heap.remset_capacity = NURSERY_REMSET_CAPACITY;
     heap_priv.remset_other = malloc (NURSERY_REMSET_CAPACITY * sizeof(void*));
+    heap_priv.remset_other_capacity = NURSERY_REMSET_CAPACITY;
 }
 // ===================== end nursery =========================================

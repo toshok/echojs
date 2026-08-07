@@ -260,6 +260,12 @@ typedef struct {
     EJSBool verify;      // EJS_GC_VERIFY: old-gen barrier-coverage check per minor
     size_t young_alloced;  // bytes of young pages handed out this cycle
     size_t young_budget;   // minor-collection trigger (EJS_GC_NURSERY_BUDGET)
+    // budget adaptivity: when a minor's fixed costs (sticky pins, frame
+    // chains, dirty rescans over a huge live set) dwarf the mutator
+    // window, the trigger amortizes upward; an explicit
+    // EJS_GC_NURSERY_BUDGET pins it (young_budget_fixed)
+    EJSBool  young_budget_fixed;
+    uint64_t last_minor_end_us;
     // minor worklist (objects whose slots still need processing)
     GCObjectPtr* wl;
     int wl_count, wl_cap;
@@ -267,7 +273,11 @@ typedef struct {
     // front and processes the snapshot; slots whose referent stays young
     // (pinned) re-append into the live buffer — old→young edges CARRY
     // across cycles for as long as the target remains in the nursery.
+    // Buffers grow independently (the live one grows in
+    // _ejs_gc_remember_slow), so each carries its own capacity and the
+    // swap exchanges both.
     void** remset_other;
+    int32_t remset_other_capacity;
     // stats (reported under EJS_GC_PROFILE)
     uint64_t minors, minor_usec_total, minor_usec_max;
     uint64_t promoted_objs, promoted_bytes, minor_pins, remset_peak, overflow_minors;
