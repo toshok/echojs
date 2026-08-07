@@ -257,21 +257,57 @@ _ejs_shape_transition_add(uint32_t shape, ejsval name, ejsval value,
     return child;
 }
 
+/* direct-mapped (shape, name-pointer) -> slot cache over the chain walk.
+   Shape records are append-only and immutable once interned, so entries
+   never invalidate; a moved name string changes pointer and simply
+   misses.  slot == SHAPECACHE_MISS caches a definitive not-found. */
+#define SHAPECACHE_SIZE 8192
+#define SHAPECACHE_MISS UINT32_MAX
+typedef struct {
+    uint32_t       shape;
+    EJSPrimString* name;
+    uint32_t       slot;
+} ShapeCacheEntry;
+static ShapeCacheEntry shape_lookup_cache[SHAPECACHE_SIZE];
+
 EJSBool
 _ejs_shape_lookup(uint32_t shape, ejsval name, uint32_t *slot)
 {
+    if (shape == EJS_SHAPE_DICT)
+        return EJS_FALSE;
+
+    EJSPrimString* n = EJSVAL_TO_STRING(name);
+    ShapeCacheEntry* e = &shape_lookup_cache[
+        (shape ^ (((uintptr_t)n >> 4) * 2654435761u)) & (SHAPECACHE_SIZE - 1)];
+    // shape 0 is EJS_SHAPE_DICT (handled above), so a zero-initialized
+    // entry can never alias a real probe
+    if (e->shape == shape && e->name == n) {
+        if (e->slot == SHAPECACHE_MISS)
+            return EJS_FALSE;
+        *slot = e->slot;
+        return EJS_TRUE;
+    }
+
+    uint32_t found = SHAPECACHE_MISS;
     uint32_t s = shape;
     while (s != EJS_SHAPE_DICT) {
         EJSShape *cur = shape_get(s);
         if (cur->field_count == 0)
             break;
         if (shape_name_eq(cur->name, name)) {
-            *slot = cur->field_count - 1;
-            return EJS_TRUE;
+            found = cur->field_count - 1;
+            break;
         }
         s = cur->parent;
     }
-    return EJS_FALSE;
+
+    e->shape = shape;
+    e->name = n;
+    e->slot = found;
+    if (found == SHAPECACHE_MISS)
+        return EJS_FALSE;
+    *slot = found;
+    return EJS_TRUE;
 }
 
 void
