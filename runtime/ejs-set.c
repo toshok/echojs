@@ -25,9 +25,9 @@ _ejs_set_new ()
 
 // ---- svz-hash index over the insertion list -------------------------
 // mirrors ejs-map.c: the [[SetData]] List survives for iterators; the
-// index makes add/has/delete O(1) instead of a SameValueZero walk, and
-// rebuilds when _ejs_gc_move_epoch advances (identity-hashed values
-// move with the collector).
+// index makes add/has/delete O(1) instead of a SameValueZero walk.
+// Object/symbol values hash via the header identity-hash bits
+// (ejs-gc.h), stable across collections — rebuilds are growth-only.
 
 struct _EJSSetIndexSlot {
     EJSSetValueEntry* entry; // NULL = empty, SET_INDEX_TOMB = deleted
@@ -60,7 +60,6 @@ set_index_rebuild (EJSSet* set)
     set->index = (struct _EJSSetIndexSlot*)calloc (capacity, sizeof(struct _EJSSetIndexSlot));
     set->index_capacity = capacity;
     set->index_used = live;
-    set->index_epoch = _ejs_gc_move_epoch;
 
     for (EJSSetValueEntry* e = set->head_insert; e; e = e->next_insert)
         if (!EJSVAL_IS_NO_ITER_VALUE_MAGIC(e->value))
@@ -70,7 +69,7 @@ set_index_rebuild (EJSSet* set)
 static void
 set_index_ensure (EJSSet* set)
 {
-    if (!set->index || set->index_epoch != _ejs_gc_move_epoch
+    if (!set->index
         || set->index_used + 1 > set->index_capacity - (set->index_capacity >> 2))
         set_index_rebuild (set);
 }

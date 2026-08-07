@@ -25,9 +25,9 @@ _ejs_map_new ()
 // The spec's [[MapData]] List survives (iterators walk it); the index is
 // a malloc'd open-addressed table from _ejs_svz_hash(key) to the entry,
 // making get/has/set/delete O(1) instead of a full-list SameValueZero
-// walk.  Identity-hashed keys (objects, symbols) move with the
-// collector, so the index rebuilds whenever _ejs_gc_move_epoch has
-// advanced past index_epoch.
+// walk.  Object/symbol keys hash via the header identity-hash bits
+// (ejs-gc.h), which move with the cell — the index survives
+// collections and rebuilds only for growth.
 
 struct _EJSMapIndexSlot {
     EJSKeyValueEntry* entry; // NULL = empty, MAP_INDEX_TOMB = deleted
@@ -60,7 +60,6 @@ map_index_rebuild (EJSMap* map)
     map->index = (struct _EJSMapIndexSlot*)calloc (capacity, sizeof(struct _EJSMapIndexSlot));
     map->index_capacity = capacity;
     map->index_used = live;
-    map->index_epoch = _ejs_gc_move_epoch;
 
     for (EJSKeyValueEntry* p = map->head_insert; p; p = p->next_insert)
         if (!EJSVAL_IS_NO_ITER_VALUE_MAGIC(p->key))
@@ -70,7 +69,7 @@ map_index_rebuild (EJSMap* map)
 static void
 map_index_ensure (EJSMap* map)
 {
-    if (!map->index || map->index_epoch != _ejs_gc_move_epoch
+    if (!map->index
         || map->index_used + 1 > map->index_capacity - (map->index_capacity >> 2))
         map_index_rebuild (map);
 }

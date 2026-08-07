@@ -93,9 +93,9 @@ young_page_freed(PageInfo* info, Arena* arena)
 // dirty owner carries to the next cycle
 EJSBool minor_scan_saw_young;
 
-// bumped at every collection: identity hashes over heap pointers
-// (Map/Set indexes) are only valid while this is unchanged
-uint64_t _ejs_gc_move_epoch;
+// identity-hash assignment counter (bits live in each object's header
+// and move with it; see ejs-gc.h)
+uint32_t _ejs_gc_idhash_next;
 
 void
 minor_wl_push(GCObjectPtr p)
@@ -367,10 +367,6 @@ _ejs_gc_minor_collect(const char* reason)
 {
     struct timeval tv0, tv1;
     gettimeofday (&tv0, NULL);
-
-    // any collection can move objects and rewrite key slots: identity
-    // hashes (Map/Set indexes) must rebuild after this
-    _ejs_gc_move_epoch++;
 
     if (in_minor_gc) {
         _ejs_log ("GC BUG: reentrant minor collection (reason=%s)\n", reason);

@@ -25,6 +25,32 @@ typedef enum {
 #define EJS_GC_USER_FLAGS_SHIFT 24
 #define EJS_GC_USER_FLAGS_MASK 0xffff0000
 
+// identity hash for GC things (objects, symbols): bits 5-23 of the
+// header — free in every layout (scan type owns 0-4, user flags start
+// at 24).  Stable across moves because the header travels with the
+// cell, which is the whole point: Map/Set indexes over object keys
+// survive collections without rebuilding.  0 = unassigned; assigned
+// lazily from a counter on first request (callers mix the sequential
+// value before bucketing).
+#define EJS_GC_IDHASH_SHIFT 5
+#define EJS_GC_IDHASH_MASK  0x7FFFFULL // 19 bits
+
+extern uint32_t _ejs_gc_idhash_next;
+
+static inline uint32_t
+_ejs_gc_identity_hash (void* p)
+{
+    uint64_t* h = (uint64_t*)p;
+    uint32_t bits = (uint32_t)((*h >> EJS_GC_IDHASH_SHIFT) & EJS_GC_IDHASH_MASK);
+    if (EJS_UNLIKELY(bits == 0)) {
+        bits = (++_ejs_gc_idhash_next) & (uint32_t)EJS_GC_IDHASH_MASK;
+        if (bits == 0)
+            bits = ++_ejs_gc_idhash_next & (uint32_t)EJS_GC_IDHASH_MASK;
+        *h |= ((uint64_t)bits << EJS_GC_IDHASH_SHIFT);
+    }
+    return bits;
+}
+
 typedef void *GCObjectPtr;
 
 extern void _ejs_GC_init(ejsval global);
@@ -34,10 +60,6 @@ extern void _ejs_gc_shutdown();
 extern void _ejs_gc_collect(const char *reason);
 
 extern GCObjectPtr _ejs_gc_alloc(size_t size, EJSScanType scan_type);
-
-// bumped at every collection (ejs-gc-minor.c): identity hashes over heap
-// pointers (Map/Set indexes) are only valid while this is unchanged
-extern uint64_t _ejs_gc_move_epoch;
 
 // TRUE when ptr lies in GC-managed storage (arena reservation or LOS) —
 // addresses the collector can free and recycle.  Identity caches keyed

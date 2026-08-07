@@ -612,9 +612,9 @@ SameValue(ejsval x, ejsval y)
 
 
 // hash consistent with SameValueZero: values equal under SVZ hash equal.
-// objects/symbols hash by identity (raw ejsval bits) — such hashes go
-// stale when the collector moves the referent, so callers must guard
-// usage with _ejs_gc_move_epoch and rehash after any collection.
+// objects/symbols hash by identity via the header identity-hash bits
+// (ejs-gc.h) — assigned lazily and STABLE across collections, so Map/Set
+// indexes over object keys survive GC without rebuilding.
 uint32_t
 _ejs_svz_hash (ejsval v)
 {
@@ -630,8 +630,9 @@ _ejs_svz_hash (ejsval v)
         return _ejs_string_hash(v);
     if (EJSVAL_IS_BIGINT(v))
         return 0xb161717; // rare as a key: collide, the compare resolves
-    // undefined/null/booleans are singleton bit patterns; objects and
-    // symbols compare by identity, so the raw bits are the identity
+    if (EJSVAL_IS_OBJECT(v) || EJSVAL_IS_SYMBOL(v))
+        return _ejs_gc_identity_hash(EJSVAL_TO_GCTHING_IMPL(v)) * 0x9E3779B9u;
+    // undefined/null/booleans are singleton bit patterns
     return (uint32_t)((v.asBits * 0x9E3779B97F4A7C15ull) >> 32);
 }
 
