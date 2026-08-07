@@ -131,6 +131,9 @@ struct _EJSPropertyMap {
     _EJSPropertyMapEntry** buckets;
     int nbuckets;
     int inuse;
+    // bumped on every insert/remove/desc-replacement; guards the
+    // lookup cache's cached desc pointers (ejs-object.c)
+    uint32_t gen;
 };
 
 typedef struct _EJSPropertyMap EJSPropertyMap;

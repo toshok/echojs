@@ -199,6 +199,33 @@ PropertyKeyEq (ejsval a, ejsval b)
     return EJS_FALSE;
 }
 
+/* direct-mapped cache in front of _ejs_propertymap_lookup.  Prototype
+   objects are dict-mode (their properties carry non-default attributes),
+   so every method call on a class instance walks to a dict propertymap;
+   with interned property names the (map, name-pointer) pair repeats
+   exactly at every call site.  Entries cache hits AND misses (NULL desc).
+   Guards: per-map gen (bumped on insert/remove/desc-replacement — a
+   replacement frees the cached desc) and a global epoch bumped when any
+   map is freed (a recycled map allocation must not revive stale entries).
+   Moved strings only ever cause misses: the key is the pointer value. */
+#define PROPCACHE_SIZE 8192
+typedef struct {
+    EJSPropertyMap*  map;
+    EJSPrimString*   name;
+    uint32_t         map_gen;
+    uint32_t         free_epoch;
+    EJSPropertyDesc* desc;
+} PropCacheEntry;
+static PropCacheEntry prop_cache[PROPCACHE_SIZE];
+static uint32_t propmap_free_epoch;
+
+static inline uint32_t
+propcache_slot (EJSPropertyMap* map, EJSPrimString* name)
+{
+    uintptr_t h = ((uintptr_t)map >> 4) ^ (((uintptr_t)name >> 4) * 2654435761u);
+    return (uint32_t)h & (PROPCACHE_SIZE - 1);
+}
+
 // ECMA262: 6.2.4.1
 EJSBool
 IsAccessorDescriptor(EJSPropertyDesc* Desc)
@@ -418,6 +445,7 @@ void
 _ejs_propertymap_free (EJSPropertyMap *map)
 {
     //_ejs_log ("%p: free\n", map);
+    propmap_free_epoch++; // a recycled allocation must not revive stale cache entries
     _EJSPropertyMapEntry* s = map->head_insert;
     while (s) {
         _EJSPropertyMapEntry* next = s->next_insert;
@@ -450,6 +478,7 @@ void
 _ejs_propertymap_remove (EJSPropertyMap *map, ejsval name)
 {
     //_ejs_log ("%p: remove (%s)\n", map, ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name)));
+    map->gen++; // invalidate lookup-cache entries for this map
     if (map->inuse == 0) {
         //_ejs_log ("  map empty, returning early\n");
         return;
@@ -501,19 +530,38 @@ _ejs_propertymap_remove (EJSPropertyMap *map, ejsval name)
 EJSPropertyDesc*
 _ejs_propertymap_lookup (EJSPropertyMap* map, ejsval name)
 {
-    if (map->inuse == 0)
-        return NULL;
-
-    uint32_t hashcode = PropertyKeyHash(name);
-    int bucket = (int)(hashcode % map->nbuckets);
-
-    for (_EJSPropertyMapEntry* s = map->buckets[bucket]; s; s = s->next_bucket) {
-        if (s->hash != hashcode)
-            continue;
-        if (PropertyKeyEq(s->name, name))
-            return s->desc;
+    PropCacheEntry* e = NULL;
+    if (EJSVAL_IS_STRING(name)) {
+        EJSPrimString* n = EJSVAL_TO_STRING(name);
+        e = &prop_cache[propcache_slot(map, n)];
+        if (e->map == map && e->name == n
+            && e->map_gen == map->gen && e->free_epoch == propmap_free_epoch)
+            return e->desc;
     }
-    return NULL;
+
+    EJSPropertyDesc* found = NULL;
+    if (map->inuse != 0) {
+        uint32_t hashcode = PropertyKeyHash(name);
+        int bucket = (int)(hashcode % map->nbuckets);
+
+        for (_EJSPropertyMapEntry* s = map->buckets[bucket]; s; s = s->next_bucket) {
+            if (s->hash != hashcode)
+                continue;
+            if (PropertyKeyEq(s->name, name)) {
+                found = s->desc;
+                break;
+            }
+        }
+    }
+
+    if (e) {
+        e->map = map;
+        e->name = EJSVAL_TO_STRING(name);
+        e->map_gen = map->gen;
+        e->free_epoch = propmap_free_epoch;
+        e->desc = found;
+    }
+    return found;
 }
 
 static void
@@ -547,6 +595,7 @@ void
 _ejs_propertymap_insert (EJSPropertyMap* map, ejsval name, EJSPropertyDesc* desc)
 {
     //_ejs_log ("%p: insert (%s)\n", map, ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name)));
+    map->gen++; // invalidate lookup-cache entries (a replacement frees the old desc)
     if (map->buckets == NULL) {
         map->nbuckets = primes[0];
         map->buckets = calloc (sizeof(_EJSPropertyMapEntry*), map->nbuckets);
