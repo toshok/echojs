@@ -2941,6 +2941,24 @@ _ejs_string_hash (ejsval str)
     return _ejs_primstring_hash (EJSVAL_TO_STRING_IMPL(str));
 }
 
+EJSBool
+_ejs_string_eq (ejsval x, ejsval y)
+{
+    if (EJSVAL_EQ(x, y)) return EJS_TRUE;
+
+    EJSPrimString* xp = EJSVAL_TO_STRING_IMPL(x);
+    EJSPrimString* yp = EJSVAL_TO_STRING_IMPL(y);
+
+    if (xp->length != yp->length) return EJS_FALSE;
+    if (EJS_PRIMSTR_HAS_HASH(xp) && EJS_PRIMSTR_HAS_HASH(yp) && xp->hash != yp->hash)
+        return EJS_FALSE;
+
+    // embedded NULs are ordinary code units, so compare by explicit length
+    return memcmp (_ejs_primstring_flatten(xp)->data.flat,
+                   _ejs_primstring_flatten(yp)->data.flat,
+                   xp->length * sizeof(jschar)) == 0;
+}
+
 jschar
 _ejs_string_char_code_at(EJSPrimString* primstr, int i)
 {

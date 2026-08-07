@@ -113,6 +113,10 @@ jschar _ejs_string_ucs2_at (EJSPrimString* primstr, uint32_t offset);
 
 uint32_t _ejs_string_hash (ejsval str);
 
+// content equality for two string ejsvals: identity, length, and cached-hash
+// rejects before the flatten + memcmp
+EJSBool _ejs_string_eq (ejsval x, ejsval y);
+
 // seed the literal intern table with the runtime's static atoms (called once
 // from _ejs_init, after _ejs_init_static_strings)
 void _ejs_string_intern_static_atoms (void);

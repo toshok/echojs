@@ -592,11 +592,7 @@ SameValue(ejsval x, ejsval y)
     if (EJSVAL_IS_STRING(x)) {
         // a. If x and y are exactly the same sequence of code units (same length and same code units in corresponding positions) return true;
         //    otherwise, return false.
-        if (EJSVAL_TO_STRLEN(x) != EJSVAL_TO_STRLEN(y)) return EJS_FALSE;
-
-        // XXX there is doubtless a more efficient way to compare two ropes, but we convert but to flat strings for now.
-        // length-aware compare: embedded NULs are ordinary code units
-        return ucs2_strcmp_len (EJSVAL_TO_FLAT_STRING(x), EJSVAL_TO_STRLEN(x), EJSVAL_TO_FLAT_STRING(y), EJSVAL_TO_STRLEN(y)) ? EJS_FALSE : EJS_TRUE;
+        return _ejs_string_eq (x, y);
     }
     // 8. If Type(x) is Boolean, then
     if (EJSVAL_IS_BOOLEAN(x)) {
@@ -649,11 +645,7 @@ SameValueZero(ejsval x, ejsval y)
     if (EJSVAL_IS_STRING(x)) {
         //    a. If x and y are exactly the same sequence of code units (same length and same code units in corresponding positions) return true;
         //       otherwise, return false.
-        if (EJSVAL_TO_STRLEN(x) != EJSVAL_TO_STRLEN(y)) return EJS_FALSE;
-
-        // XXX there is doubtless a more efficient way to compare two ropes, but we convert but to flat strings for now.
-        // length-aware compare: embedded NULs are ordinary code units
-        return ucs2_strcmp_len (EJSVAL_TO_FLAT_STRING(x), EJSVAL_TO_STRLEN(x), EJSVAL_TO_FLAT_STRING(y), EJSVAL_TO_STRLEN(y)) ? EJS_FALSE : EJS_TRUE;
+        return _ejs_string_eq (x, y);
     }
     // 8. If Type(x) is Boolean, then
     if (EJSVAL_IS_BOOLEAN(x)) {
@@ -1182,10 +1174,7 @@ _ejs_op_strict_eq (ejsval x, ejsval y)
     if (EJSVAL_IS_STRING(x)) {
         //    a. If x and y are exactly the same sequence of characters (same length and same characters in corresponding positions), return true.
         //    b. Else, return false.
-        if (EJSVAL_TO_STRLEN(x) != EJSVAL_TO_STRLEN(y))
-            return _ejs_false;
-        // length-aware compare: embedded NULs are ordinary code units
-        return BOOLEAN_TO_EJSVAL (!ucs2_strcmp_len (EJSVAL_TO_FLAT_STRING(x), EJSVAL_TO_STRLEN(x), EJSVAL_TO_FLAT_STRING(y), EJSVAL_TO_STRLEN(y)));
+        return BOOLEAN_TO_EJSVAL (_ejs_string_eq (x, y));
     }
     // 6. If Type(x) is Boolean, then
     if (EJSVAL_IS_BOOLEAN(x)) {

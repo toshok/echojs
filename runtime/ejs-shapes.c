@@ -114,9 +114,7 @@ shape_name_hash(ejsval name)
 static EJSBool
 shape_name_eq(ejsval a, ejsval b)
 {
-    if (EJSVAL_EQ(a, b))
-        return EJS_TRUE;
-    return EJSVAL_TO_BOOLEAN(_ejs_op_strict_eq(a, b));
+    return _ejs_string_eq(a, b);
 }
 
 static void transition_insert(uint32_t parent, uint32_t name_hash, uint32_t child);

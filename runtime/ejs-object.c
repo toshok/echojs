@@ -187,6 +187,18 @@ PropertyKeyHash (ejsval argument)
         return _ejs_symbol_hash(argument);
 }
 
+/* property keys are strings or symbols (asserted in PropertyKeyHash);
+   symbols compare by identity, so only strings need the content path */
+static EJSBool
+PropertyKeyEq (ejsval a, ejsval b)
+{
+    if (EJSVAL_EQ(a, b))
+        return EJS_TRUE;
+    if (EJSVAL_IS_STRING(a) && EJSVAL_IS_STRING(b))
+        return _ejs_string_eq(a, b);
+    return EJS_FALSE;
+}
+
 // ECMA262: 6.2.4.1
 EJSBool
 IsAccessorDescriptor(EJSPropertyDesc* Desc)
@@ -449,7 +461,7 @@ _ejs_propertymap_remove (EJSPropertyMap *map, ejsval name)
     _EJSPropertyMapEntry* prev = NULL;
     _EJSPropertyMapEntry* s = map->buckets[bucket];
     while (s) {
-        if (s->hash == hashcode && EJSVAL_TO_BOOLEAN(_ejs_op_strict_eq(s->name, name))) {
+        if (s->hash == hashcode && PropertyKeyEq(s->name, name)) {
             //_ejs_log ("  found entry in bucket (hashcode %d, bucket %d)\n", hashcode, bucket);
             if (prev)
                 prev->next_bucket = s->next_bucket;
@@ -498,7 +510,7 @@ _ejs_propertymap_lookup (EJSPropertyMap* map, ejsval name)
     for (_EJSPropertyMapEntry* s = map->buckets[bucket]; s; s = s->next_bucket) {
         if (s->hash != hashcode)
             continue;
-        if (EJSVAL_TO_BOOLEAN(_ejs_op_strict_eq(s->name, name)))
+        if (PropertyKeyEq(s->name, name))
             return s->desc;
     }
     return NULL;
@@ -546,7 +558,7 @@ _ejs_propertymap_insert (EJSPropertyMap* map, ejsval name, EJSPropertyDesc* desc
     for (_EJSPropertyMapEntry* s = map->buckets[bucket]; s; s = s->next_bucket) {
         if (s->hash != hashcode)
             continue;
-        if (EJSVAL_TO_BOOLEAN(_ejs_op_strict_eq(s->name, name))) {
+        if (PropertyKeyEq(s->name, name)) {
             _ejs_propertydesc_free (s->desc);
             s->desc = desc;
             return;
