@@ -397,7 +397,6 @@ function parseFile(filename: string, content: string, options: CompilerOptions):
             loc: true,
             raw: true,
             sourceType: options.script ? "script" : "module",
-            parser: options.parser,
         });
     } catch (err) {
         console.warn(`${filename}: ${String(err)}:`);

@@ -7,9 +7,8 @@
 // module.  The contract is the ESTree dialect in ./estree — whatever
 // parser sits behind this module must produce that shape.
 //
-// The default parser is acorn (external-deps/acorn, standard ESTree),
-// adapted to the dialect below; the esprima fork stays available via
-// --parser esprima for bisection.
+// The parser is acorn (external-deps/acorn, standard ESTree), adapted
+// to the dialect below.
 //
 // The adapter also *gates*: syntax acorn parses but the backend does not
 // implement (BigInt, dynamic import(), ...) dies here with a clear
@@ -17,15 +16,12 @@
 // lowering support lands.
 
 import * as acorn from "../external-deps/acorn/acorn-es6";
-import * as esprima from "../external-deps/esprima/esprima-es6";
 import type { Program } from "./estree";
 
 export interface ParseOptions {
     loc?: boolean;
     raw?: boolean;
     sourceType?: "script" | "module";
-    // "acorn" (default) or "esprima" (the retained fork, for bisection)
-    parser?: string;
 }
 
 // acorn nodes, structurally: type plus whatever fields the node kind has
@@ -254,14 +250,6 @@ function adaptTree(n: Node): void {
 }
 
 export function parse(source: string, options?: ParseOptions): Program {
-    if (options?.parser === "esprima") {
-        return esprima.parse(source, {
-            loc: options.loc,
-            raw: options.raw,
-            sourceType: options.sourceType,
-        });
-    }
-
     const sourceType = options?.sourceType ?? "script";
     const ast = acorn.parse(source, {
         ecmaVersion: "latest",

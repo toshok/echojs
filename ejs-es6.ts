@@ -130,7 +130,6 @@ const options: CompilerOptions = {
     import_variables: [],
     srcdir: false,
     stdout_writer: new Writer(process.stdout),
-    parser: "acorn",
     script: false,
 };
 
@@ -249,10 +248,6 @@ const args: Record<string, ArgSpec | undefined> = {
         handler: add_native_module_dir,
         handlerArgc: 1,
         help: "--module path-to-search-for-modules",
-    },
-    "--parser": {
-        option: "parser",
-        help: "which parser to use: acorn (default) or esprima (for bisection)",
     },
     "--help": {
         flag: "show_help",
