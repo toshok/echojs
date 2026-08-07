@@ -27,6 +27,14 @@ typedef struct {
 
     EJSKeyValueEntry* head_insert;
     EJSKeyValueEntry* tail_insert;
+
+    // open-addressed (svz-hash -> entry) index over the insertion list;
+    // malloc'd, rebuilt when index_epoch falls behind _ejs_gc_move_epoch
+    // (identity-hashed keys move with the collector).  see ejs-map.c
+    struct _EJSMapIndexSlot* index;
+    uint32_t index_capacity;   // power of two
+    uint32_t index_used;       // live + tombstones
+    uint64_t index_epoch;
 } EJSMap;
 
 EJS_BEGIN_DECLS

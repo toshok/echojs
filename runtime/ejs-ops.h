@@ -43,6 +43,9 @@ ejsval SpeciesConstructor(ejsval O, ejsval defaultConstructor);
 
 EJSBool SameValue(ejsval x, ejsval y);
 EJSBool SameValueZero(ejsval x, ejsval y);
+// hash agreeing with SameValueZero; identity-hashed values (objects,
+// symbols) go stale across GC moves — guard with _ejs_gc_move_epoch
+uint32_t _ejs_svz_hash(ejsval v);
 
 ejsval _ejs_op_typeof_is_object(ejsval exp);
 ejsval _ejs_op_typeof_is_function(ejsval exp);

@@ -611,6 +611,30 @@ SameValue(ejsval x, ejsval y)
 }
 
 
+// hash consistent with SameValueZero: values equal under SVZ hash equal.
+// objects/symbols hash by identity (raw ejsval bits) — such hashes go
+// stale when the collector moves the referent, so callers must guard
+// usage with _ejs_gc_move_epoch and rehash after any collection.
+uint32_t
+_ejs_svz_hash (ejsval v)
+{
+    if (EJSVAL_IS_NUMBER(v)) {
+        double d = EJSVAL_TO_NUMBER(v);
+        if (d == 0) d = 0;             // -0 and +0 are SVZ-equal
+        if (isnan(d)) return 0x7ff8;   // every NaN is SVZ-equal
+        union { double d; uint64_t u; } u;
+        u.d = d;
+        return (uint32_t)((u.u * 0x9E3779B97F4A7C15ull) >> 32);
+    }
+    if (EJSVAL_IS_STRING(v))
+        return _ejs_string_hash(v);
+    if (EJSVAL_IS_BIGINT(v))
+        return 0xb161717; // rare as a key: collide, the compare resolves
+    // undefined/null/booleans are singleton bit patterns; objects and
+    // symbols compare by identity, so the raw bits are the identity
+    return (uint32_t)((v.asBits * 0x9E3779B97F4A7C15ull) >> 32);
+}
+
 // ECMA262 7.2.10
 // SameValueZero(x, y)
 // same as SameValue, except in its treatment of +/- 0

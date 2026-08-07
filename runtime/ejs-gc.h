@@ -35,6 +35,10 @@ extern void _ejs_gc_collect(const char *reason);
 
 extern GCObjectPtr _ejs_gc_alloc(size_t size, EJSScanType scan_type);
 
+// bumped at every collection (ejs-gc-minor.c): identity hashes over heap
+// pointers (Map/Set indexes) are only valid while this is unchanged
+extern uint64_t _ejs_gc_move_epoch;
+
 #define _ejs_gc_new(T) (T *)_ejs_gc_alloc(sizeof(T), EJS_SCAN_TYPE_OBJECT)
 #define _ejs_gc_new_obj(T, sz) (T *)_ejs_gc_alloc(sz, EJS_SCAN_TYPE_OBJECT)
 #define _ejs_gc_new_primstr(sz)                                                \

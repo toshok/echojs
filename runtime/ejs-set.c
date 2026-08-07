@@ -23,6 +23,83 @@ _ejs_set_new ()
     return OBJECT_TO_EJSVAL(set);
 }
 
+// ---- svz-hash index over the insertion list -------------------------
+// mirrors ejs-map.c: the [[SetData]] List survives for iterators; the
+// index makes add/has/delete O(1) instead of a SameValueZero walk, and
+// rebuilds when _ejs_gc_move_epoch advances (identity-hashed values
+// move with the collector).
+
+struct _EJSSetIndexSlot {
+    EJSSetValueEntry* entry; // NULL = empty, SET_INDEX_TOMB = deleted
+};
+#define SET_INDEX_TOMB ((EJSSetValueEntry*)1)
+
+static void
+set_index_insert_raw (struct _EJSSetIndexSlot* slots, uint32_t capacity, EJSSetValueEntry* e)
+{
+    uint32_t mask = capacity - 1;
+    uint32_t i = _ejs_svz_hash(e->value) & mask;
+    while (slots[i].entry && slots[i].entry != SET_INDEX_TOMB)
+        i = (i + 1) & mask;
+    slots[i].entry = e;
+}
+
+static void
+set_index_rebuild (EJSSet* set)
+{
+    uint32_t live = 0;
+    for (EJSSetValueEntry* e = set->head_insert; e; e = e->next_insert)
+        if (!EJSVAL_IS_NO_ITER_VALUE_MAGIC(e->value))
+            live++;
+
+    uint32_t capacity = 16;
+    while (capacity < live * 2)
+        capacity <<= 1;
+
+    free (set->index);
+    set->index = (struct _EJSSetIndexSlot*)calloc (capacity, sizeof(struct _EJSSetIndexSlot));
+    set->index_capacity = capacity;
+    set->index_used = live;
+    set->index_epoch = _ejs_gc_move_epoch;
+
+    for (EJSSetValueEntry* e = set->head_insert; e; e = e->next_insert)
+        if (!EJSVAL_IS_NO_ITER_VALUE_MAGIC(e->value))
+            set_index_insert_raw (set->index, set->index_capacity, e);
+}
+
+static void
+set_index_ensure (EJSSet* set)
+{
+    if (!set->index || set->index_epoch != _ejs_gc_move_epoch
+        || set->index_used + 1 > set->index_capacity - (set->index_capacity >> 2))
+        set_index_rebuild (set);
+}
+
+static struct _EJSSetIndexSlot*
+set_index_find_slot (EJSSet* set, ejsval value)
+{
+    set_index_ensure (set);
+    uint32_t mask = set->index_capacity - 1;
+    uint32_t i = _ejs_svz_hash(value) & mask;
+    while (set->index[i].entry) {
+        EJSSetValueEntry* e = set->index[i].entry;
+        if (e != SET_INDEX_TOMB
+            && !EJSVAL_IS_NO_ITER_VALUE_MAGIC(e->value)
+            && SameValueZero (e->value, value))
+            return &set->index[i];
+        i = (i + 1) & mask;
+    }
+    return NULL;
+}
+
+static void
+set_index_add (EJSSet* set, EJSSetValueEntry* e)
+{
+    set_index_ensure (set);
+    set_index_insert_raw (set->index, set->index_capacity, e);
+    set->index_used++;
+}
+
 // ES6: 23.1.3.1
 // Map.prototype.clear ()
 static EJS_NATIVE_FUNC(_ejs_Set_prototype_clear) {
@@ -41,12 +118,14 @@ static EJS_NATIVE_FUNC(_ejs_Set_prototype_clear) {
 
     // 5. Let entries be the List that is the value of S’s [[SetData]] internal slot. 
     EJSSetValueEntry* entries = EJSVAL_TO_SET(S)->head_insert;
-    // 6. Repeat for each e that is an element of entries, 
+    // 6. Repeat for each e that is an element of entries,
     for (EJSSetValueEntry* e = entries; e; e = e->next_insert) {
-        //    a. Replace the element of entries whose value is e with an element whose value is empty. 
+        //    a. Replace the element of entries whose value is e with an element whose value is empty.
         e->value = MAGIC_TO_EJSVAL_IMPL(EJS_NO_ITER_VALUE);
     }
-    // 7. Return undefined. 
+    free (EJSVAL_TO_SET(S)->index);
+    EJSVAL_TO_SET(S)->index = NULL;
+    // 7. Return undefined.
     return _ejs_undefined;
 }
 
@@ -56,19 +135,15 @@ _ejs_set_delete(ejsval S, ejsval value)
     // our caller should have already validated and thrown appropriate TypeErrors
     EJS_ASSERT(EJSVAL_IS_SET(S));
 
-    // 5. Let entries be the List that is the value of S’s [[SetData]] internal slot. 
-    EJSSetValueEntry* entries = EJSVAL_TO_SET(S)->head_insert;
-    // 6. Repeat for each e that is an element of entries, 
-    for (EJSSetValueEntry* e = entries; e; e = e->next_insert) {
-        //    a. If e is not empty and SameValueZero(e, value) is true, then 
-        if (SameValueZero(e->value, value)) {
-            // i. Replace the element of entries whose value is e with an element whose value is empty. 
-            e->value = MAGIC_TO_EJSVAL_IMPL(EJS_NO_ITER_VALUE);
-            // ii. Return true. 
-            return _ejs_true;
-        }
+    // index probe replaces the spec's [[SetData]] walk (the List
+    // survives for suspended iterators; the entry empties in place)
+    struct _EJSSetIndexSlot* slot = set_index_find_slot (EJSVAL_TO_SET(S), value);
+    if (slot) {
+        slot->entry->value = MAGIC_TO_EJSVAL_IMPL(EJS_NO_ITER_VALUE);
+        slot->entry = SET_INDEX_TOMB;
+        return _ejs_true;
     }
-    // 7. Return false. 
+    // 7. Return false.
     return _ejs_false;
 }
 
@@ -171,17 +246,8 @@ _ejs_set_has(ejsval S, ejsval value)
 
     EJSSet* _set = EJSVAL_TO_SET(S);
 
-    // 5. Let entries be the List that is the value of S’s [[SetData]] internal slot. 
-    EJSSetValueEntry* entries = _set->head_insert;
-
-    // 6. Repeat for each e that is an element of entries, 
-    for (EJSSetValueEntry* e = entries; e; e = e->next_insert) {
-        // a. If e is not empty and SameValueZero(e, value) is true, then return true.
-        if (SameValueZero (e->value, value))
-            return _ejs_true;
-    }
-    // 7. Return false. 
-    return _ejs_false;
+    // index probe replaces the spec's [[SetData]] walk
+    return set_index_find_slot (_set, value) ? _ejs_true : _ejs_false;
 }
 
 // ES6: 23.2.3.7
@@ -215,22 +281,15 @@ _ejs_set_add(ejsval S, ejsval value)
     // 4. If S’s [[SetData]] internal slot is undefined, then throw a TypeError exception. 
     EJSSet* _set = EJSVAL_TO_SET(S);
 
-    // 5. Let entries be the List that is the value of S’s [[SetData]] internal slot. 
-    EJSSetValueEntry* entries = _set->head_insert;
+    // 6. index probe replaces the spec's [[SetData]] walk
+    if (set_index_find_slot (_set, value))
+        return S;
 
-    EJSSetValueEntry* e;
-    // 6. Repeat for each e that is an element of entries, 
-    for (e = entries; e; e = e->next_insert) {
-        //    a. If e is not empty and SameValueZero(e, value) is true, then 
-        if (SameValueZero(e->value, value))
-        //       i. Return S. 
-            return S;
-    }
-    // 7. If value is −0, then let value be +0. 
+    // 7. If value is −0, then let value be +0.
     if (EJSVAL_IS_NUMBER(value) && EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(value)))
         value = NUMBER_TO_EJSVAL(0);
-    // 8. Append value as the last element of entries. 
-    e = calloc (1, sizeof (EJSSetValueEntry));
+    // 8. Append value as the last element of entries.
+    EJSSetValueEntry* e = calloc (1, sizeof (EJSSetValueEntry));
     e->value = value;
     _ejs_gc_remember(_set, e->value);
 
@@ -244,6 +303,8 @@ _ejs_set_add(ejsval S, ejsval value)
     else {
         _set->tail_insert = e;
     }
+
+    set_index_add (_set, e);
 
     // 9. Return S.
     return S;
@@ -987,6 +1048,7 @@ _ejs_set_specop_finalize (EJSObject* obj)
         free (s);
         s = next;
     }
+    free (set->index);
 
     _ejs_Object_specops.Finalize (obj);
 }

@@ -21,6 +21,93 @@ _ejs_map_new ()
     return OBJECT_TO_EJSVAL(map);
 }
 
+// ---- svz-hash index over the insertion list -------------------------
+// The spec's [[MapData]] List survives (iterators walk it); the index is
+// a malloc'd open-addressed table from _ejs_svz_hash(key) to the entry,
+// making get/has/set/delete O(1) instead of a full-list SameValueZero
+// walk.  Identity-hashed keys (objects, symbols) move with the
+// collector, so the index rebuilds whenever _ejs_gc_move_epoch has
+// advanced past index_epoch.
+
+struct _EJSMapIndexSlot {
+    EJSKeyValueEntry* entry; // NULL = empty, MAP_INDEX_TOMB = deleted
+};
+#define MAP_INDEX_TOMB ((EJSKeyValueEntry*)1)
+
+static void
+map_index_insert_raw (struct _EJSMapIndexSlot* slots, uint32_t capacity, EJSKeyValueEntry* p)
+{
+    uint32_t mask = capacity - 1;
+    uint32_t i = _ejs_svz_hash(p->key) & mask;
+    while (slots[i].entry && slots[i].entry != MAP_INDEX_TOMB)
+        i = (i + 1) & mask;
+    slots[i].entry = p;
+}
+
+static void
+map_index_rebuild (EJSMap* map)
+{
+    uint32_t live = 0;
+    for (EJSKeyValueEntry* p = map->head_insert; p; p = p->next_insert)
+        if (!EJSVAL_IS_NO_ITER_VALUE_MAGIC(p->key))
+            live++;
+
+    uint32_t capacity = 16;
+    while (capacity < live * 2)
+        capacity <<= 1;
+
+    free (map->index);
+    map->index = (struct _EJSMapIndexSlot*)calloc (capacity, sizeof(struct _EJSMapIndexSlot));
+    map->index_capacity = capacity;
+    map->index_used = live;
+    map->index_epoch = _ejs_gc_move_epoch;
+
+    for (EJSKeyValueEntry* p = map->head_insert; p; p = p->next_insert)
+        if (!EJSVAL_IS_NO_ITER_VALUE_MAGIC(p->key))
+            map_index_insert_raw (map->index, map->index_capacity, p);
+}
+
+static void
+map_index_ensure (EJSMap* map)
+{
+    if (!map->index || map->index_epoch != _ejs_gc_move_epoch
+        || map->index_used + 1 > map->index_capacity - (map->index_capacity >> 2))
+        map_index_rebuild (map);
+}
+
+// the slot holding the SVZ-equal live entry, or NULL if absent
+static struct _EJSMapIndexSlot*
+map_index_find_slot (EJSMap* map, ejsval key)
+{
+    map_index_ensure (map);
+    uint32_t mask = map->index_capacity - 1;
+    uint32_t i = _ejs_svz_hash(key) & mask;
+    while (map->index[i].entry) {
+        EJSKeyValueEntry* e = map->index[i].entry;
+        if (e != MAP_INDEX_TOMB
+            && !EJSVAL_IS_NO_ITER_VALUE_MAGIC(e->key)
+            && SameValueZero (e->key, key))
+            return &map->index[i];
+        i = (i + 1) & mask;
+    }
+    return NULL;
+}
+
+static EJSKeyValueEntry*
+map_index_lookup (EJSMap* map, ejsval key)
+{
+    struct _EJSMapIndexSlot* slot = map_index_find_slot (map, key);
+    return slot ? slot->entry : NULL;
+}
+
+static void
+map_index_add (EJSMap* map, EJSKeyValueEntry* p)
+{
+    map_index_ensure (map); // guarantees a free slot
+    map_index_insert_raw (map->index, map->index_capacity, p);
+    map->index_used++;
+}
+
 // ES6: 23.1.3.1
 // Map.prototype.clear ()
 static EJS_NATIVE_FUNC(_ejs_Map_prototype_clear) {
@@ -52,6 +139,9 @@ static EJS_NATIVE_FUNC(_ejs_Map_prototype_clear) {
         p->value = MAGIC_TO_EJSVAL_IMPL(EJS_NO_ITER_VALUE);
     }
 
+    free (EJSVAL_TO_MAP(M)->index);
+    EJSVAL_TO_MAP(M)->index = NULL;
+
     // 9. Return undefined.
     return _ejs_undefined;
 }
@@ -69,24 +159,17 @@ _ejs_map_delete (ejsval map, ejsval key)
 
     EJSMap* _map = EJSVAL_TO_MAP(map);
 
-    // 4. Let entries be the List that is the value of M’s [[MapData]] internal slot.
-    EJSKeyValueEntry* entries = _map->head_insert;
+    // index probe replaces the spec's list walk (the List survives for
+    // suspended iterators; the entry is emptied in place)
+    struct _EJSMapIndexSlot* slot = map_index_find_slot (_map, key);
+    if (!slot)
+        return _ejs_false;
 
-    // 5. Repeat for each Record {[[key]], [[value]]} p that is an element of entries,
-    for (EJSKeyValueEntry* p = entries; p; p = p->next_insert) {
-        // a. If p.[[key]] is not empty and SameValueZero(p.[[key]], key) is true, then
-        if (!EJSVAL_IS_NO_ITER_VALUE_MAGIC(p->key) && SameValueZero (p->key, key)) {
-            // i. Set p.[[key]] to empty.
-            p->key = MAGIC_TO_EJSVAL_IMPL(EJS_NO_ITER_VALUE);
-            // ii. Set p.[[value]] to empty.
-            p->value = MAGIC_TO_EJSVAL_IMPL(EJS_NO_ITER_VALUE);
-            // iii. Return true.
-            return _ejs_true;
-        }
-    }
-
-    // 6. Return false.
-    return _ejs_false;
+    EJSKeyValueEntry* p = slot->entry;
+    p->key = MAGIC_TO_EJSVAL_IMPL(EJS_NO_ITER_VALUE);
+    p->value = MAGIC_TO_EJSVAL_IMPL(EJS_NO_ITER_VALUE);
+    slot->entry = MAP_INDEX_TOMB;
+    return _ejs_true;
 }
 
 static EJS_NATIVE_FUNC(_ejs_Map_prototype_delete) {
@@ -184,17 +267,9 @@ _ejs_map_get (ejsval map, ejsval key)
 
     EJSMap* _map = EJSVAL_TO_MAP(map);
 
-    // 4. Let entries be the List that is the value of M’s [[MapData]] internal slot.
-    EJSKeyValueEntry* entries = _map->head_insert;
-
-    // 5. Repeat for each Record {[[key]], [[value]]} p that is an element of entries,
-    for (EJSKeyValueEntry* p = entries; p; p = p->next_insert) {
-        // a. If p.[[key]] is not empty and SameValueZero(p.[[key]], key) is true, return p.[[value]].
-        if (!EJSVAL_IS_NO_ITER_VALUE_MAGIC(p->key) && SameValueZero (p->key, key))
-            return p->value;
-    }
-    // 6. Return undefined.
-    return _ejs_undefined;
+    // index probe replaces the spec's [[MapData]] walk
+    EJSKeyValueEntry* p = map_index_lookup (_map, key);
+    return p ? p->value : _ejs_undefined;
 }
 
 // ES6: 23.1.3.6
@@ -225,18 +300,8 @@ _ejs_map_has (ejsval map, ejsval key)
 
     EJSMap* _map = EJSVAL_TO_MAP(map);
 
-    // 4. Let entries be the List that is the value of M’s [[MapData]] internal slot.
-    EJSKeyValueEntry* entries = _map->head_insert;
-
-    // 5. Repeat for each Record {[[key]], [[value]]} p that is an element of entries,
-    for (EJSKeyValueEntry* p = entries; p; p = p->next_insert) {
-        // a. If p.[[key]] is not empty and SameValueZero(p.[[key]], key) is true, return true.
-        if (!EJSVAL_IS_NO_ITER_VALUE_MAGIC(p->key) && SameValueZero (p->key, key))
-            return _ejs_true;
-    }
-
-    // 6. Return false.
-    return _ejs_false;
+    // index probe replaces the spec's [[MapData]] walk
+    return map_index_lookup (_map, key) ? _ejs_true : _ejs_false;
 }
 
 // upsert proposal
@@ -343,21 +408,16 @@ _ejs_map_set (ejsval map, ejsval key, ejsval value)
 
     EJSMap* _map = EJSVAL_TO_MAP(map);
 
-    // 4. Let entries be the List that is the value of M’s [[MapData]] internal slot.
-    EJSKeyValueEntry* entries = _map->head_insert;
-
-    // 5. Repeat for each Record {[[key]], [[value]]} p that is an element of entries,
-    EJSKeyValueEntry* p;
-    for (p = entries; p; p = p->next_insert) {
-        // a. If p.[[key]] is not empty and SameValueZero(p.[[key]], key) is true, then
-        if (!EJSVAL_IS_NO_ITER_VALUE_MAGIC(p->key) && SameValueZero (p->key, key)) {
-            // i. Set p.[[value]] to value.
-            p->value = value;
-            _ejs_gc_remember(_map, p->value);
-            // ii. Return M.
-            return map;
-        }
+    // 5. index probe replaces the spec's [[MapData]] walk
+    EJSKeyValueEntry* p = map_index_lookup (_map, key);
+    if (p) {
+        // i. Set p.[[value]] to value.
+        p->value = value;
+        _ejs_gc_remember(_map, p->value);
+        // ii. Return M.
+        return map;
     }
+
     // 6. If key is −0, let key be +0.
     if (EJSVAL_IS_NUMBER(key) && EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(key)))
         key = NUMBER_TO_EJSVAL(0);
@@ -380,6 +440,8 @@ _ejs_map_set (ejsval map, ejsval key, ejsval value)
     else {
         _map->tail_insert = p;
     }
+
+    map_index_add (_map, p);
 
     // 9. Return M.
     return map;
@@ -790,6 +852,7 @@ _ejs_map_specop_finalize (EJSObject* obj)
         free (s);
         s = next;
     }
+    free (map->index);
 
     _ejs_Object_specops.Finalize (obj);
 }

@@ -218,6 +218,9 @@ compact_stat_cmp(const void* a, const void* b)
 static void
 compact_old_gen(void)
 {
+    // old-gen cells are about to move: identity hashes go stale
+    _ejs_gc_move_epoch++;
+
     // every registered generator pins: the registry reaches them through
     // raw intrusive pointers (reg_next/reg_prev), and their machine
     // state is re-scanned conservatively by their specops

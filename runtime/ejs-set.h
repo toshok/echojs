@@ -24,6 +24,14 @@ typedef struct {
 
     EJSSetValueEntry* head_insert;
     EJSSetValueEntry* tail_insert;
+
+    // open-addressed (svz-hash -> entry) index over the insertion list;
+    // malloc'd, rebuilt when index_epoch falls behind _ejs_gc_move_epoch
+    // (identity-hashed values move with the collector).  see ejs-set.c
+    struct _EJSSetIndexSlot* index;
+    uint32_t index_capacity;   // power of two
+    uint32_t index_used;       // live + tombstones
+    uint64_t index_epoch;
 } EJSSet;
 
 EJS_BEGIN_DECLS
