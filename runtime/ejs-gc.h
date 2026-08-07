@@ -66,6 +66,20 @@ extern GCObjectPtr _ejs_gc_alloc(size_t size, EJSScanType scan_type);
 // on pointer values must not admit such pointers.
 extern EJSBool _ejs_gc_ptr_is_gc_managed(void* ptr);
 
+// ---- sticky-pin cache (minor collections only) -------------------
+//
+// A suspended generator's stack is frozen, so its conservative hit set
+// is identical from one minor to the next: the first scan captures the
+// pins into a cache (handle stored on the generator), and while the
+// generator stays suspended later minors REPLAY the pins instead of
+// rescanning the whole stack.  The push hook invalidates on resume.
+// All four calls no-op / return FALSE outside a minor collection.
+extern EJSBool _ejs_gc_pin_cache_replay(void** cache);   // TRUE = pins replayed, skip the scan
+extern void _ejs_gc_pin_cache_begin(void** cache);       // capture hits of the following scan
+extern void _ejs_gc_pin_cache_end(void);                 // scan done; cache becomes valid
+extern void _ejs_gc_pin_cache_invalidate(void** cache);  // stack will mutate (resume)
+extern void _ejs_gc_pin_cache_free(void** cache);        // generator finalize
+
 #define _ejs_gc_new(T) (T *)_ejs_gc_alloc(sizeof(T), EJS_SCAN_TYPE_OBJECT)
 #define _ejs_gc_new_obj(T, sz) (T *)_ejs_gc_alloc(sz, EJS_SCAN_TYPE_OBJECT)
 #define _ejs_gc_new_primstr(sz)                                                \

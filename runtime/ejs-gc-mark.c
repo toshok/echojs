@@ -480,6 +480,10 @@ _ejs_gc_push_generator(EJSGenerator* gen)
         abort();
     }
     generators[generator_count++] = gen;
+    // this generator's stack is about to run (mutate): its sticky-pin
+    // cache no longer describes the frozen state
+    _ejs_gc_pin_cache_invalidate (&gen->pin_cache);
+    gen->running = EJS_TRUE;
     // keep the barrier's transient-slot bound on the CURRENT stack
     _ejs_heap.current_stack_end = gen->stack + gen->stack_size;
     // swap in this stack's gc-frame chain; the caller's segment
@@ -494,6 +498,7 @@ _ejs_gc_pop_generator()
 {
     generator_count--;
     EJSGenerator* gen = generators[generator_count];
+    gen->running = EJS_FALSE;
     _ejs_heap.current_stack_end = generator_count > 0
         ? generators[generator_count - 1]->stack + generators[generator_count - 1]->stack_size
         : (void*)stack_bottom;

@@ -186,6 +186,8 @@ _ejs_generator_new (ejsval generator_body)
     rv->caller_stack_top = NULL;
     rv->gc_frame_head = NULL;        // this stack's parked chain
     rv->caller_gc_frame_head = NULL;
+    rv->pin_cache = NULL;
+    rv->running = EJS_FALSE;
     rv->reg_prev = NULL;
     rv->reg_next = _ejs_generator_registry;
     if (_ejs_generator_registry) _ejs_generator_registry->reg_prev = rv;
@@ -509,6 +511,7 @@ _ejs_generator_specop_finalize (EJSObject* obj)
     if (gen->reg_prev) gen->reg_prev->reg_next = gen->reg_next;
     if (_ejs_generator_registry == gen) _ejs_generator_registry = gen->reg_next;
     free (gen->stack);
+    _ejs_gc_pin_cache_free (&gen->pin_cache);
 }
 
 // the conservative half of the generator scan: both saved register
@@ -519,6 +522,18 @@ _ejs_generator_specop_finalize (EJSObject* obj)
 void
 _ejs_generator_scan_conservative (EJSGenerator* gen)
 {
+    // minor collections: a suspended generator's stack and saved
+    // register files are frozen, so the previous scan's pins replay in
+    // O(pins) instead of a word walk (no-ops outside a minor; the full
+    // collector's mark scan below runs unchanged).  A RUNNING
+    // generator's stack is still mutating — scan it plainly, cache
+    // nothing.
+    if (!gen->running) {
+        if (_ejs_gc_pin_cache_replay (&gen->pin_cache))
+            return;
+        _ejs_gc_pin_cache_begin (&gen->pin_cache);
+    }
+
     _ejs_gc_mark_conservative_range(&gen->generator_context, (char*)&gen->generator_context + sizeof(ucontext_t));
     _ejs_gc_mark_conservative_range(&gen->caller_context, (char*)&gen->caller_context + sizeof(ucontext_t));
 
@@ -558,6 +573,9 @@ _ejs_generator_scan_conservative (EJSGenerator* gen)
             saved_sp = gen->stack;
         _ejs_gc_mark_conservative_range(saved_sp, stack_end);
     }
+
+    if (!gen->running)
+        _ejs_gc_pin_cache_end ();
 }
 
 static void

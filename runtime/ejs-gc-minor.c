@@ -181,6 +181,103 @@ old_alloc_cell_for_promotion(size_t cell_size)
     return rv;
 }
 
+// ---- sticky-pin cache ---------------------------------------------
+//
+// A suspended generator's stack (and its saved ucontexts) are frozen,
+// so its conservative hit set is identical from one minor to the next.
+// The first scan after suspension captures every young hit here; later
+// minors replay the pins in O(pins) instead of walking the whole stack
+// segment word by word.  The oracle-class workload this pays for:
+// thousands of live suspended generators otherwise rescanned per minor
+// (measured: 3,698 generators, ~3ms of every 7.4ms pause).
+//
+// Replayed pins go through minor_conservative_hit like any other hit,
+// so worklist membership and content rescans are identical to a real
+// scan; only the word-walk is skipped.  Captured entries record hits
+// REGARDLESS of the already-black dedup (another stack may have pinned
+// first this cycle but be gone the next).
+typedef struct {
+    uint32_t count;
+    uint32_t capacity;
+    EJSBool valid;
+    struct { PageInfo* page; uint32_t cell_idx; } hits[];
+} PinCache;
+
+static PinCache** pin_capture; // non-NULL while capturing a scan
+
+static void
+pin_cache_append(PinCache** cachep, PageInfo* page, uint32_t cell_idx)
+{
+    PinCache* c = *cachep;
+    if (!c || c->count == c->capacity) {
+        uint32_t newcap = c ? c->capacity * 2 : 16;
+        c = realloc (c, sizeof(PinCache) + newcap * sizeof(c->hits[0]));
+        if (!*cachep) { c->count = 0; c->valid = EJS_FALSE; }
+        c->capacity = newcap;
+        *cachep = c;
+    }
+    c->hits[c->count].page = page;
+    c->hits[c->count].cell_idx = cell_idx;
+    c->count++;
+}
+
+EJSBool
+_ejs_gc_pin_cache_replay(void** cache)
+{
+    if (!in_minor_gc)
+        return EJS_FALSE;
+    PinCache* c = (PinCache*)*cache;
+    if (!c || !c->valid)
+        return EJS_FALSE;
+    for (uint32_t i = 0; i < c->count; i++)
+        minor_conservative_hit (c->hits[i].page, c->hits[i].cell_idx);
+    return EJS_TRUE;
+}
+
+void
+_ejs_gc_pin_cache_begin(void** cache)
+{
+    if (!in_minor_gc)
+        return;
+    PinCache* c = (PinCache*)*cache;
+    if (c) {
+        c->count = 0;
+        c->valid = EJS_FALSE;
+    }
+    pin_capture = (PinCache**)cache;
+}
+
+void
+_ejs_gc_pin_cache_end(void)
+{
+    if (!pin_capture)
+        return;
+    if (*pin_capture)
+        (*pin_capture)->valid = EJS_TRUE;
+    else {
+        // a scan with zero hits still caches (the common tail-call case)
+        pin_cache_append (pin_capture, NULL, 0);
+        (*pin_capture)->count = 0;
+        (*pin_capture)->valid = EJS_TRUE;
+    }
+    pin_capture = NULL;
+}
+
+void
+_ejs_gc_pin_cache_invalidate(void** cache)
+{
+    PinCache* c = (PinCache*)*cache;
+    if (c)
+        c->valid = EJS_FALSE;
+}
+
+void
+_ejs_gc_pin_cache_free(void** cache)
+{
+    free (*cache);
+    *cache = NULL;
+}
+
 // conservative hit during a minor collection: young targets pin in
 // place (never move this cycle) and join the scan worklist once; old
 // targets are not this collection's problem
@@ -190,10 +287,12 @@ minor_conservative_hit(PageInfo* page, uint32_t cell_idx)
     if (!page->young) return;
     if (page->young == 1 && !young_cell_is_allocated(page, cell_idx)) return;
     if (page->young == 2 && cell_is_free(page->page_bitmap[cell_idx])) return;
-    BitmapCell cell = page->page_bitmap[cell_idx];
-    if (cell_is_black(cell)) return; // already pinned this minor
     GCObjectPtr base = page->page_start + ((size_t)cell_idx * page->cell_size);
     if (_ejs_gc_is_forwarded(base)) return; // pins precede evacuation; stale hit
+    if (pin_capture)
+        pin_cache_append (pin_capture, page, cell_idx);
+    BitmapCell cell = page->page_bitmap[cell_idx];
+    if (cell_is_black(cell)) return; // already pinned this minor
     cell_set_black(&page->page_bitmap[cell_idx]);
     heap_priv.minor_pins++;
     MINOR_SPEW("minor: pin %p\n", base);

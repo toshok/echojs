@@ -59,6 +59,17 @@ typedef struct _EJSGenerator {
     // end) to cover the suspended segment.
     void* caller_stack_top;
 
+    // sticky-pin cache: the conservative hits of this generator's last
+    // minor-GC stack scan, replayed instead of rescanned while the
+    // generator stays suspended (a frozen stack's reference set cannot
+    // change).  Opaque to this module — owned by ejs-gc-minor.c,
+    // invalidated by the push hook on every resume, freed at finalize.
+    // `running` (maintained by the push/pop hooks) gates capture: a scan
+    // taken mid-execution describes a stack that keeps mutating and
+    // must not be cached.
+    void* pin_cache;
+    EJSBool running;
+
     // each machine stack owns a disjoint gc-frame chain.
     // The push hook parks the caller's chain head here and installs
     // this generator's saved head (NULL on first entry); the pop hook
