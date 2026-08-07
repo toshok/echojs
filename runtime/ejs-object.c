@@ -530,8 +530,13 @@ _ejs_propertymap_remove (EJSPropertyMap *map, ejsval name)
 EJSPropertyDesc*
 _ejs_propertymap_lookup (EJSPropertyMap* map, ejsval name)
 {
+    // heap-allocated names are excluded: the collector can free and
+    // recycle their addresses, and a different string at a recycled
+    // address would false-hit.  Statics (atoms, interned module
+    // literals) — the hot compiled-access case — cache safely.
     PropCacheEntry* e = NULL;
-    if (EJSVAL_IS_STRING(name)) {
+    if (EJSVAL_IS_STRING(name)
+        && !_ejs_gc_ptr_is_gc_managed(EJSVAL_TO_STRING(name))) {
         EJSPrimString* n = EJSVAL_TO_STRING(name);
         e = &prop_cache[propcache_slot(map, n)];
         if (e->map == map && e->name == n

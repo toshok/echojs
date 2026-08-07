@@ -39,6 +39,11 @@ extern GCObjectPtr _ejs_gc_alloc(size_t size, EJSScanType scan_type);
 // pointers (Map/Set indexes) are only valid while this is unchanged
 extern uint64_t _ejs_gc_move_epoch;
 
+// TRUE when ptr lies in GC-managed storage (arena reservation or LOS) —
+// addresses the collector can free and recycle.  Identity caches keyed
+// on pointer values must not admit such pointers.
+extern EJSBool _ejs_gc_ptr_is_gc_managed(void* ptr);
+
 #define _ejs_gc_new(T) (T *)_ejs_gc_alloc(sizeof(T), EJS_SCAN_TYPE_OBJECT)
 #define _ejs_gc_new_obj(T, sz) (T *)_ejs_gc_alloc(sz, EJS_SCAN_TYPE_OBJECT)
 #define _ejs_gc_new_primstr(sz)                                                \

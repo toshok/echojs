@@ -137,6 +137,20 @@ conservative_bounds_add(void* start, size_t size)
 static char *los_lo = (char*)UINTPTR_MAX;
 static char *los_hi = NULL;
 
+// TRUE when ptr lies in GC-managed storage (the arena reservation or the
+// LOS span): such an address can be freed and recycled by the collector,
+// so identity caches keyed on it (the shape-lookup and propertymap
+// caches) must not admit it — a recycled address would false-hit with
+// the previous occupant's entry.  Statics (runtime atoms, module string
+// literals) are outside both ranges and cache safely.
+EJSBool
+_ejs_gc_ptr_is_gc_managed (void* ptr)
+{
+    if ((uintptr_t)((char*)ptr - arena_space) < (uintptr_t)MAX_HEAP_SIZE)
+        return EJS_TRUE;
+    return (char*)ptr >= los_lo && (char*)ptr < los_hi;
+}
+
 EJSList heap_pages[HEAP_PAGELISTS_COUNT];
 LargeObjectInfo *los_list;
 
