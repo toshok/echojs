@@ -432,6 +432,18 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     // trigger one).  zeroed contents are inert to the scanner.
     memset (rv, 0, info->cell_size);
     *((GCObjectHeader*)rv) = scan_type | EJS_GC_HEADER_YOUNG;
+    if (nursery_enabled) {
+        // page-path objects are OLD at birth, exactly like LOS objects:
+        // this path serves the nursery-starvation fallback (survivor
+        // pins can exhaust the nursery arena — thousands of suspended
+        // generators do), and C constructors' initializing stores
+        // bypass the write barrier on the young-at-birth assumption.
+        // An old-page cell is invisible to the minor's conservative
+        // pins AND outside the nursery range the barrier tests, so a
+        // young referent stored into it would go stale at the next
+        // evacuation.  Born DIRTY, it gets a precise rescan instead.
+        _ejs_gc_remember_slow(rv);
+    }
 
     if (info->num_free_cells == 0) {
         // if the page is full, bump it to the end of the list (if there's more than 1 page in the list)

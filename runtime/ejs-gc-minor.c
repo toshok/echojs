@@ -48,22 +48,24 @@ young_page_retire_current(int idx)
 static PageInfo*
 young_page_install(int idx, size_t cell_size)
 {
-    Arena* arena = heap_priv.nursery_arena;
     PageInfo* info = NULL;
     if (in_minor_gc) {
         _ejs_log ("GC BUG: young_page_install during a minor collection\n");
         abort();
     }
-    if (arena->free_pages) {
-        info = arena->free_pages;
-        EJS_LIST_DETACH(info, arena->free_pages);
-        info->cell_size = cell_size;
-        info->num_cells = CELLS_OF_SIZE(cell_size);
-        info->num_free_cells = info->num_cells;
-    } else {
-        info = alloc_page_from_arena(arena, cell_size);
-        if (!info) return NULL;
+    for (int i = 0; i < heap_priv.nursery_arena_count && !info; i++) {
+        Arena* arena = heap_priv.nursery_arenas[i];
+        if (arena->free_pages) {
+            info = arena->free_pages;
+            EJS_LIST_DETACH(info, arena->free_pages);
+            info->cell_size = cell_size;
+            info->num_cells = CELLS_OF_SIZE(cell_size);
+            info->num_free_cells = info->num_cells;
+        } else {
+            info = alloc_page_from_arena(arena, cell_size);
+        }
     }
+    if (!info) return NULL;
     info->young = 1;
     info->bump_ptr = info->page_start;
     heap_priv.young_alloced += PAGE_SIZE;
@@ -659,7 +661,8 @@ _ejs_gc_minor_collect(const char* reason)
             page->young = 0;
             page->bump_ptr = page->page_start;
             page->num_free_cells = page->num_cells;
-            EJS_LIST_PREPEND(page, heap_priv.nursery_arena->free_pages);
+            // back to the OWNING arena's free list (multi-arena nursery)
+            EJS_LIST_PREPEND(page, ((Arena*)PTR_TO_ARENA(page->page_start))->free_pages);
         } else {
             page->young = 2;
             page->num_free_cells = page->num_cells - survivors;
@@ -791,16 +794,35 @@ nursery_init(void)
     if (budget_env) heap_priv.young_budget = (size_t)atoll(budget_env);
     if (!nursery_enabled) return;
 
-    Arena* arena = arena_new();
-    if (!arena) {
-        _ejs_log ("gc: could not allocate the nursery arena; nursery disabled\n");
-        nursery_enabled = EJS_FALSE;
-        return;
+    // EJS_GC_NURSERY_ARENAS contiguous arenas (default 8 = 256MB of
+    // reserved address space, committed page by page on use).  They are
+    // carved before any old-gen arena exists, so consecutive arena_new
+    // calls hand back adjacent chunks and the span check holds.
+    int nursery_arena_target = 8;
+    char* na_env = getenv("EJS_GC_NURSERY_ARENAS");
+    if (na_env) {
+        int v = atoi(na_env);
+        if (v >= 1 && v <= EJS_GC_MAX_NURSERY_ARENAS)
+            nursery_arena_target = v;
     }
-    arena->is_nursery = EJS_TRUE;
-    heap_priv.nursery_arena = arena;
-    _ejs_heap.nursery_base = (void*)arena;
-    _ejs_heap.nursery_end = arena->end;
+    for (int i = 0; i < nursery_arena_target; i++) {
+        Arena* arena = arena_new();
+        if (!arena) {
+            if (i == 0) {
+                _ejs_log ("gc: could not allocate the nursery arena; nursery disabled\n");
+                nursery_enabled = EJS_FALSE;
+                return;
+            }
+            break; // partial nursery: keep what we have
+        }
+        EJS_ASSERT(i == 0
+                   || (void*)arena == heap_priv.nursery_arenas[i - 1]->end);
+        arena->is_nursery = EJS_TRUE;
+        heap_priv.nursery_arenas[heap_priv.nursery_arena_count++] = arena;
+    }
+    _ejs_heap.nursery_base = (void*)heap_priv.nursery_arenas[0];
+    _ejs_heap.nursery_end =
+        heap_priv.nursery_arenas[heap_priv.nursery_arena_count - 1]->end;
     _ejs_heap.remset = malloc (NURSERY_REMSET_CAPACITY * sizeof(void*));
     _ejs_heap.remset_capacity = NURSERY_REMSET_CAPACITY;
     heap_priv.remset_other = malloc (NURSERY_REMSET_CAPACITY * sizeof(void*));

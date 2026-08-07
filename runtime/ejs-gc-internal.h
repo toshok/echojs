@@ -245,7 +245,16 @@ rewrite_slot_payload(ejsval* slot, GCObjectPtr to)
 // the private half of the (single) isolate's heap context (_ejs_heap
 // in ejs-gc.h is the emitted-code seam; this is everything else)
 typedef struct {
-    Arena* nursery_arena;
+    // the nursery arenas: contiguous (carved back-to-back at init,
+    // before any old-gen arena), so [nursery_base, nursery_end) is one
+    // span and is-young stays a two-compare range check.  Multiple
+    // arenas because survivor pins (thousands of suspended generators)
+    // can hold hundreds of MB of pages hostage; a starved nursery
+    // pushes allocation onto the old-page fallback — correct (born
+    // dirty) but slow.
+#define EJS_GC_MAX_NURSERY_ARENAS 32
+    Arena* nursery_arenas[EJS_GC_MAX_NURSERY_ARENAS];
+    int    nursery_arena_count;
     PageInfo* young_current[EJS_GC_NUM_SIZE_CLASSES];
     EJSList young_pages; // all young pages not currently being bumped
     EJSBool verify;      // EJS_GC_VERIFY: old-gen barrier-coverage check per minor
