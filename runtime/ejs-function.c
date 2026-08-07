@@ -30,11 +30,38 @@ static void indent(char ch)
         putchar (ch);
 }
 
+// preinterned birth chains for the hottest allocation the runtime
+// itself performs: every function gets {prototype(w,c), name(c)} and
+// every fresh fun_proto gets {constructor(w,c)}.  Interning once and
+// birthing in one step replaces three DefineOwnProperty round-trips
+// (transition probe + slot growth each) per closure.
+static uint32_t fn_birth_shape;    // root -> prototype -> name
+static uint32_t proto_birth_shape; // root -> constructor
+static EJSBool birth_shapes_ready;
+
+static void
+ensure_birth_shapes (void)
+{
+    if (birth_shapes_ready)
+        return;
+    birth_shapes_ready = EJS_TRUE;
+    uint32_t s = _ejs_shape_intern_edge (EJS_SHAPE_ROOT, _ejs_atom_prototype,
+                                         EJS_SHAPE_REPR_BOXED,
+                                         EJS_SHAPE_ATTR_WRITABLE | EJS_SHAPE_ATTR_CONFIGURABLE);
+    if (s != EJS_SHAPE_DICT)
+        s = _ejs_shape_intern_edge (s, _ejs_atom_name, EJS_SHAPE_REPR_BOXED,
+                                    EJS_SHAPE_ATTR_CONFIGURABLE);
+    fn_birth_shape = s;
+    proto_birth_shape = _ejs_shape_intern_edge (EJS_SHAPE_ROOT, _ejs_atom_constructor,
+                                                EJS_SHAPE_REPR_BOXED,
+                                                EJS_SHAPE_ATTR_WRITABLE | EJS_SHAPE_ATTR_CONFIGURABLE);
+}
+
 ejsval
 _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func)
 {
     EJSFunction *rv = _ejs_gc_new(EJSFunction);
-    
+
     _ejs_init_object ((EJSObject*)rv, _ejs_Function_prototype, &_ejs_Function_specops);
 
     rv->func = func;
@@ -46,6 +73,16 @@ _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func)
 
     // ECMA262: 15.3.2.1
     ejsval fun_proto = _ejs_object_new (_ejs_Object_prototype, &_ejs_Object_specops);
+
+    ensure_birth_shapes();
+    if (fn_birth_shape != EJS_SHAPE_DICT && proto_birth_shape != EJS_SHAPE_DICT
+        && EJSVAL_IS_STRING(name)) {
+        ejsval fn_vals[2] = { fun_proto, name };
+        _ejs_object_birth_shaped (fun, fn_birth_shape, 2, fn_vals);
+        _ejs_object_birth_shaped (fun_proto, proto_birth_shape, 1, &fun);
+        return fun;
+    }
+
     _ejs_object_define_value_property (fun, _ejs_atom_prototype, fun_proto, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 
     _ejs_object_define_value_property (fun_proto, _ejs_atom_constructor, fun, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);

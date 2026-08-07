@@ -232,6 +232,14 @@ _ejs_shape_transition_add(uint32_t shape, ejsval name, ejsval value,
 }
 
 uint32_t
+_ejs_shape_intern_edge(uint32_t parent, ejsval name, uint8_t repr, uint8_t attrs)
+{
+    if (!_ejs_shapes_tracking || parent == EJS_SHAPE_DICT)
+        return EJS_SHAPE_DICT;
+    return transition_find_or_add(parent, name, repr, attrs);
+}
+
+uint32_t
 _ejs_shape_transition_add_attrs(uint32_t shape, ejsval name, ejsval value,
                                 uint8_t attrs, EJSShapeMigrateReason *reason)
 {

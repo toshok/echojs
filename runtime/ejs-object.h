@@ -259,6 +259,11 @@ void _ejs_propertymap_foreach_value (EJSPropertyMap *map, EJSValueFunc foreach_f
 void _ejs_propertymap_foreach_property (EJSPropertyMap *map, EJSPropertyDescFunc foreach_func, void* data);
 
 EJSBool _ejs_object_define_value_property (ejsval obj, ejsval key, ejsval value, uint32_t flags);
+
+// birth a FRESH shaped object's fields in one step (one slot alloc,
+// direct stores, one shape stamp).  `shape`'s chain must match
+// values[0..nfields) in insertion order; see ejs-object.c
+void _ejs_object_birth_shaped (ejsval obj, uint32_t shape, uint32_t nfields, const ejsval* values);
 EJSBool _ejs_object_define_accessor_property (ejsval obj, ejsval key, ejsval get, ejsval set, uint32_t flags);
 EJSBool _ejs_object_define_accessor_property_desc (ejsval obj, ejsval key, ejsval get, ejsval set, uint32_t flags);
 

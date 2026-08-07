@@ -199,6 +199,13 @@ uint32_t _ejs_shape_transition_add_attrs(uint32_t shape, ejsval name,
                                          ejsval value, uint8_t attrs,
                                          EJSShapeMigrateReason *reason);
 
+/* intern one (name, repr, attrs) edge off `parent` directly — for
+   runtime birth shapes (function/prototype creation) whose chains are
+   known statically.  Returns EJS_SHAPE_DICT when tracking is off or the
+   table is full; callers fall back to per-field defines. */
+uint32_t _ejs_shape_intern_edge(uint32_t parent, ejsval name, uint8_t repr,
+                                uint8_t attrs);
+
 /* inline fast path for property adds: when the parent shape's transition
    memo matches (same name ejsval, same repr — the monomorphic
    construction sequence), the name was already vetted as a shapeable key

@@ -722,6 +722,30 @@ shaped_ensure_capacity (EJSObject* obj, uint32_t needed)
     _ejs_gc_remember(obj, newslots);
 }
 
+// birth a fresh shaped object's fields in one step: one slot-array
+// allocation, direct stores, one shape stamp — the runtime twin of the
+// emitted born-with-shape path, for runtime-created objects whose
+// chains are known statically (function/prototype birth).  The caller
+// guarantees obj is freshly created (root shape, no fields) and that
+// `shape`'s chain matches values[0..nfields) in insertion order.
+void
+_ejs_object_birth_shaped (ejsval objval, uint32_t shape, uint32_t nfields,
+                          const ejsval* values)
+{
+    EJSObject* obj = EJSVAL_TO_OBJECT(objval);
+    EJS_ASSERT(EJS_OBJECT_SHAPE(obj) != EJS_SHAPE_DICT
+               && _ejs_shape_field_count(EJS_OBJECT_SHAPE(obj)) == 0);
+    EJS_ASSERT(_ejs_shape_field_count(shape) == nfields);
+
+    shaped_ensure_capacity (obj, nfields);
+    ejsval* slots = shaped_slots(obj);
+    for (uint32_t i = 0; i < nfields; i++) {
+        slots[i] = values[i];
+        _ejs_gc_remember (obj, values[i]);
+    }
+    EJS_OBJECT_SET_SHAPE(obj, shape);
+}
+
 // one-way migration to dictionary mode: materialize the map from the
 // shape's fields + the slot array, then flip the header index.  Nothing
 // here allocates from the GC heap, so the union flip is atomic as far as
@@ -1157,11 +1181,14 @@ _ejs_init_object (EJSObject* obj, ejsval proto, EJSSpecOps *ops)
 {
     obj->proto = proto;
     obj->ops = ops ? ops : &_ejs_Object_specops;
-    // shaped mode: ordinary objects are born with the root shape and
-    // lazily-allocated slot storage — no map calloc on this path;
-    // everything else (and every object under EJS_SHAPES=off) is
-    // dictionary-mode from birth
-    if (obj->ops == &_ejs_Object_specops && _ejs_shapes_tracking) {
+    // shaped mode: ordinary objects — and functions, whose property ops
+    // are all inherited from Object and whose birth fields
+    // (prototype/name/length) carry attribute-bearing shape edges — are
+    // born with the root shape and lazily-allocated slot storage; no map
+    // calloc on this path.  Everything else (and every object under
+    // EJS_SHAPES=off) is dictionary-mode from birth
+    if ((obj->ops == &_ejs_Object_specops || obj->ops == &_ejs_Function_specops)
+        && _ejs_shapes_tracking) {
         obj->slots = _ejs_null;
         _ejs_shape_object_born (obj);
     }
