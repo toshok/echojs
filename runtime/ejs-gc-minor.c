@@ -153,9 +153,14 @@ static GCObjectPtr
 old_alloc_cell_for_promotion(size_t cell_size)
 {
     int bucket = ffs((int)cell_size) - OBJECT_SIZE_LOW_LIMIT_BITS;
+
+    // O(1) page selection, mirroring _ejs_gc_alloc: use the head page or
+    // mint a new one, and rotate pages to the tail as they fill.  A
+    // promotion storm never rescans full pages (the old linear walk here
+    // was quadratic across a storm); partially-freed interior pages are
+    // picked up again after compaction, same as the mutator path.
     PageInfo* info = (PageInfo*)heap_pages[bucket].head;
-    while (info && !info->num_free_cells) info = info->next;
-    if (!info) {
+    if (!info || !info->num_free_cells) {
         info = alloc_new_page(cell_size);
         if (info == NULL) {
             _ejs_log ("gc: promotion allocation failed (size %zd)\n", cell_size);
@@ -164,6 +169,11 @@ old_alloc_cell_for_promotion(size_t cell_size)
         _ejs_list_prepend_node (&heap_pages[bucket], (EJSListNode*)info);
     }
     GCObjectPtr rv = alloc_from_page(info);
+    if (info->num_free_cells == 0
+        && heap_pages[bucket].head != heap_pages[bucket].tail) {
+        _ejs_list_pop_head (&heap_pages[bucket]);
+        _ejs_list_append_node (&heap_pages[bucket], (EJSListNode*)info);
+    }
     return rv;
 }
 
