@@ -93,12 +93,24 @@ void _ejs_shapes_init(void);
 /* the shape record and chunk table are exposed only so the hot-path
    inlines below can avoid a cross-TU call per property insert; everything
    else treats them as private to ejs-shapes.c */
+/* per-field attribute bits: part of shape identity like repr, so a
+   defineProperty with non-default attributes takes a transition instead
+   of a dictionary migration (functions' length/name/prototype and
+   prototypes' constructor were 99.6% of all migrations).  Accessors and
+   attribute CHANGES on existing fields still migrate — the generic
+   algorithm owns those reject rules. */
+#define EJS_SHAPE_ATTR_WRITABLE     0x1
+#define EJS_SHAPE_ATTR_ENUMERABLE   0x2
+#define EJS_SHAPE_ATTR_CONFIGURABLE 0x4
+#define EJS_SHAPE_ATTRS_DEFAULT     0x7
+
 typedef struct {
     uint32_t parent;      /* parent shape index (EJS_SHAPE_DICT for the root) */
     uint32_t field_count; /* own fields including this edge (root = 0) */
     ejsval name;          /* this edge's field name; gc-rooted (chunks are
                              address-stable) */
     uint8_t repr;         /* EJSShapeRepr, part of shape identity */
+    uint8_t attrs;        /* EJS_SHAPE_ATTR_* bits, part of shape identity */
     uint32_t last_child;  /* memo of the most recent transition taken from
                              this shape; monomorphic construction sites hit
                              it every time and skip the hash entirely */
@@ -162,9 +174,17 @@ _ejs_shape_field_count(uint32_t shape)
    with *slot = the field's insertion-ordered index */
 EJSBool _ejs_shape_lookup(uint32_t shape, ejsval name, uint32_t *slot);
 
+/* _ejs_shape_lookup, but also reporting the field's attribute bits */
+EJSBool _ejs_shape_lookup_attrs(uint32_t shape, ejsval name, uint32_t *slot,
+                                uint8_t *attrs);
+
 /* fill names[0 .. field_count) with the field names in insertion
    (root->leaf) order; names must have room for field_count entries */
 void _ejs_shape_fields(uint32_t shape, ejsval *names);
+
+/* fill attrs[0 .. field_count) with the fields' attribute bits, same
+   order as _ejs_shape_fields */
+void _ejs_shape_attrs(uint32_t shape, uint8_t *attrs);
 
 /* transition for inserting a new own data property `name` (a string,
    caller-checked) with default attributes and initial value `value`.
@@ -172,6 +192,12 @@ void _ejs_shape_fields(uint32_t shape, ejsval *names);
    the add can't stay shaped (index-looking key, field cap, table full). */
 uint32_t _ejs_shape_transition_add(uint32_t shape, ejsval name, ejsval value,
                                    EJSShapeMigrateReason *reason);
+
+/* _ejs_shape_transition_add with explicit attribute bits (defineProperty
+   creating a new field with non-default attributes) */
+uint32_t _ejs_shape_transition_add_attrs(uint32_t shape, ejsval name,
+                                         ejsval value, uint8_t attrs,
+                                         EJSShapeMigrateReason *reason);
 
 /* inline fast path for property adds: when the parent shape's transition
    memo matches (same name ejsval, same repr — the monomorphic
@@ -187,7 +213,8 @@ _ejs_shape_transition_add_fast(uint32_t shape, ejsval name, ejsval value,
         EJSShape *m = _ejs_shape_get(memo);
         uint8_t repr = EJSVAL_IS_NUMBER(value) ? EJS_SHAPE_REPR_F64
                                                : EJS_SHAPE_REPR_BOXED;
-        if (EJSVAL_EQ(m->name, name) && m->repr == repr) {
+        if (EJSVAL_EQ(m->name, name) && m->repr == repr
+            && m->attrs == EJS_SHAPE_ATTRS_DEFAULT) {
             _ejs_shape_stat_transitions++;
             _ejs_shape_stat_fast_hits++;
             return memo;

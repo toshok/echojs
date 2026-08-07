@@ -734,8 +734,10 @@ _ejs_object_to_dictionary (EJSObject* obj, EJSShapeMigrateReason reason)
 
     uint32_t nfields = _ejs_shape_field_count(shape);
     ejsval names[256];
+    uint8_t attrs[256];
     EJS_ASSERT(nfields <= 256);
     _ejs_shape_fields (shape, names);
+    _ejs_shape_attrs (shape, attrs);
 
     ejsval slotsval = obj->slots;
     EJSPropertyMap* map = (EJSPropertyMap*)calloc (sizeof(EJSPropertyMap), 1);
@@ -743,9 +745,9 @@ _ejs_object_to_dictionary (EJSObject* obj, EJSShapeMigrateReason reason)
     for (uint32_t i = 0; i < nfields; i ++) {
         EJSPropertyDesc* desc = _ejs_propertydesc_new();
         _ejs_property_desc_set_value (desc, EJSVAL_TO_CLOSUREENV_IMPL(slotsval)->slots[i]);
-        _ejs_property_desc_set_writable (desc, EJS_TRUE);
-        _ejs_property_desc_set_enumerable (desc, EJS_TRUE);
-        _ejs_property_desc_set_configurable (desc, EJS_TRUE);
+        _ejs_property_desc_set_writable (desc, (attrs[i] & EJS_SHAPE_ATTR_WRITABLE) != 0);
+        _ejs_property_desc_set_enumerable (desc, (attrs[i] & EJS_SHAPE_ATTR_ENUMERABLE) != 0);
+        _ejs_property_desc_set_configurable (desc, (attrs[i] & EJS_SHAPE_ATTR_CONFIGURABLE) != 0);
         _ejs_propertymap_insert (map, names[i], desc);
     }
     // the union flip below disconnects the slot array — same
@@ -920,7 +922,7 @@ static EJSPropertyDesc synth_descs[SYNTH_DESC_RING];
 static int synth_desc_next = -1;
 
 static EJSPropertyDesc*
-shaped_synthesize_desc (ejsval value)
+shaped_synthesize_desc (ejsval value, uint8_t attrs)
 {
     if (synth_desc_next < 0) {
         for (int i = 0; i < SYNTH_DESC_RING; i ++) {
@@ -933,7 +935,10 @@ shaped_synthesize_desc (ejsval value)
     }
     EJSPropertyDesc* desc = &synth_descs[synth_desc_next];
     synth_desc_next = (synth_desc_next + 1) % SYNTH_DESC_RING;
-    desc->flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE;
+    desc->flags = EJS_PROP_FLAGS_VALUE_SET
+        | ((attrs & EJS_SHAPE_ATTR_WRITABLE)     ? EJS_PROP_WRITABLE     : EJS_PROP_NOT_WRITABLE)
+        | ((attrs & EJS_SHAPE_ATTR_ENUMERABLE)   ? EJS_PROP_ENUMERABLE   : EJS_PROP_NOT_ENUMERABLE)
+        | ((attrs & EJS_SHAPE_ATTR_CONFIGURABLE) ? EJS_PROP_CONFIGURABLE : EJS_PROP_NOT_CONFIGURABLE);
     desc->value = value;
     return desc;
 }
@@ -1012,14 +1017,18 @@ collect_keys (ejsval objval, int *num, int *alloc, ejsval **keys)
     EJSObject *obj = EJSVAL_TO_OBJECT(objval);
     EJS_ASSERT(obj);
 
-    // shaped mode: shaped objects enumerate the shape chain (all fields
-    // are enumerable by construction; the chain is insertion order)
+    // shaped mode: shaped objects enumerate the shape chain in
+    // insertion order, skipping non-enumerable fields
     uint32_t shape = EJS_OBJECT_SHAPE(obj);
     if (shape != EJS_SHAPE_DICT) {
         uint32_t nfields = _ejs_shape_field_count(shape);
         ejsval names[256];
+        uint8_t attrs[256];
         _ejs_shape_fields (shape, names);
+        _ejs_shape_attrs (shape, attrs);
         for (uint32_t i = 0; i < nfields; i ++) {
+            if (!(attrs[i] & EJS_SHAPE_ATTR_ENUMERABLE))
+                continue;
             // for..in enumerates string keys only (symbol-named fields
             // like the weak-collection inverted-rep slot stay hidden)
             if (!EJSVAL_IS_STRING(names[i]))
@@ -1737,14 +1746,18 @@ static EJS_NATIVE_FUNC(_ejs_Object_assign) {
         //    j. Let pendingException be undefined.
         ejsval pendingException = _ejs_undefined;
 
-        // shaped mode: a shaped source enumerates its shape fields (all
-        // enumerable plain data properties, in insertion order)
+        // shaped mode: a shaped source enumerates its enumerable shape
+        // fields (plain data properties, in insertion order)
         uint32_t from_shape = EJS_OBJECT_SHAPE(from_);
         if (from_shape != EJS_SHAPE_DICT) {
             uint32_t nfields = _ejs_shape_field_count(from_shape);
             ejsval names[256];
+            uint8_t attrs[256];
             _ejs_shape_fields (from_shape, names);
+            _ejs_shape_attrs (from_shape, attrs);
             for (uint32_t i = 0; i < nfields; i ++) {
+                if (!(attrs[i] & EJS_SHAPE_ATTR_ENUMERABLE))
+                    continue;
                 ejsval propValue = OP(from_,Get)(from, names[i], from);
                 Put(to, names[i], propValue, EJS_TRUE);
             }
@@ -1992,16 +2005,24 @@ static EJS_NATIVE_FUNC(_ejs_Object_defineProperties) {
     /* 3. Let names be an internal list containing the names of each enumerable own property of props. */
     int names_len = 0;
     ejsval* names;
-    // shaped mode: a shaped props object enumerates its shape fields
+    // shaped mode: a shaped props object enumerates its enumerable
+    // shape fields
     uint32_t props_shape = EJS_OBJECT_SHAPE(props_obj);
     if (props_shape != EJS_SHAPE_DICT) {
-        names_len = (int)_ejs_shape_field_count(props_shape);
+        uint32_t nfields = _ejs_shape_field_count(props_shape);
+        ejsval all_names[256];
+        uint8_t attrs[256];
+        _ejs_shape_fields (props_shape, all_names);
+        _ejs_shape_attrs (props_shape, attrs);
+        names = malloc(nfields ? nfields * sizeof(ejsval) : sizeof(ejsval));
+        for (uint32_t i = 0; i < nfields; i ++)
+            if (attrs[i] & EJS_SHAPE_ATTR_ENUMERABLE)
+                names[names_len++] = all_names[i];
         if (names_len == 0) {
             /* no enumerable properties, bail early */
+            free(names);
             return O;
         }
-        names = malloc(names_len * sizeof(ejsval));
-        _ejs_shape_fields (props_shape, names);
     }
     else {
         for (_EJSPropertyMapEntry *s = props_obj->map->head_insert; s; s = s->next_insert) {
@@ -2893,9 +2914,10 @@ _ejs_object_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval* ex
     uint32_t shape = EJS_OBJECT_SHAPE(obj_);
     if (shape != EJS_SHAPE_DICT) {
         uint32_t slot;
+        uint8_t attrs;
         if (EJSVAL_IS_STRING(property_str) &&
-            _ejs_shape_lookup (shape, property_str, &slot))
-            return shaped_synthesize_desc (shaped_slots(obj_)[slot]);
+            _ejs_shape_lookup_attrs (shape, property_str, &slot, &attrs))
+            return shaped_synthesize_desc (shaped_slots(obj_)[slot], attrs);
         return NULL;
     }
 
@@ -2922,8 +2944,11 @@ _ejs_object_specop_set (ejsval O, ejsval P, ejsval V, ejsval Receiver)
         EJSObject* O_ = EJSVAL_TO_OBJECT(O);
         uint32_t O_shape = EJS_OBJECT_SHAPE(O_);
         uint32_t slot;
+        uint8_t field_attrs;
         if (O_shape != EJS_SHAPE_DICT && EJSVAL_IS_STRING(P) &&
-            _ejs_shape_lookup (O_shape, P, &slot)) {
+            _ejs_shape_lookup_attrs (O_shape, P, &slot, &field_attrs) &&
+            (field_attrs & EJS_SHAPE_ATTR_WRITABLE) /* non-writable: the
+                generic path below sees the synthesized desc and rejects */) {
             uint32_t next_shape = _ejs_shape_transition_set (O_shape, slot, V);
             if (next_shape != EJS_SHAPE_DICT) {
                 EJS_OBJECT_SET_SHAPE(O_, next_shape);
@@ -3110,13 +3135,32 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
             _ejs_object_to_dictionary (obj, EJS_SHAPE_MIGRATE_SYMBOL_KEY);
         else {
             uint32_t slot;
-            if (_ejs_shape_lookup (obj_shape, P, &slot)) {
-                // existing field: attribute-lowering migrates; a value
-                // update is a repr check + slot store (attributes are
-                // all true already, so re-asserting them is a no-op)
-                if ((_ejs_property_desc_has_writable(Desc) && !_ejs_property_desc_is_writable(Desc)) ||
-                    (_ejs_property_desc_has_enumerable(Desc) && !_ejs_property_desc_is_enumerable(Desc)) ||
-                    (_ejs_property_desc_has_configurable(Desc) && !_ejs_property_desc_is_configurable(Desc)))
+            uint8_t field_attrs;
+            if (_ejs_shape_lookup_attrs (obj_shape, P, &slot, &field_attrs)) {
+                // existing field: an attribute CHANGE migrates — the
+                // generic algorithm below owns the reject rules for
+                // non-configurable redefinition; a value update on a
+                // writable-or-configurable field is a repr check + slot
+                // store with attributes untouched
+                uint8_t new_attrs = field_attrs;
+                if (_ejs_property_desc_has_writable(Desc)) {
+                    new_attrs &= ~EJS_SHAPE_ATTR_WRITABLE;
+                    if (_ejs_property_desc_is_writable(Desc)) new_attrs |= EJS_SHAPE_ATTR_WRITABLE;
+                }
+                if (_ejs_property_desc_has_enumerable(Desc)) {
+                    new_attrs &= ~EJS_SHAPE_ATTR_ENUMERABLE;
+                    if (_ejs_property_desc_is_enumerable(Desc)) new_attrs |= EJS_SHAPE_ATTR_ENUMERABLE;
+                }
+                if (_ejs_property_desc_has_configurable(Desc)) {
+                    new_attrs &= ~EJS_SHAPE_ATTR_CONFIGURABLE;
+                    if (_ejs_property_desc_is_configurable(Desc)) new_attrs |= EJS_SHAPE_ATTR_CONFIGURABLE;
+                }
+                if (new_attrs != field_attrs
+                    || (!(field_attrs & EJS_SHAPE_ATTR_WRITABLE)
+                        && _ejs_property_desc_has_value(Desc)))
+                    // attr change, or value redefine of a non-writable
+                    // field (allowed only when configurable; the generic
+                    // path decides)
                     _ejs_object_to_dictionary (obj, EJS_SHAPE_MIGRATE_ATTRS);
                 else if (_ejs_property_desc_has_value(Desc)) {
                     ejsval value = _ejs_property_desc_get_value(Desc);
@@ -3134,27 +3178,28 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
                     return EJS_TRUE;
             }
             else if (EJS_OBJECT_IS_EXTENSIBLE(obj)) {
-                // absent field: only a creation with all-default
-                // attributes stays shaped (absent attribute fields
-                // default to false per the spec's step 4a)
-                if (!_ejs_property_desc_is_writable(Desc) ||
-                    !_ejs_property_desc_is_enumerable(Desc) ||
-                    !_ejs_property_desc_is_configurable(Desc))
-                    _ejs_object_to_dictionary (obj, EJS_SHAPE_MIGRATE_ATTRS);
+                // absent field: creation carries the descriptor's
+                // attribute bits into the shape edge (absent attribute
+                // fields default to false per the spec's step 4a)
+                uint8_t attrs =
+                    (_ejs_property_desc_is_writable(Desc)     ? EJS_SHAPE_ATTR_WRITABLE     : 0) |
+                    (_ejs_property_desc_is_enumerable(Desc)   ? EJS_SHAPE_ATTR_ENUMERABLE   : 0) |
+                    (_ejs_property_desc_is_configurable(Desc) ? EJS_SHAPE_ATTR_CONFIGURABLE : 0);
+                ejsval value = _ejs_property_desc_get_value(Desc);
+                EJSShapeMigrateReason reason;
+                uint32_t next_shape =
+                    attrs == EJS_SHAPE_ATTRS_DEFAULT
+                        ? _ejs_shape_transition_add_fast (obj_shape, P, value, &reason)
+                        : _ejs_shape_transition_add_attrs (obj_shape, P, value, attrs, &reason);
+                if (next_shape == EJS_SHAPE_DICT)
+                    _ejs_object_to_dictionary (obj, reason);
                 else {
-                    ejsval value = _ejs_property_desc_get_value(Desc);
-                    EJSShapeMigrateReason reason;
-                    uint32_t next_shape = _ejs_shape_transition_add_fast (obj_shape, P, value, &reason);
-                    if (next_shape == EJS_SHAPE_DICT)
-                        _ejs_object_to_dictionary (obj, reason);
-                    else {
-                        uint32_t nfields = _ejs_shape_field_count(next_shape);
-                        shaped_ensure_capacity (obj, nfields);
-                        EJS_OBJECT_SET_SHAPE(obj, next_shape);
-                        shaped_slots(obj)[nfields - 1] = value;
-                        _ejs_gc_remember(obj, value);
-                        return EJS_TRUE;
-                    }
+                    uint32_t nfields = _ejs_shape_field_count(next_shape);
+                    shaped_ensure_capacity (obj, nfields);
+                    EJS_OBJECT_SET_SHAPE(obj, next_shape);
+                    shaped_slots(obj)[nfields - 1] = value;
+                    _ejs_gc_remember(obj, value);
+                    return EJS_TRUE;
                 }
             }
         }

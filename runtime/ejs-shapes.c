@@ -65,7 +65,8 @@ static uint32_t stat_max_depth;
    allocatable, so a compiled guard against the sentinel is statically
    false */
 static uint32_t
-shape_alloc(uint32_t parent, ejsval name, uint8_t repr, uint32_t field_count)
+shape_alloc(uint32_t parent, ejsval name, uint8_t repr, uint8_t attrs,
+            uint32_t field_count)
 {
     if (shape_count >= EJS_SHAPE_NOMATCH)
         return EJS_SHAPE_DICT;
@@ -80,6 +81,7 @@ shape_alloc(uint32_t parent, ejsval name, uint8_t repr, uint32_t field_count)
     shape->field_count = field_count;
     shape->name = name;
     shape->repr = repr;
+    shape->attrs = attrs;
     /* the trace bitmap: parent's mask plus this edge's repr bit.
        the root (field_count 0, parent DICT) gets 0. */
     shape->f64_mask = (field_count > 0 ? shape_get(parent)->f64_mask : 0)
@@ -94,11 +96,11 @@ shape_alloc(uint32_t parent, ejsval name, uint8_t repr, uint32_t field_count)
 }
 
 static uint32_t
-transition_hash(uint32_t parent, uint32_t name_hash, uint8_t repr)
+transition_hash(uint32_t parent, uint32_t name_hash, uint8_t repr, uint8_t attrs)
 {
     uint32_t h = parent * 0x9e3779b9u;
     h ^= name_hash + 0x9e3779b9u + (h << 6) + (h >> 2);
-    h ^= (uint32_t)repr + 0x9e3779b9u + (h << 6) + (h >> 2);
+    h ^= ((uint32_t)repr | ((uint32_t)attrs << 8)) + 0x9e3779b9u + (h << 6) + (h >> 2);
     return h;
 }
 
@@ -146,7 +148,9 @@ transition_insert(uint32_t parent, uint32_t name_hash, uint32_t child)
         transition_grow();
 
     uint32_t mask = transition_capacity - 1;
-    uint32_t slot = transition_hash(parent, name_hash, shape_get(child)->repr) & mask;
+    EJSShape *child_shape = shape_get(child);
+    uint32_t slot = transition_hash(parent, name_hash, child_shape->repr,
+                                    child_shape->attrs) & mask;
     while (transitions[slot].child != 0)
         slot = (slot + 1) & mask;
     transitions[slot].parent = parent;
@@ -155,11 +159,11 @@ transition_insert(uint32_t parent, uint32_t name_hash, uint32_t child)
     transition_count++;
 }
 
-/* the one hash hit per property add: find the (parent, name, repr) edge,
-   interning a new shape on first use.  returns EJS_SHAPE_DICT only when
-   the global table is full. */
+/* the one hash hit per property add: find the (parent, name, repr, attrs)
+   edge, interning a new shape on first use.  returns EJS_SHAPE_DICT only
+   when the global table is full. */
 static uint32_t
-transition_find_or_add(uint32_t parent, ejsval name, uint8_t repr)
+transition_find_or_add(uint32_t parent, ejsval name, uint8_t repr, uint8_t attrs)
 {
     EJSShape *parent_shape = shape_get(parent);
 
@@ -167,7 +171,7 @@ transition_find_or_add(uint32_t parent, ejsval name, uint8_t repr)
     uint32_t memo = parent_shape->last_child;
     if (memo != EJS_SHAPE_DICT) {
         EJSShape *m = shape_get(memo);
-        if (m->repr == repr && EJSVAL_EQ(m->name, name)) {
+        if (m->repr == repr && m->attrs == attrs && EJSVAL_EQ(m->name, name)) {
             _ejs_shape_stat_cache_hits++;
             return memo;
         }
@@ -178,13 +182,14 @@ transition_find_or_add(uint32_t parent, ejsval name, uint8_t repr)
 
     uint32_t name_hash = shape_name_hash(name);
     uint32_t mask = transition_capacity - 1;
-    uint32_t slot = transition_hash(parent, name_hash, repr) & mask;
+    uint32_t slot = transition_hash(parent, name_hash, repr, attrs) & mask;
 
     while (transitions[slot].child != 0) {
         if (transitions[slot].parent == parent &&
             transitions[slot].name_hash == name_hash) {
             EJSShape *cand = shape_get(transitions[slot].child);
-            if (cand->repr == repr && shape_name_eq(cand->name, name)) {
+            if (cand->repr == repr && cand->attrs == attrs
+                && shape_name_eq(cand->name, name)) {
                 _ejs_shape_stat_cache_hits++;
                 parent_shape->last_child = transitions[slot].child;
                 return transitions[slot].child;
@@ -193,7 +198,7 @@ transition_find_or_add(uint32_t parent, ejsval name, uint8_t repr)
         slot = (slot + 1) & mask;
     }
 
-    uint32_t child = shape_alloc(parent, name, repr,
+    uint32_t child = shape_alloc(parent, name, repr, attrs,
                                  parent_shape->field_count + 1);
     if (child == EJS_SHAPE_DICT)
         return EJS_SHAPE_DICT;
@@ -222,6 +227,14 @@ uint32_t
 _ejs_shape_transition_add(uint32_t shape, ejsval name, ejsval value,
                           EJSShapeMigrateReason *reason)
 {
+    return _ejs_shape_transition_add_attrs(shape, name, value,
+                                           EJS_SHAPE_ATTRS_DEFAULT, reason);
+}
+
+uint32_t
+_ejs_shape_transition_add_attrs(uint32_t shape, ejsval name, ejsval value,
+                                uint8_t attrs, EJSShapeMigrateReason *reason)
+{
     EJS_ASSERT(shape != EJS_SHAPE_DICT);
     EJS_ASSERT(EJSVAL_IS_STRING(name));
 
@@ -244,7 +257,7 @@ _ejs_shape_transition_add(uint32_t shape, ejsval name, ejsval value,
         return EJS_SHAPE_DICT;
     }
 
-    uint32_t child = transition_find_or_add(shape, name, classify_repr(value));
+    uint32_t child = transition_find_or_add(shape, name, classify_repr(value), attrs);
     if (child == EJS_SHAPE_DICT) {
         *reason = EJS_SHAPE_MIGRATE_TABLE_FULL;
         return EJS_SHAPE_DICT;
@@ -267,28 +280,38 @@ typedef struct {
     uint32_t       shape;
     EJSPrimString* name;
     uint32_t       slot;
+    uint8_t        attrs;
 } ShapeCacheEntry;
 static ShapeCacheEntry shape_lookup_cache[SHAPECACHE_SIZE];
 
 EJSBool
-_ejs_shape_lookup(uint32_t shape, ejsval name, uint32_t *slot)
+_ejs_shape_lookup_attrs(uint32_t shape, ejsval name, uint32_t *slot, uint8_t *attrs)
 {
     if (shape == EJS_SHAPE_DICT)
         return EJS_FALSE;
 
+    // heap-allocated names are excluded from the cache: the collector
+    // can free and recycle their addresses, and a different string at a
+    // recycled address would false-hit.  Statics (atoms, interned module
+    // literals) — the hot compiled-access case — cache safely.
     EJSPrimString* n = EJSVAL_TO_STRING(name);
-    ShapeCacheEntry* e = &shape_lookup_cache[
-        (shape ^ (((uintptr_t)n >> 4) * 2654435761u)) & (SHAPECACHE_SIZE - 1)];
-    // shape 0 is EJS_SHAPE_DICT (handled above), so a zero-initialized
-    // entry can never alias a real probe
-    if (e->shape == shape && e->name == n) {
-        if (e->slot == SHAPECACHE_MISS)
-            return EJS_FALSE;
-        *slot = e->slot;
-        return EJS_TRUE;
+    ShapeCacheEntry* e = NULL;
+    if (!_ejs_gc_ptr_is_gc_managed(n)) {
+        e = &shape_lookup_cache[
+            (shape ^ (((uintptr_t)n >> 4) * 2654435761u)) & (SHAPECACHE_SIZE - 1)];
+        // shape 0 is EJS_SHAPE_DICT (handled above), so a zero-initialized
+        // entry can never alias a real probe
+        if (e->shape == shape && e->name == n) {
+            if (e->slot == SHAPECACHE_MISS)
+                return EJS_FALSE;
+            *slot = e->slot;
+            *attrs = e->attrs;
+            return EJS_TRUE;
+        }
     }
 
     uint32_t found = SHAPECACHE_MISS;
+    uint8_t found_attrs = EJS_SHAPE_ATTRS_DEFAULT;
     uint32_t s = shape;
     while (s != EJS_SHAPE_DICT) {
         EJSShape *cur = shape_get(s);
@@ -296,18 +319,30 @@ _ejs_shape_lookup(uint32_t shape, ejsval name, uint32_t *slot)
             break;
         if (shape_name_eq(cur->name, name)) {
             found = cur->field_count - 1;
+            found_attrs = cur->attrs;
             break;
         }
         s = cur->parent;
     }
 
-    e->shape = shape;
-    e->name = n;
-    e->slot = found;
+    if (e) {
+        e->shape = shape;
+        e->name = n;
+        e->slot = found;
+        e->attrs = found_attrs;
+    }
     if (found == SHAPECACHE_MISS)
         return EJS_FALSE;
     *slot = found;
+    *attrs = found_attrs;
     return EJS_TRUE;
+}
+
+EJSBool
+_ejs_shape_lookup(uint32_t shape, ejsval name, uint32_t *slot)
+{
+    uint8_t attrs;
+    return _ejs_shape_lookup_attrs(shape, name, slot, &attrs);
 }
 
 void
@@ -321,6 +356,17 @@ _ejs_shape_fields(uint32_t shape, ejsval *names)
     }
 }
 
+void
+_ejs_shape_attrs(uint32_t shape, uint8_t *attrs)
+{
+    uint32_t s = shape;
+    for (uint32_t i = shape_get(shape)->field_count; i > 0; i--) {
+        EJSShape *cur = shape_get(s);
+        attrs[i - 1] = cur->attrs;
+        s = cur->parent;
+    }
+}
+
 /* rebuild the chain with `field_index`'s repr changed: the sibling shape a
    type-flipping store transitions to.  returns EJS_SHAPE_DICT on table
    overflow. */
@@ -330,6 +376,7 @@ shape_flip_repr(uint32_t shape, uint32_t field_index, uint8_t new_repr)
     /* collect edges leaf->root; depth is capped by shape_field_cap */
     ejsval names[256];
     uint8_t reprs[256];
+    uint8_t attrs[256];
     uint32_t depth = shape_get(shape)->field_count;
     EJS_ASSERT(depth <= 256);
 
@@ -338,13 +385,14 @@ shape_flip_repr(uint32_t shape, uint32_t field_index, uint8_t new_repr)
         EJSShape *cur = shape_get(s);
         names[i - 1] = cur->name;
         reprs[i - 1] = cur->repr;
+        attrs[i - 1] = cur->attrs;
         s = cur->parent;
     }
     reprs[field_index] = new_repr;
 
     uint32_t rebuilt = EJS_SHAPE_ROOT;
     for (uint32_t i = 0; i < depth; i++) {
-        rebuilt = transition_find_or_add(rebuilt, names[i], reprs[i]);
+        rebuilt = transition_find_or_add(rebuilt, names[i], reprs[i], attrs[i]);
         if (rebuilt == EJS_SHAPE_DICT)
             return EJS_SHAPE_DICT;
     }
@@ -413,7 +461,7 @@ _ejs_shape_intern(uint32_t nfields, const ejsval *names, uint32_t f64_mask)
 
         uint8_t repr = (f64_mask & (1u << i)) ? EJS_SHAPE_REPR_F64
                                               : EJS_SHAPE_REPR_BOXED;
-        shape = transition_find_or_add(shape, name, repr);
+        shape = transition_find_or_add(shape, name, repr, EJS_SHAPE_ATTRS_DEFAULT);
         if (shape == EJS_SHAPE_DICT)
             return EJS_SHAPE_NOMATCH;
     }
@@ -540,7 +588,8 @@ _ejs_shapes_init(void)
 
     /* index 0 is dictionary mode; index 1 is the empty root shape */
     shape_count = 1;
-    shape_alloc(EJS_SHAPE_DICT, _ejs_undefined, EJS_SHAPE_REPR_BOXED, 0);
+    shape_alloc(EJS_SHAPE_DICT, _ejs_undefined, EJS_SHAPE_REPR_BOXED,
+                EJS_SHAPE_ATTRS_DEFAULT, 0);
 
     if (getenv("EJS_SHAPES_CENSUS")) {
         census_enabled = EJS_TRUE;
