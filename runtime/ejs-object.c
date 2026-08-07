@@ -2766,10 +2766,11 @@ _ejs_object_specop_set_prototype_of (ejsval O, ejsval V)
 static ejsval
 _ejs_object_specop_get (ejsval O, ejsval P, ejsval Receiver)
 {
-    // 1. Assert: IsPropertyKey(P) is true. 
-    ejsval pname = ToPropertyKey(P); // XXX this shouldn't be necessary, but ejs passes numbers here
+    // 1. Assert: IsPropertyKey(P) is true.
+    // string keys skip ToPropertyKey: it's the hot case and a no-op there
+    ejsval pname = EJSVAL_IS_STRING(P) ? P : ToPropertyKey(P); // XXX conversion shouldn't be necessary, but ejs passes numbers here
 
-    if (EJSVAL_IS_STRING(pname) && !ucs2_strcmp(_ejs_ucs2___proto__, EJSVAL_TO_FLAT_STRING(pname)))
+    if (EJSVAL_IS_STRING(pname) && _ejs_string_eq(pname, _ejs_atom___proto__))
         return OP(EJSVAL_TO_OBJECT(O),GetPrototypeOf) (O);
 
     // 2. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with argument P.
@@ -2829,7 +2830,7 @@ _ejs_object_specop_get (ejsval O, ejsval P, ejsval Receiver)
 static EJSPropertyDesc*
 _ejs_object_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval* exc)
 {
-    ejsval property_str = ToPropertyKey(propertyName);
+    ejsval property_str = EJSVAL_IS_STRING(propertyName) ? propertyName : ToPropertyKey(propertyName);
     EJSObject* obj_ = EJSVAL_TO_OBJECT(obj);
 
     // shaped mode: shaped objects synthesize the default data
@@ -2854,7 +2855,9 @@ _ejs_object_specop_set (ejsval O, ejsval P, ejsval V, ejsval Receiver)
     EJSPropertyDesc undefined_desc = { .value = _ejs_undefined, .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
 
     // 1. Assert: IsPropertyKey(P) is true.
-    P = ToPropertyKey(P); // XXX this shouldn't be necessary, but ejs passes numbers here
+    // string keys skip ToPropertyKey: it's the hot case and a no-op there
+    if (!EJSVAL_IS_STRING(P))
+        P = ToPropertyKey(P); // XXX conversion shouldn't be necessary, but ejs passes numbers here
 
     // shaped-mode fast path: a store to an existing shaped field on the
     // receiver itself is a repr check + slot store (shaped fields are
