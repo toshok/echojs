@@ -233,9 +233,31 @@ _ejs_generator_yield (ejsval generator, ejsval arg) {
 
 // every swap back from the generator lands here: if the body ended in
 // an uncaught throw, rethrow it now — on the caller's stack
+// A COMPLETED generator never runs again: its machine stack, saved
+// contexts, and pin cache are dead weight the collector otherwise keeps
+// conservatively scanning (and pinning through) until the object
+// happens to be collected — iterator-heavy workloads hold thousands of
+// completed generators, taxing every minor with dead-stack sweeps.
+// Release everything scan-visible as soon as the caller observes
+// completion; the finalizer remains the idempotent backstop.  Callers
+// must be on the CALLER's stack (never the generator's own).
+static void
+generator_release_resources (EJSGenerator* gen)
+{
+    if (_ejs_generator_registry == gen) _ejs_generator_registry = gen->reg_next;
+    if (gen->reg_next) gen->reg_next->reg_prev = gen->reg_prev;
+    if (gen->reg_prev) gen->reg_prev->reg_next = gen->reg_next;
+    gen->reg_next = gen->reg_prev = NULL;
+    free (gen->stack);
+    gen->stack = NULL;
+    _ejs_gc_pin_cache_free (&gen->pin_cache);
+}
+
 static ejsval
 _ejs_generator_resume_result (EJSGenerator* gen)
 {
+    if (gen->completed)
+        generator_release_resources (gen);
     if (gen->threw_out) {
         gen->threw_out = EJS_FALSE;
         ejsval exc = gen->yielded_value;
@@ -317,6 +339,7 @@ static EJS_NATIVE_FUNC(_ejs_Generator_prototype_return) {
     // not yet started, or already done: complete without running the body
     if (!gen->started || gen->completed) {
         gen->completed = EJS_TRUE;
+        generator_release_resources (gen);
         return _ejs_create_iter_result(arg, _ejs_true);
     }
 
@@ -506,12 +529,7 @@ EJSGenerator* _ejs_generator_registry;
 static void
 _ejs_generator_specop_finalize (EJSObject* obj)
 {
-    EJSGenerator* gen = (EJSGenerator*)obj;
-    if (gen->reg_next) gen->reg_next->reg_prev = gen->reg_prev;
-    if (gen->reg_prev) gen->reg_prev->reg_next = gen->reg_next;
-    if (_ejs_generator_registry == gen) _ejs_generator_registry = gen->reg_next;
-    free (gen->stack);
-    _ejs_gc_pin_cache_free (&gen->pin_cache);
+    generator_release_resources ((EJSGenerator*)obj);
 }
 
 // the conservative half of the generator scan: both saved register
@@ -522,6 +540,12 @@ _ejs_generator_specop_finalize (EJSObject* obj)
 void
 _ejs_generator_scan_conservative (EJSGenerator* gen)
 {
+    // released (completed): the stack is freed and the saved contexts
+    // are dead — scanning them would only pin whatever stale pointers
+    // the last run left in the register files
+    if (gen->completed && gen->stack == NULL)
+        return;
+
     // minor collections: a suspended generator's stack and saved
     // register files are frozen, so the previous scan's pins replay in
     // O(pins) instead of a word walk (no-ops outside a minor; the full
