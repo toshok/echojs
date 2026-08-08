@@ -659,12 +659,13 @@ shaped_slots (EJSObject* obj)
 }
 
 // is the slot storage embedded in the object's own cell (single-cell
-// born-with-shape allocation)?  Pointer identity is the mode
-// test — no header bit to keep coherent through evacuation's memcpy.
+// born-with-shape allocation)?  The header flag is the mode test —
+// pointer identity is ambiguous, because an out-of-line env can land
+// at exactly obj+sizeof(EJSObject) (see the flag's definition).
 static EJSBool
 shaped_slots_are_embedded (EJSObject* obj)
 {
-    return (char*)shaped_env(obj) == (char*)obj + sizeof(EJSObject);
+    return EJS_OBJECT_SLOTS_ARE_EMBEDDED(obj);
 }
 
 // retiring a slot-storage env: an OLD out-of-line env we are about to
@@ -719,6 +720,7 @@ shaped_ensure_capacity (EJSObject* obj, uint32_t needed)
         shaped_retire_slots (obj);
     }
     obj->slots = newslots;
+    EJS_OBJECT_CLEAR_SLOTS_EMBEDDED(obj);
     _ejs_gc_remember(obj, newslots);
 }
 
@@ -778,6 +780,7 @@ _ejs_object_to_dictionary (EJSObject* obj, EJSShapeMigrateReason reason)
     // retirement contract as shaped_ensure_capacity
     shaped_retire_slots (obj);
     obj->map = map;
+    EJS_OBJECT_CLEAR_SLOTS_EMBEDDED(obj);
     _ejs_shape_object_migrate (obj, reason);
 }
 
@@ -876,6 +879,7 @@ shaped_alloc_embedded (ejsval proto, uint32_t shape, uint32_t nfields,
         for (uint32_t i = 0; i < nfields; i ++)
             env->slots[i] = _ejs_undefined;
     obj->slots = CLOSUREENV_TO_EJSVAL_IMPL(env);
+    EJS_OBJECT_SET_SLOTS_EMBEDDED(obj);
     EJS_OBJECT_SET_SHAPE(obj, shape);
     return OBJECT_TO_EJSVAL(obj);
 }
@@ -3438,6 +3442,8 @@ _ejs_object_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     if (obj_shape != EJS_SHAPE_DICT) {
         if (!EJSVAL_IS_NULL(obj->slots)) {
             EJSClosureEnv* env = shaped_env(obj);
+            if (EJS_UNLIKELY(_ejs_gc_env_guard))
+                _ejs_gc_validate_closureenv(obj, env, "object_specop_scan");
             // the shape's trace bitmap: f64-repr slots hold raw
             // doubles — never references — so the walk skips them.
             // Slots past field_count (hint slack) are undefined, whose

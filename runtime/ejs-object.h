@@ -229,6 +229,23 @@ void _ejs_Class_initialize (EJSSpecOps *child, EJSSpecOps* parent);
 
 #define EJS_OBJECT_IS_EXTENSIBLE(o) ((((EJSObject*)(o))->gc_header & EJS_OBJECT_EXTENSIBLE_FLAG_SHIFTED) != 0)
 
+// slot storage lives inside the object's own cell (shaped_alloc_embedded).
+// The mode MUST be a header flag, not slots-pointer identity: an
+// out-of-line env can legitimately land at exactly obj+sizeof(EJSObject)
+// (owner in a page's last cell, env in the first cell of the adjacent
+// page), and an identity test there misreads it as embedded — dropping
+// the obj->slots edge from every GC scan, so the env is swept/left
+// behind while still referenced.  The flag travels with the header
+// through evacuation and compaction memcpys.
+#define EJS_OBJECT_SLOTS_EMBEDDED_FLAG 0x02
+
+#define EJS_OBJECT_SLOTS_EMBEDDED_FLAG_SHIFTED (EJS_OBJECT_SLOTS_EMBEDDED_FLAG << EJS_GC_USER_FLAGS_SHIFT)
+
+#define EJS_OBJECT_SET_SLOTS_EMBEDDED(o) (((EJSObject*)(o))->gc_header |= EJS_OBJECT_SLOTS_EMBEDDED_FLAG_SHIFTED)
+#define EJS_OBJECT_CLEAR_SLOTS_EMBEDDED(o) (((EJSObject*)(o))->gc_header &= ~EJS_OBJECT_SLOTS_EMBEDDED_FLAG_SHIFTED)
+
+#define EJS_OBJECT_SLOTS_ARE_EMBEDDED(o) ((((EJSObject*)(o))->gc_header & EJS_OBJECT_SLOTS_EMBEDDED_FLAG_SHIFTED) != 0)
+
 struct _EJSObject {
     GCObjectHeader   gc_header;
     EJSSpecOps*      ops;

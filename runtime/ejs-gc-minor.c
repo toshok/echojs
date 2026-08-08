@@ -418,6 +418,8 @@ minor_scan_object(GCObjectPtr p)
     }
     else if ((header & EJS_SCAN_TYPE_CLOSUREENV) != 0) {
         EJSClosureEnv* env = (EJSClosureEnv*)p;
+        if (EJS_UNLIKELY(_ejs_gc_env_guard))
+            _ejs_gc_validate_closureenv(NULL, env, "minor_scan");
         for (uint32_t i = 0; i < env->length; i++)
             minor_process_slot(&env->slots[i]);
     }
@@ -809,6 +811,8 @@ nursery_init(void)
     heap_priv.verify = getenv("EJS_GC_VERIFY") != NULL;
     minor_spew = getenv("EJS_GC_MINOR_SPEW") != NULL;
     gc_paranoid = getenv("EJS_GC_PARANOID") != NULL;
+    _ejs_gc_env_guard = getenv("EJS_GC_ENV_GUARD") != NULL
+        || heap_priv.verify || gc_paranoid;
     if (getenv("EJS_GC_WATCH"))
         gc_watch_addr = (uintptr_t)strtoull(getenv("EJS_GC_WATCH"), NULL, 16);
     // 1MB balances pause and throughput (measured 2026-07-25): minor p99

@@ -66,6 +66,17 @@ extern GCObjectPtr _ejs_gc_alloc(size_t size, EJSScanType scan_type);
 // on pointer values must not admit such pointers.
 extern EJSBool _ejs_gc_ptr_is_gc_managed(void* ptr);
 
+// EJS_GC_ENV_GUARD=1 (also on under EJS_GC_VERIFY / EJS_GC_PARANOID):
+// scanners validate a closureenv against its heap cell — bounds, cell
+// base, scan type, forwarding state, and length-vs-cell-size — before
+// walking its slots.  A stale env reference otherwise reads a poisoned
+// or recycled LENGTH and walks off mapped memory, faulting far from
+// the bug; the guard turns that into an abort naming the owner.
+// owner is the referencing EJSObject for shaped-storage envs (NULL
+// when the env cell itself is being scanned).
+extern EJSBool _ejs_gc_env_guard;
+extern void _ejs_gc_validate_closureenv(void* owner, void* env, const char* ctx);
+
 // ---- sticky-pin cache (minor collections only) -------------------
 //
 // A suspended generator's stack is frozen, so its conservative hit set

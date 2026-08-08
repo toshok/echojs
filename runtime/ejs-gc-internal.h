@@ -328,6 +328,7 @@ extern char *conservative_hi;
 
 // collection state
 extern EJSBool in_minor_gc;          // (ejs-gc-minor.c)
+extern EJSBool in_compact_fixup;     // (ejs-gc-major.c)
 extern EJSHeapPriv heap_priv;        // (ejs-gc-minor.c)
 extern EJSBool minor_scan_saw_young; // (ejs-gc-minor.c) set when a scan leaves a pinned-young referent
 extern size_t heap_size_at_last_gc;  // (ejs-gc-major.c) post-sweep footprint, drives full_gc_trigger

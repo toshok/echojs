@@ -100,6 +100,10 @@ sweep_heap()
 // differential runs.
 static uint64_t compact_moved_objs, compact_moved_bytes, compact_freed_pages;
 
+// TRUE while the fixup pass runs — the env guard's forwarded-env check
+// keys off it (see _ejs_gc_validate_closureenv)
+EJSBool in_compact_fixup;
+
 static void
 compact_fixup_slot(ejsval* slot)
 {
@@ -151,6 +155,8 @@ compact_fixup_object(GCObjectPtr p)
         compact_fixup_slot(&((EJSPrimSymbol*)p)->description);
     else if ((*h & EJS_SCAN_TYPE_CLOSUREENV) != 0) {
         EJSClosureEnv* env = (EJSClosureEnv*)p;
+        if (EJS_UNLIKELY(_ejs_gc_env_guard))
+            _ejs_gc_validate_closureenv(NULL, env, "compact_fixup");
         for (uint32_t i = 0; i < env->length; i++)
             compact_fixup_slot(&env->slots[i]);
     }
@@ -291,6 +297,10 @@ compact_old_gen(void)
     // 2. fixup: rewrite every reference that can name a moved cell, and
     //    clear the cycle's pins while walking the live set.  Runs even
     //    when nothing was evacuated — the pins must reset either way.
+    //    (During this pass an owner walked before its env edge is
+    //    rewritten legitimately reaches a forwarded env — the flag lets
+    //    the env guard treat that transient as valid.)
+    in_compact_fixup = EJS_TRUE;
     root_registry_foreach (compact_fixup_slot);
     for (int i = 0; i < _ejs_num_modules; i++) {
         EJSObject* mod = (EJSObject*)_ejs_modules[i];
@@ -313,6 +323,7 @@ compact_old_gen(void)
             if (!cell_is_free(pg->page_bitmap[c]))
                 compact_fixup_object(p);
     }
+    in_compact_fixup = EJS_FALSE;
 
     // 3. release the sources: nothing reads the forwarding records
     //    anymore; the pages go back to their arenas.  No finalizers run —

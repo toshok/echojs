@@ -486,6 +486,95 @@ paranoid_sweep_check(void)
     }
 }
 
+// ---- EJS_GC_ENV_GUARD: closureenv geometry validation ------------
+//
+// Scanners trust a closureenv's LENGTH word absolutely: a stale env
+// reference (missed barrier, unfixed edge) reads it from a poisoned or
+// recycled cell and walks the slot array off the end of mapped memory,
+// faulting far from the object that held the stale pointer.  With the
+// guard on, every slot walk first validates the env against the cell
+// the allocator actually placed it in, so the bad walk becomes an
+// abort that names the owner.
+EJSBool _ejs_gc_env_guard;
+
+static void
+env_guard_die(void* owner, EJSClosureEnv* env, PageInfo* page, const char* ctx, const char* why)
+{
+    GCObjectHeader oh = 0;
+    const char* ocls = "<none>";
+    if (owner) {
+        oh = *(GCObjectHeader*)owner;
+        ocls = ((oh & EJS_SCAN_TYPE_OBJECT) && ((EJSObject*)owner)->ops)
+            ? ((EJSObject*)owner)->ops->class_name : "?";
+    }
+    // page resolved => the env's cell memory is mapped and safe to dump
+    GCObjectHeader eh = page ? *(GCObjectHeader*)env : 0;
+    uint32_t elen = page ? env->length : 0;
+    _ejs_log ("EJS_GC_ENV_GUARD [%s]: %s: owner %p (class %s, hdr %llx) env %p (hdr %llx, len %u) page %p (cell_size %d, young %d) minor#%llu in_minor=%d in_compact_fixup=%d\n",
+              ctx, why,
+              owner, ocls, (unsigned long long)oh,
+              (void*)env, (unsigned long long)eh, elen,
+              (void*)page, page ? page->cell_size : 0, page ? page->young : -1,
+              (unsigned long long)heap_priv.minors, in_minor_gc, in_compact_fixup);
+    abort();
+}
+
+void
+_ejs_gc_validate_closureenv(void* owner, void* env_, const char* ctx)
+{
+    EJSClosureEnv* env = (EJSClosureEnv*)env_;
+    uint32_t cell_idx;
+    PageInfo* page;
+    size_t offset_in_cell;
+
+    if (owner && EJS_OBJECT_SLOTS_ARE_EMBEDDED((EJSObject*)owner)) {
+        // embedded shaped storage: the env shares the owner's cell and
+        // has no header discipline of its own — geometry is the check
+        page = find_page_and_cell((GCObjectPtr)owner, &cell_idx);
+        if (!page)
+            env_guard_die(owner, env, NULL, ctx, "embedded env but owner outside GC heap");
+        char* base = (char*)page->page_start + (size_t)cell_idx * page->cell_size;
+        if ((char*)env <= base || (char*)env >= base + page->cell_size)
+            env_guard_die(owner, env, page, ctx, "embedded flag set but env outside owner cell");
+        offset_in_cell = (size_t)((char*)env - base);
+    }
+    else {
+        page = find_page_and_cell((GCObjectPtr)env, &cell_idx);
+        if (!page)
+            env_guard_die(owner, env, NULL, ctx, "env outside GC-managed memory");
+        char* base = (char*)page->page_start + (size_t)cell_idx * page->cell_size;
+        if ((char*)env != base)
+            env_guard_die(owner, env, page, ctx, "env interior to another cell");
+        if (_ejs_gc_is_forwarded((GCObjectPtr)env)) {
+            // compact fixup walks owners before their env edge is
+            // rewritten, so a forwarded env is the expected transient
+            // there (the old copy's length survives the first-word
+            // overwrite); validate the geometry of the live copy
+            if (!in_compact_fixup)
+                env_guard_die(owner, env, page, ctx, "env cell forwarded (stale reference)");
+            EJSClosureEnv* to = (EJSClosureEnv*)_ejs_gc_forwarding_addr((GCObjectPtr)env);
+            uint32_t to_idx;
+            PageInfo* to_page = find_page_and_cell((GCObjectPtr)to, &to_idx);
+            if (!to_page)
+                env_guard_die(owner, env, page, ctx, "forwarded env target outside GC heap");
+            env = to;
+            page = to_page;
+            cell_idx = to_idx;
+            base = (char*)page->page_start + (size_t)cell_idx * page->cell_size;
+            if ((char*)env != base)
+                env_guard_die(owner, env, page, ctx, "forwarded env target interior to a cell");
+        }
+        uint32_t st = (uint32_t)(*(GCObjectHeader*)env & 0xf);
+        if (st != EJS_SCAN_TYPE_CLOSUREENV)
+            env_guard_die(owner, env, page, ctx, "env cell scan type is not closureenv");
+        offset_in_cell = 0;
+    }
+
+    if (offset_in_cell + offsetof(EJSClosureEnv, slots)
+          + (size_t)env->length * sizeof(ejsval) > (size_t)page->cell_size)
+        env_guard_die(owner, env, page, ctx, "env length overflows its cell");
+}
+
 void
 _ejs_gc_dump_heap_stats()
 {

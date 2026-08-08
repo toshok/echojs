@@ -178,6 +178,8 @@ _scan_from_ejsprimsym(EJSPrimSymbol *primSymbol)
 static void
 _scan_from_ejsclosureenv(EJSClosureEnv *env)
 {
+    if (EJS_UNLIKELY(_ejs_gc_env_guard))
+        _ejs_gc_validate_closureenv(NULL, env, "mark_scan");
     for (uint32_t i = 0; i < env->length; i ++) {
         _scan_ejsvalue (&env->slots[i]);
     }
