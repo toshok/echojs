@@ -28,6 +28,39 @@ measurable:
   fast paths already at/near node parity on kernels), plus GC pause
   and footprint targets from gc-plan.md (generational mover).
 
+## 0.x — analysis-driven compilation (--types earns its keep)
+
+--types is on by default as of 2026-08 (the fv DAG fix and the
+dead-generator GC release turned "never finishes" into 66s
+self-compile; --no-types is the escape hatch).  What ships today is
+the *platform*: analysis runs everywhere, but cross-module imports
+are still ⊤ and specialization on the self-compile is ~zero.  This
+milestone is the gap between "analysis runs" and "analysis pays".
+
+Bar: on the fixed benchmarks, default-on analysis buys more execution
+speed than it costs in compile time, at self-hosting scale.
+
+- **Cross-module summaries** (echojs-maam
+  docs/cross-module-summaries.md, phases C1-C6): export summaries
+  consumed at import seams over the module DAG — primitives, then
+  structural shapes, then ⊤-argument function results.  Success
+  metric: unmapped/degraded-binding declines fall on the
+  self-compile; cross-module shape sites start guarding;
+  specialized > 0.
+- **Self-hosted oracle speed**: analysis is <1s node-hosted but ~30s
+  of the 66s exe self-compile (entry module alone 8s).  Close the
+  self-hosted gap enough that default-on stays comfortable
+  (candidates: the Map/Set-heavy oracle inner loops on the runtime
+  side, survivor-hole reuse, EIR generator lowering — the latter two
+  are already-queued GC/runtime levers with wins beyond the oracle).
+- **Runtime type feedback as gap-filler** (README's original PGO
+  story): record-types → persist structurally-keyed shape/type
+  feedback → recompile with guards, behind the same oracle interface
+  the static analysis serves.  Static stays primary; the profile only
+  fills residual ⊤.
+- Watch item: analysis-on stress RSS ~910MB (vs ~570MB before) —
+  revisit with the heap growth policy.
+
 ## 1.0 — the compatibility release
 
 Bar, in three parts:
