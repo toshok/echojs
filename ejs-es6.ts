@@ -117,7 +117,7 @@ const options: CompilerOptions = {
     warn_on_undeclared: false,
     frozen_global: false,
     record_types: false,
-    types: false,
+    types: true,
     types_dump: false,
     output_filename: null,
     show_help: false,
@@ -169,6 +169,11 @@ function increase_debug_level(): void {
 
 function add_debug_after_pass(passname: string): void {
     options.debug_passes.add(passname);
+}
+
+function disable_types(): void {
+    options.types = false;
+    options.types_dump = false;
 }
 
 function add_import_variable(arg: string): void {
@@ -264,7 +269,12 @@ const args: Record<string, ArgSpec | undefined> = {
     },
     "--types": {
         flag: "types",
-        help: "run the MAAM type-analysis probe over each module and log its stats (consumes nothing yet).",
+        help: "run the MAAM type analysis over each module (the default; see --no-types).",
+    },
+    "--no-types": {
+        handler: disable_types,
+        handlerArgc: 0,
+        help: "skip the MAAM type analysis.",
     },
     "--types-dump": {
         flag: "types_dump",

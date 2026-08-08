@@ -140,8 +140,9 @@ async function worker(wid) {
             continue;
         }
 
-        // flag-off compile + run
-        const c0 = await run("node", [path.join(WORK, "lib/generated/ejs-es6.js"), ...EJS, file], { cwd: testDir, env }, TIMEOUT_MS);
+        // types-off compile + run (--no-types: types is the default now,
+        // so the off side of the diff must opt out explicitly)
+        const c0 = await run("node", [path.join(WORK, "lib/generated/ejs-es6.js"), ...EJS, "--no-types", file], { cwd: testDir, env }, TIMEOUT_MS);
         if (c0.timedout) { r.status = "TIMEOUT-compile-off"; results.push(r); continue; }
         if (c0.code !== 0) { r.status = "N/A"; results.push(r); continue; }
         const off = await run(exe, [], { cwd: testDir, env }, TIMEOUT_MS);
