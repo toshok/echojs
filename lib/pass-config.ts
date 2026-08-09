@@ -206,8 +206,8 @@ export const PASSES: readonly PassDesc[] = [
     {
         name: "gen-eir",
         field: "genEir",
-        minLevel: OPT_IN,
-        help: "generator bodies lower to EIR state machines over a persistent env (no machine stacks); opt-in while G1 stabilizes",
+        minLevel: 0,
+        help: "generator bodies lower to EIR state machines over a persistent env (no machine stacks); -fno-gen-eir restores the coroutine path",
     },
     {
         name: "fn-summaries",
