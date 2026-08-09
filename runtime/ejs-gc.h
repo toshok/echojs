@@ -79,17 +79,6 @@ extern void _ejs_gc_validate_closureenv(void* owner, void* env, const char* ctx)
 
 // ---- sticky-pin cache (minor collections only) -------------------
 //
-// A suspended generator's stack is frozen, so its conservative hit set
-// is identical from one minor to the next: the first scan captures the
-// pins into a cache (handle stored on the generator), and while the
-// generator stays suspended later minors REPLAY the pins instead of
-// rescanning the whole stack.  The push hook invalidates on resume.
-// All four calls no-op / return FALSE outside a minor collection.
-extern EJSBool _ejs_gc_pin_cache_replay(void** cache);   // TRUE = pins replayed, skip the scan
-extern void _ejs_gc_pin_cache_begin(void** cache);       // capture hits of the following scan
-extern void _ejs_gc_pin_cache_end(void);                 // scan done; cache becomes valid
-extern void _ejs_gc_pin_cache_invalidate(void** cache);  // stack will mutate (resume)
-extern void _ejs_gc_pin_cache_free(void** cache);        // generator finalize
 
 #define _ejs_gc_new(T) (T *)_ejs_gc_alloc(sizeof(T), EJS_SCAN_TYPE_OBJECT)
 #define _ejs_gc_new_obj(T, sz) (T *)_ejs_gc_alloc(sz, EJS_SCAN_TYPE_OBJECT)
@@ -173,19 +162,15 @@ typedef struct {
     int32_t remset_count;
     int32_t remset_capacity;
     int32_t remset_overflowed; // fall back to a full old-gen scan this minor
-    // the top of the CURRENT machine stack (main stack bottom, or the
-    // running generator's stack end) — maintained by the generator
-    // push/pop hooks so the barrier can reject transient stack slots
+    // the top of the machine stack (the main stack's bottom) — the
+    // barrier rejects transient stack slots below it
     void* current_stack_end;
     // -- runtime-private state (an opaque struct in ejs-gc.c) --
     void* priv;
     // -- head of the CURRENT stack's gc-frame chain (word 17
     //    of the emitted seam).  Emitted prologues link an EJSGCFrame
     //    here, epilogues unlink, catch handlers re-link their own frame
-    //    (unwound callees' records die with their stack).  Each machine
-    //    stack owns a disjoint chain: the generator push/pop hooks swap
-    //    this head alongside current_stack_end, and suspended
-    //    generators' chains are walked via their saved heads.  Minor
+    //    (unwound callees' records die with their stack).  Minor
     //    collections process every chain slot PRECISELY (evacuate +
     //    rewrite) BEFORE the conservative pin pass — a frame-held young
     //    object therefore MOVES every minor, and the conservative
@@ -253,7 +238,6 @@ extern void _ejs_gc_remember_val(ejsval owner, ejsval val);
 extern void _ejs_gc_add_root(ejsval *val);
 extern void _ejs_gc_remove_root(ejsval *root);
 
-extern void _ejs_gc_mark_conservative_range(void *low, void *high);
 
 #define EJS_GC_MARK_THREAD_STACK_BOTTOM                                        \
   do {                                                                         \

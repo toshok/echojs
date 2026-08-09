@@ -722,17 +722,17 @@ test("lower: tagged templates lower via template_callsite", () => {
     assert(sites === 1, `expected one callsite, saw ${sites}`);
 });
 
-test("lower: generator function lowers via make_generator/generator_yield", () => {
+test("lower: generator function lowers via make_generator_eir/gen_yield", () => {
     let r = lowerFunctionNode(
         parseFnPreEIR("function f() { function* g() { yield 1; yield 2; } return g(); }")
     );
     verifyModule(r.module);
     let all = r.module.functions.map((fn) => printFunction(fn)).join("\n");
-    assertContains(all, 'name="make_generator"');
-    assertContains(all, 'name="generator_yield"');
+    assertContains(all, 'name="make_generator_eir"');
+    assertContains(all, "gen_yield");
 });
 
-test("lower: statement-position yield* lowers as a for-of delegate loop", () => {
+test("lower: yield* lowers as an inline delegation loop", () => {
     let r = lowerFunctionNode(
         parseFnPreEIR(
             "function f() { function* inner() { yield 1; } function* outer() { yield* inner(); } return outer(); }"
@@ -740,7 +740,9 @@ test("lower: statement-position yield* lowers as a for-of delegate loop", () => 
     );
     verifyModule(r.module);
     let all = r.module.functions.map((fn) => printFunction(fn)).join("\n");
-    assertContains(all, 'name="generator_yield"');
+    assertContains(all, "gen_yield");
+    // the delegation loop drives the inner iterator protocol inline
+    assertContains(all, 'atom="next"');
 });
 
 test("lower: program with several functions", () => {
@@ -3775,9 +3777,9 @@ test("slot-cse: a stable slot's loads fold across calls and blocks", () => {
 });
 
 test("slot-cse: a suspendable function declines the stable exemptions", () => {
-    // a generator body (post-desugar: generator_yield runtime calls)
-    // can see the toplevel's remaining stores run mid-suspension — its
-    // loads must reload even for stable slots
+    // a generator body (gen_yield suspension points) can see the
+    // toplevel's remaining stores run mid-suspension — its loads must
+    // reload even for stable slots
     const mod = new Module("cse_gen_mod");
     const fb = new FunctionBuilder("toplevel", ["%env", "%this"]);
     const obj = fb.emit("make_object", [], { keys: [] });
@@ -3786,7 +3788,7 @@ test("slot-cse: a suspendable function declines the stable exemptions", () => {
     mod.addFunction(fb.finish());
     const gb = new FunctionBuilder("gen_body", ["%env", "%this"]);
     const l1 = gb.emit("module_slot_load", [], { module: "%self", slot: 0 });
-    gb.emit("call_runtime", [l1], { name: "generator_yield" });
+    gb.emit("gen_yield", [l1, l1], {});
     const l2 = gb.emit("module_slot_load", [], { module: "%self", slot: 0 });
     gb.ret(l2);
     mod.addFunction(gb.finish());

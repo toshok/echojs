@@ -531,7 +531,7 @@ function specializeRound(
     for (const [info, flow] of flows) {
         const node = info.node;
 
-        // -fgen-eir generator bodies own a fixed resume-protocol ABI —
+        // generator bodies own a fixed resume-protocol ABI —
         // body(gen, mode, sent), every param boxed — and rewrite into
         // state machines after this pass; never clone or wrap them
         if (info.fn && info.fn.genBody) continue;

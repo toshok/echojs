@@ -9,7 +9,6 @@ export const makeClosureEnv_id = identifier("%makeClosureEnv");
 export const makeClosure_id = identifier("%makeClosure");
 export const makeClosureNoEnv_id = identifier("%makeClosureNoEnv");
 export const makeAnonClosure_id = identifier("%makeAnonClosure");
-export const makeGenerator_id = identifier("%makeGenerator");
 export const makeGeneratorEIR_id = identifier("%makeGeneratorEIR");
 export const generatorYield_id = identifier("%generatorYield");
 export const generatorDelegate_id = identifier("%generatorDelegate");

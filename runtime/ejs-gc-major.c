@@ -93,11 +93,9 @@ sweep_heap()
 // and the proportional growth target then adapts downward.
 //
 // Pinned cells sweep in place, exactly like the minor's young pins:
-// conservative hits (C stack, spilled registers, generator stacks) set
-// PINNED during marking, and every registered generator object pins too
-// (the registry is an intrusive list of raw pointers).  LOS objects
-// never move.  EJS_GC_COMPACT=off restores plain mark-sweep for A/B and
-// differential runs.
+// conservative hits (C stack, spilled registers) set PINNED during
+// marking.  LOS objects never move.  EJS_GC_COMPACT=off restores plain
+// mark-sweep for A/B and differential runs.
 static uint64_t compact_moved_objs, compact_moved_bytes, compact_freed_pages;
 
 // TRUE while the fixup pass runs — the env guard's forwarded-env check
@@ -224,12 +222,6 @@ compact_stat_cmp(const void* a, const void* b)
 static void
 compact_old_gen(void)
 {
-    // every registered generator pins: the registry reaches them through
-    // raw intrusive pointers (reg_next/reg_prev), and their machine
-    // state is re-scanned conservatively by their specops
-    for (EJSGenerator* g = _ejs_generator_registry; g; g = g->reg_next)
-        *(GCObjectHeader*)g |= EJS_GC_HEADER_PINNED;
-
     uint64_t moved_before = compact_moved_objs;
     uint64_t freed_before = compact_freed_pages;
 
@@ -387,7 +379,6 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
 
         mark_thread_stack();
 
-        mark_generator_stacks();
         gettimeofday (&fg[2], NULL);
 
         // dirty objects await their deferred minor scan and may
@@ -534,9 +525,9 @@ _ejs_gc_collect(const char *reason)
 
     // post-sweep footprint drives the proportional collection trigger
     // (see heap_size_at_last_gc).  LOS bytes count: without them a
-    // large-object-heavy live set (suspended generator stacks) leaves
-    // the growth budget at the floor and every large alloc re-trips a
-    // full collection that frees nothing.
+    // large-object-heavy live set leaves the growth budget at the
+    // floor and every large alloc re-trips a full collection that
+    // frees nothing.
     heap_size_at_last_gc = calc_heap_size() + los_size;
 
 #if gc_timings > 0

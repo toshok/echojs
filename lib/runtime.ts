@@ -202,13 +202,8 @@ const runtime_interface = {
         );
     },
 
-    make_generator: function (this: RuntimeContext) {
-        return this.abi.createExternalFunction(this.module, "_ejs_generator_new", ty.EjsValue, [
-            ty.EjsValue,
-        ]);
-    },
-    // the -fgen-eir state-machine path (docs/generator-eir-plan.md):
-    // stackless generators over a persistent closure env
+    // state-machine generators (docs/generator-eir-plan.md):
+    // stackless, over a persistent closure env
     make_generator_eir: function (this: RuntimeContext) {
         return this.abi.createExternalFunction(this.module, "_ejs_generator_new_eir", ty.EjsValue, [
             ty.EjsValue,

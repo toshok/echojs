@@ -54,22 +54,17 @@ export const eir_intrinsics: Record<string, IntrinsicEntry> = {
     // DesugarMetaProperties (new.target)
     "%getNewTarget": { op: "new_target" },
 
-    // DesugarGeneratorFunctions: coroutine-style — the generator body is
-    // an ordinary closure run on its own stack (runtime ucontext switch),
-    // so these are plain runtime calls
-    "%makeGenerator": { runtime: "make_generator" },
-    "%generatorYield": { runtime: "generator_yield" },
+    // DesugarGeneratorFunctions: the state-machine generators
+    // (docs/generator-eir-plan.md).  %generatorYield and
+    // %generatorDelegate lower specially in lower.ts (a gen_yield op /
+    // an inline delegation loop — they only exist inside marked bodies);
+    // their entries here are for scopes.ts name acceptance and never
+    // emit as runtime calls.
+    "%makeGeneratorEIR": { runtime: "make_generator_eir" },
+    "%generatorYield": { runtime: "make_generator_eir" },
+    "%generatorDelegate": { runtime: "make_generator_eir" },
     "%generatorIsReturnSentinel": { runtime: "generator_is_return_sentinel" },
     "%generatorReturnValue": { runtime: "generator_return_value" },
-
-    // DesugarGeneratorFunctions, -fgen-eir: the state-machine path
-    // (docs/generator-eir-plan.md).  %generatorYield in a marked body
-    // and %generatorDelegate lower specially in lower.ts (gen_yield op
-    // / an inline delegation loop) — the entries here exist so
-    // scopes.ts accepts the names; the runtime values are the marked
-    // body's fallbacks and never actually emit.
-    "%makeGeneratorEIR": { runtime: "make_generator_eir" },
-    "%generatorDelegate": { runtime: "generator_yield" },
 
     // DesugarDestructuring (array patterns iterate via a runtime wrapper)
     "%createIteratorWrapper": { runtime: "iterator_wrapper_new" },

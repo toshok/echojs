@@ -19,7 +19,7 @@
 //           would manage, so per-cycle young-survival is THE
 //           number that sizes the nursery payoff.
 //   PINNED: set (once per cycle) when a CONSERVATIVE reference — C stack,
-//           spilled registers, generator stacks/contexts — hits the
+//           spilled registers — hits the
 //           object.  Under the mover these are the objects that cannot
 //           be evacuated this cycle; their count/bytes/sources size the
 //           payoff of precise JS frames and decide its ordering.
@@ -35,7 +35,7 @@ struct timeval prof_start_tv;   // process start, for the shutdown report
 
 // (the PROF_SRC_* enum lives in ejs-gc-internal.h; the scanners set
 // prof_pin_source as they change source)
-static const char* prof_src_names[PROF_SRC_COUNT] = { "cstack", "regs", "genstack" };
+static const char* prof_src_names[PROF_SRC_COUNT] = { "cstack", "regs" };
 int prof_pin_source = PROF_SRC_CSTACK;
 
 #define PROF_NBUCKETS 12 // ffs buckets 16B.. + [0] = LOS
@@ -160,7 +160,7 @@ profile_report_cycle_end(uint64_t pause_usec)
     _ejs_log ("EJS_GC_PROFILE: gc#%llu reason=%s pause=%.2fms "
               "live=%llu objs/%.2fMB | young allocd=%llu/%.2fMB "
               "survived=%llu/%.2fMB (%.1f%% of bytes) | pins: "
-              "cstack=%llu/%lluKB regs=%llu/%lluKB genstack=%llu/%lluKB "
+              "cstack=%llu/%lluKB regs=%llu/%lluKB "
               "envint=%llu los=%llu young=%llu old=%llu\n",
               (unsigned long long)prof_collections, prof_gc_reason,
               pause_usec / 1000.0,
@@ -175,8 +175,6 @@ profile_report_cycle_end(uint64_t pause_usec)
               (unsigned long long)(prof_pin_bytes[PROF_SRC_CSTACK] / 1024),
               (unsigned long long)prof_pin_count[PROF_SRC_REGS],
               (unsigned long long)(prof_pin_bytes[PROF_SRC_REGS] / 1024),
-              (unsigned long long)prof_pin_count[PROF_SRC_GENSTACK],
-              (unsigned long long)(prof_pin_bytes[PROF_SRC_GENSTACK] / 1024),
               (unsigned long long)prof_pin_env_interior,
               (unsigned long long)prof_pin_los,
               (unsigned long long)prof_pin_young,

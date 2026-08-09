@@ -464,7 +464,7 @@ export class ScopeAnalysis {
     }
 
     leaveFunction(): void {
-        // a -fgen-eir generator body (marked by the desugar): every
+        // a generator body (marked by the desugar): every
         // binding lives in the env, never in SSA — resumes re-enter the
         // function mid-CFG, and only env slots (persisted on the
         // generator object) survive across the suspension's return.

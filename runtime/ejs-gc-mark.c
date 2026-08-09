@@ -3,8 +3,8 @@
  */
 
 // marking: the tri-color worklist, the precise slot scanners, the
-// conservative stack/register/generator-stack scanners with the
-// gc-frame skip machinery, and the full-GC mark phases.
+// conservative stack/register scanners with the gc-frame skip
+// machinery, and the full-GC mark phases.
 
 #include "ejs-gc-internal.h"
 
@@ -191,8 +191,8 @@ void
 _ejs_gc_mark_thread_stack_bottom(GCObjectPtr* btm)
 {
     stack_bottom = btm;
-    // the write barrier's transient-slot upper bound starts at
-    // the main stack's bottom (generator push/pop moves it)
+    // the write barrier's transient-slot upper bound: the main
+    // stack's bottom
     _ejs_heap.current_stack_end = (void*)btm;
 }
 
@@ -342,31 +342,16 @@ mark_ejsvals_in_range(void* low, void* high)
     }
 }
 
-#define MAX_GENERATORS 256
-static int generator_count = 0;
-static EJSGenerator* generators[MAX_GENERATORS];
-
-// walk every gc-frame chain — the running stack's (the
-// seam head) plus every suspended generator's saved chain and every
-// ACTIVE generator's parked caller segment.  Chains are per-stack and
-// disjoint; records live in stack frames that stay mapped for exactly
-// as long as they are linked (returns unlink, catches re-link their
-// own frame past unwound callees, the generator hooks swap heads at
-// every stack switch).
+// walk the gc-frame chain — precise, relocatable JS-frame roots.
+// Records live in stack frames that stay mapped for exactly as long as
+// they are linked (returns unlink, catches re-link their own frame past
+// unwound callees).
 void
 walk_gc_frames(void (*slot_fn)(ejsval*))
 {
     for (EJSGCFrame* f = (EJSGCFrame*)_ejs_heap.gc_frame_head; f; f = f->prev)
         for (uintptr_t i = 0; i < f->count; i++)
             slot_fn(&f->slots[i]);
-    for (EJSGenerator* g = _ejs_generator_registry; g; g = g->reg_next)
-        for (EJSGCFrame* f = (EJSGCFrame*)g->gc_frame_head; f; f = f->prev)
-            for (uintptr_t i = 0; i < f->count; i++)
-                slot_fn(&f->slots[i]);
-    for (int gi = 0; gi < generator_count; gi++)
-        for (EJSGCFrame* f = (EJSGCFrame*)generators[gi]->caller_gc_frame_head; f; f = f->prev)
-            for (uintptr_t i = 0; i < f->count; i++)
-                slot_fn(&f->slots[i]);
 }
 
 static void
@@ -470,47 +455,6 @@ mark_from_modules()
 #error "put code here to mark registers"
 #endif
 
-// (MAX_GENERATORS / generators[] / generator_count moved above
-// walk_gc_frames, which walks the active chain's parked caller
-// segments)
-
-void
-_ejs_gc_push_generator(EJSGenerator* gen)
-{
-    if (generator_count >= MAX_GENERATORS) {
-        _ejs_log ("too many nested generators (max %d)\n", MAX_GENERATORS);
-        abort();
-    }
-    generators[generator_count++] = gen;
-    // this generator's stack is about to run (mutate): its sticky-pin
-    // cache no longer describes the frozen state
-    _ejs_gc_pin_cache_invalidate (&gen->pin_cache);
-    gen->running = EJS_TRUE;
-    // keep the barrier's transient-slot bound on the CURRENT stack
-    _ejs_heap.current_stack_end = gen->stack + gen->stack_size;
-    // swap in this stack's gc-frame chain; the caller's segment
-    // parks on the generator until the matching pop
-    gen->caller_gc_frame_head = _ejs_heap.gc_frame_head;
-    _ejs_heap.gc_frame_head = gen->gc_frame_head;
-    gen->gc_frame_head = NULL; // the live chain is the seam head now
-}
-
-void
-_ejs_gc_pop_generator()
-{
-    generator_count--;
-    EJSGenerator* gen = generators[generator_count];
-    gen->running = EJS_FALSE;
-    _ejs_heap.current_stack_end = generator_count > 0
-        ? generators[generator_count - 1]->stack + generators[generator_count - 1]->stack_size
-        : (void*)stack_bottom;
-    // park this stack's chain on the generator (walked while
-    // suspended), restore the caller's segment
-    gen->gc_frame_head = _ejs_heap.gc_frame_head;
-    _ejs_heap.gc_frame_head = gen->caller_gc_frame_head;
-    gen->caller_gc_frame_head = NULL;
-}
-
 void
 mark_thread_stack()
 {
@@ -520,20 +464,7 @@ mark_thread_stack()
 
     GCObjectPtr stack_top = NULL;
 
-    // The CURRENT machine stack.  When the mutator is running on a
-    // generator's malloc'd stack (collections happen inside
-    // _ejs_gc_alloc, which generator bodies call), [&stack_top,
-    // stack_bottom) is NOT a stack range — it spans from the malloc heap
-    // to the main stack across unmapped memory.  Scan only up to the
-    // running generator's stack end; mark_generator_stacks covers the
-    // suspended caller segments.
-    void* high = (void*)stack_bottom;
-    if (generator_count > 0) {
-        EJSGenerator* running = generators[generator_count - 1];
-        high = running->stack + running->stack_size;
-    }
-
-    mark_ejsvals_in_range(((void*)&stack_top) + sizeof(GCObjectPtr), high);
+    mark_ejsvals_in_range(((void*)&stack_top) + sizeof(GCObjectPtr), (void*)stack_bottom);
 }
 
 // mark a known heap object as a root (page cell or LOS both resolve
@@ -561,43 +492,6 @@ mark_object_root(GCObjectPtr ptr)
     WORKLIST_PUSH_AND_GRAY_CELL(ptr, page->page_bitmap[cell_idx]);
 }
 
-// The chain of ACTIVE generators (generators whose bodies are on the
-// current stack chain; push on start/resume, pop on yield/completion —
-// generators[generator_count-1] owns the stack we are executing on).
-// mark_thread_stack scans the running stack; this covers the rest:
-//
-//   - each active generator OBJECT is a root for the cycle (its specop
-//     scan conservatively marks its own suspended frames and both saved
-//     ucontexts, i.e. the register files);
-//   - the SUSPENDED CALLER segment behind each swap-in: frames from the
-//     caller_stack_top recorded at the resume site up to that caller's
-//     stack end — the main stack (stack_bottom) for the outermost
-//     generator, the parent generator's stack end for nested ones.
-//
-// Suspended generators NOT in the chain need nothing here: if their
-// object is reachable its scan covers their stack; if it is not, nothing
-// on that stack is reachable either.
-void
-mark_generator_stacks()
-{
-    prof_pin_source = PROF_SRC_CSTACK; // the suspended segments ARE C stack
-    for (int i = 0; i < generator_count; i++) {
-        EJSGenerator* gen = generators[i];
-
-        mark_object_root((GCObjectPtr)gen);
-
-        void* seg_high = (i == 0) ? (void*)stack_bottom
-                                  : generators[i - 1]->stack + generators[i - 1]->stack_size;
-        if (gen->caller_stack_top) {
-            // this caller segment's frames are the chain parked
-            // at push time (minor only; a full GC leaves skips empty)
-            if (in_minor_gc) set_frame_skip_chain(gen->caller_gc_frame_head);
-            mark_ejsvals_in_range(gen->caller_stack_top, seg_high);
-            if (in_minor_gc) clear_frame_skip();
-        }
-    }
-}
-
 void
 process_worklist()
 {
@@ -618,12 +512,3 @@ process_worklist()
     EJS_ASSERT(work_list.list == NULL);
 }
 
-void
-_ejs_gc_mark_conservative_range(void* low, void* high) {
-    // only the generator scan uses this entry point (suspended stacks +
-    // saved ucontexts) — attribute its pins accordingly
-    int prev_src = prof_pin_source;
-    prof_pin_source = PROF_SRC_GENSTACK;
-    mark_ejsvals_in_range(low, high);
-    prof_pin_source = prev_src;
-}

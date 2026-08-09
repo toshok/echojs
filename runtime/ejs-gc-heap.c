@@ -156,10 +156,10 @@ LargeObjectInfo *los_list;
 // live LOS payload bytes, maintained at the single alloc site
 // (alloc_from_los) and the single free site (release_to_los).  The
 // full-collection growth trigger scales off the post-sweep footprint,
-// and LOS bytes must count toward it: generator machine stacks live
-// here, so a heap of suspended generators is invisible to a
-// pages-only metric — the budget stays at the floor while every
-// large alloc re-trips a full collection that frees nothing.
+// and LOS bytes must count toward it — a large-object-heavy live set
+// is otherwise invisible to a pages-only metric, leaving the budget at
+// the floor while every large alloc re-trips a full collection that
+// frees nothing.
 size_t los_size = 0;
 
 // ---- LOS lookup: sorted range array -----------------------------

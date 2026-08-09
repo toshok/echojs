@@ -249,7 +249,7 @@ class LowerFunction {
     oracle: TypeOracle | null;
     // non-null when lowering a specialized clone
     spec: SpecMode | null;
-    // a -fgen-eir generator body: yields lower to gen_yield ops and
+    // a generator body: yields lower to gen_yield ops and
     // gen-lower.ts rewrites the function into a resume-dispatch state
     // machine after optimization
     isGenBody = false;
@@ -1684,12 +1684,14 @@ class LowerFunction {
 
     intrinsicCall(n: e.CallExpression): Inst {
         const calleeName = (n.callee as e.Identifier).name;
-        // the -fgen-eir generator body forms lower specially: yields are
+        // the generator body forms lower specially: yields are
         // gen_yield ops (suspension points gen-lower.ts rewrites), and
         // yield* is an inline delegation loop — a state machine can only
         // suspend its own frame, so the legacy nested-helper yield is
         // structurally unavailable
-        if (calleeName === "%generatorYield" && this.isGenBody) {
+        if (calleeName === "%generatorYield") {
+            if (!this.isGenBody)
+                throw LowerNotSupported("%generatorYield outside a generator body", n.loc);
             const g = this.expr(n.arguments[0] as e.Expression);
             const v = this.expr(n.arguments[1] as e.Expression);
             return this.b.emit("gen_yield", [g, v], {});
@@ -2200,15 +2202,13 @@ class LowerFunction {
         }
     }
 
-    // yield* under -fgen-eir: the delegation loop inlines into the body,
-    // because gen_yield can only suspend THIS function's frame (the
-    // legacy path yields from a nested helper — a coroutine-only trick).
-    // Mirrors the __ejs_genDelegate helper exactly: sent values forward
-    // into the inner iterator's next(), an abrupt resume at the
+    // yield*: the delegation loop inlines into the body, because
+    // gen_yield can only suspend THIS function's frame.  Sent values
+    // forward into the inner iterator's next(); an abrupt resume at the
     // suspended yield (gen.throw()/gen.return(), the return sentinel
-    // included) closes the inner iterator and rethrows, and the loop's
-    // value is the inner return value.  One static next() site means the
-    // first call passes undefined where the helper passed no argument —
+    // included) closes the inner iterator and rethrows; the loop's
+    // value is the inner return value.  One static next() site means
+    // the first call passes undefined rather than no argument —
     // indistinguishable to any iterator treating absent as undefined.
     lowerGeneratorDelegate(genArg: e.Expression, iterableArg: e.Expression): Inst {
         const gen = this.expr(genArg);

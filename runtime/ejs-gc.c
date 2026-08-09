@@ -437,8 +437,8 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     if (nursery_enabled) {
         // page-path objects are OLD at birth, exactly like LOS objects:
         // this path serves the nursery-starvation fallback (survivor
-        // pins can exhaust the nursery arena — thousands of suspended
-        // generators do), and C constructors' initializing stores
+        // pins can exhaust the nursery arenas), and C constructors'
+        // initializing stores
         // bypass the write barrier on the young-at-birth assumption.
         // An old-page cell is invisible to the minor's conservative
         // pins AND outside the nursery range the barrier tests, so a

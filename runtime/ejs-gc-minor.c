@@ -184,103 +184,6 @@ old_alloc_cell_for_promotion(size_t cell_size)
     return rv;
 }
 
-// ---- sticky-pin cache ---------------------------------------------
-//
-// A suspended generator's stack (and its saved ucontexts) are frozen,
-// so its conservative hit set is identical from one minor to the next.
-// The first scan after suspension captures every young hit here; later
-// minors replay the pins in O(pins) instead of walking the whole stack
-// segment word by word.  The oracle-class workload this pays for:
-// thousands of live suspended generators otherwise rescanned per minor
-// (measured: 3,698 generators, ~3ms of every 7.4ms pause).
-//
-// Replayed pins go through minor_conservative_hit like any other hit,
-// so worklist membership and content rescans are identical to a real
-// scan; only the word-walk is skipped.  Captured entries record hits
-// REGARDLESS of the already-black dedup (another stack may have pinned
-// first this cycle but be gone the next).
-typedef struct {
-    uint32_t count;
-    uint32_t capacity;
-    EJSBool valid;
-    struct { PageInfo* page; uint32_t cell_idx; } hits[];
-} PinCache;
-
-static PinCache** pin_capture; // non-NULL while capturing a scan
-
-static void
-pin_cache_append(PinCache** cachep, PageInfo* page, uint32_t cell_idx)
-{
-    PinCache* c = *cachep;
-    if (!c || c->count == c->capacity) {
-        uint32_t newcap = c ? c->capacity * 2 : 16;
-        c = realloc (c, sizeof(PinCache) + newcap * sizeof(c->hits[0]));
-        if (!*cachep) { c->count = 0; c->valid = EJS_FALSE; }
-        c->capacity = newcap;
-        *cachep = c;
-    }
-    c->hits[c->count].page = page;
-    c->hits[c->count].cell_idx = cell_idx;
-    c->count++;
-}
-
-EJSBool
-_ejs_gc_pin_cache_replay(void** cache)
-{
-    if (!in_minor_gc)
-        return EJS_FALSE;
-    PinCache* c = (PinCache*)*cache;
-    if (!c || !c->valid)
-        return EJS_FALSE;
-    for (uint32_t i = 0; i < c->count; i++)
-        minor_conservative_hit (c->hits[i].page, c->hits[i].cell_idx);
-    return EJS_TRUE;
-}
-
-void
-_ejs_gc_pin_cache_begin(void** cache)
-{
-    if (!in_minor_gc)
-        return;
-    PinCache* c = (PinCache*)*cache;
-    if (c) {
-        c->count = 0;
-        c->valid = EJS_FALSE;
-    }
-    pin_capture = (PinCache**)cache;
-}
-
-void
-_ejs_gc_pin_cache_end(void)
-{
-    if (!pin_capture)
-        return;
-    if (*pin_capture)
-        (*pin_capture)->valid = EJS_TRUE;
-    else {
-        // a scan with zero hits still caches (the common tail-call case)
-        pin_cache_append (pin_capture, NULL, 0);
-        (*pin_capture)->count = 0;
-        (*pin_capture)->valid = EJS_TRUE;
-    }
-    pin_capture = NULL;
-}
-
-void
-_ejs_gc_pin_cache_invalidate(void** cache)
-{
-    PinCache* c = (PinCache*)*cache;
-    if (c)
-        c->valid = EJS_FALSE;
-}
-
-void
-_ejs_gc_pin_cache_free(void** cache)
-{
-    free (*cache);
-    *cache = NULL;
-}
-
 // conservative hit during a minor collection: young targets pin in
 // place (never move this cycle) and join the scan worklist once; old
 // targets are not this collection's problem
@@ -292,8 +195,6 @@ minor_conservative_hit(PageInfo* page, uint32_t cell_idx)
     if (page->young == 2 && cell_is_free(page->page_bitmap[cell_idx])) return;
     GCObjectPtr base = page->page_start + ((size_t)cell_idx * page->cell_size);
     if (_ejs_gc_is_forwarded(base)) return; // pins precede evacuation; stale hit
-    if (pin_capture)
-        pin_cache_append (pin_capture, page, cell_idx);
     BitmapCell cell = page->page_bitmap[cell_idx];
     if (cell_is_black(cell)) return; // already pinned this minor
     cell_set_black(&page->page_bitmap[cell_idx]);
@@ -510,27 +411,18 @@ _ejs_gc_minor_collect(const char* reason)
     _ejs_heap.remset_count = 0;
     _ejs_heap.remset_overflowed = 0;
 
-    // 1. conservative pins FIRST: C stacks, registers, and EVERY live
-    //    generator's suspended stack + saved contexts (the registry
-    //    walk) — all ambiguous references must pin before any object
-    //    moves; a generator discovered mid-trace would pin too late.
-    //    The shared mark helpers dispatch to minor_conservative_hit
-    //    while in_minor_gc is set.
+    // 1. conservative pins FIRST: the C stack and registers — all
+    //    ambiguous references must pin before any object moves.  The
+    //    shared mark helpers dispatch to minor_conservative_hit while
+    //    in_minor_gc is set.
     struct timeval ph0, ph1, ph2, ph3, ph4, ph5;
-    int gen_count = 0;
     gettimeofday (&ph0, NULL);
-    // each conservative range scan skips the gc-frame records of
-    // the stack it is scanning — those slots are precise roots, and
-    // seeing them conservatively would pin every frame-held value
-    // through its own slot (precision would never move anything)
+    // the conservative scan skips the gc-frame records of the stack —
+    // those slots are precise roots, and seeing them conservatively
+    // would pin every frame-held value through its own slot (precision
+    // would never move anything)
     set_frame_skip_chain(_ejs_heap.gc_frame_head);
     mark_thread_stack();
-    mark_generator_stacks();
-    for (EJSGenerator* g = _ejs_generator_registry; g; g = g->reg_next) {
-        set_frame_skip_chain(g->gc_frame_head);
-        _ejs_generator_scan_conservative(g);
-        gen_count++;
-    }
     clear_frame_skip();
     gettimeofday (&ph1, NULL);
 
@@ -583,7 +475,7 @@ _ejs_gc_minor_collect(const char* reason)
     }
 
     // 4. transitive closure.  Objects scanned here (promoted copies,
-    //    pinned young, generator roots) that still reference pinned-
+    //    pinned young) that still reference pinned-
     //    young data must carry a dirty mark so the next cycle revisits
     //    them (young owners filter out inside remember).
     gettimeofday (&ph3, NULL);
@@ -601,9 +493,8 @@ _ejs_gc_minor_collect(const char* reason)
     if (heap_priv.verify && !snapshot_overflowed) {
         verify_bad_slot = NULL;
         old_gen_walk (verify_check_object);
-        // generator specops re-run their conservative scans inside the
-        // verify walk (side effect: fresh pins pushed on the worklist);
-        // drain them before the sweep decides survivor pages
+        // specop scans inside the verify walk may push fresh work;
+        // drain it before the sweep decides survivor pages
         while (heap_priv.wl_count > 0)
             minor_scan_object (heap_priv.wl[--heap_priv.wl_count]);
     }
@@ -727,13 +618,13 @@ _ejs_gc_minor_collect(const char* reason)
         paranoid_sweep_check();
     if (gc_profile) {
 #define PHUS(a,b) (((b).tv_sec - (a).tv_sec) * 1000000LL + ((b).tv_usec - (a).tv_usec))
-        _ejs_log ("EJS_GC_PROFILE: minor#%llu reason=%s pause=%.3fms promoted=%llu/%lluKB pins=%llu gcframe_moves=%llu remset=%d gens=%d phases[pins=%lld roots=%lld dirty=%lld wl=%lld sweep=%lld]us%s\n",
+        _ejs_log ("EJS_GC_PROFILE: minor#%llu reason=%s pause=%.3fms promoted=%llu/%lluKB pins=%llu gcframe_moves=%llu remset=%d phases[pins=%lld roots=%lld dirty=%lld wl=%lld sweep=%lld]us%s\n",
                   (unsigned long long)heap_priv.minors, reason, usec / 1000.0,
                   (unsigned long long)(heap_priv.promoted_objs - promoted_objs_before),
                   (unsigned long long)((heap_priv.promoted_bytes - promoted_bytes_before) / 1024),
                   (unsigned long long)(heap_priv.minor_pins - pins_before),
                   (unsigned long long)gc_frame_moves,
-                  remset_used, gen_count,
+                  remset_used,
                   (long long)PHUS(ph0,ph1), (long long)PHUS(ph1,ph2), (long long)PHUS(ph2,ph3),
                   (long long)PHUS(ph3,ph4), (long long)PHUS(ph4,ph5),
                   overflowed ? " OVERFLOW" : "");

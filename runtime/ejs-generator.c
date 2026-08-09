@@ -123,88 +123,7 @@ _ejs_iterator_wrapper_new (ejsval iterator)
     return OBJECT_TO_EJSVAL(rv);
 }
 
-#define GENERATOR_STACK_SIZE 512 * 1024
-
-static void
-_ejs_generator_start(EJSGenerator* gen)
-{
-    _ejs_gc_push_generator(gen);
-    ejsval undef_this = _ejs_undefined;
-    // catch here: an uncaught throw out of the body must not unwind the
-    // generator stack past this frame (there is nothing above it but the
-    // makecontext trampoline).  The exception is parked in yielded_value
-    // and rethrown by the resume site on the caller's stack.
-    ejsval rv;
-    EJSBool body_returned = _ejs_invoke_closure_catch(&rv, gen->body, &undef_this, 0, NULL, _ejs_undefined);
-
-    // the body's return value is the final iteration result's value
-    // (`function* g() { return 5; }` -> { value: 5, done: true }).
-    // The iter result is allocated BEFORE the generator leaves the active
-    // chain: we are still executing on the generator's stack here, and a
-    // collection triggered by this allocation must know that
-    // (mark_thread_stack's range depends on the chain).
-    gen->completed = EJS_TRUE;
-    if (body_returned) {
-        gen->yielded_value = _ejs_create_iter_result(rv, _ejs_true);
-    }
-    else {
-        gen->threw_out = EJS_TRUE;
-        gen->yielded_value = rv;
-    }
-    _ejs_gc_remember(gen, gen->yielded_value);
-    _ejs_gc_pop_generator();
-}
-
-// makecontext's variadic arguments are ints, so a 64-bit pointer passed
-// directly gets truncated (which is how generators crashed on arm64
-// macos: heap pointers there don't fit in 32 bits).  split the pointer
-// across two int args, posix-style.
-static void
-_ejs_generator_trampoline(unsigned int gen_lo, unsigned int gen_hi)
-{
-    EJSGenerator* gen = (EJSGenerator*)(((uint64_t)gen_hi << 32) | gen_lo);
-    _ejs_generator_start(gen);
-}
-
-ejsval
-_ejs_generator_new (ejsval generator_body)
-{
-    EJSGenerator* rv = _ejs_gc_new(EJSGenerator);
-    _ejs_init_object ((EJSObject*)rv, _ejs_Generator_prototype, &_ejs_Generator_specops);
-
-    rv->body = generator_body;
-    rv->started = EJS_FALSE;
-    rv->completed = EJS_FALSE;
-    rv->threw_out = EJS_FALSE;
-    rv->throwing = EJS_FALSE;
-    rv->returning = EJS_FALSE;
-    rv->yielded_value = _ejs_undefined;
-    rv->sent_value = _ejs_undefined;
-
-    rv->stack = malloc(GENERATOR_STACK_SIZE);
-    rv->stack_size = GENERATOR_STACK_SIZE;
-    rv->caller_stack_top = NULL;
-    rv->gc_frame_head = NULL;        // this stack's parked chain
-    rv->caller_gc_frame_head = NULL;
-    rv->pin_cache = NULL;
-    rv->running = EJS_FALSE;
-    rv->reg_prev = NULL;
-    rv->reg_next = _ejs_generator_registry;
-    if (_ejs_generator_registry) _ejs_generator_registry->reg_prev = rv;
-    _ejs_generator_registry = rv;
-    getcontext(&rv->generator_context);
-    rv->generator_context.uc_stack.ss_sp = rv->stack;
-    rv->generator_context.uc_stack.ss_size = GENERATOR_STACK_SIZE;
-    rv->generator_context.uc_link = &rv->caller_context;
-    makecontext(&rv->generator_context, (void(*)(void))_ejs_generator_trampoline, 2,
-                (unsigned int)(uint64_t)(uintptr_t)rv,
-                (unsigned int)(((uint64_t)(uintptr_t)rv) >> 32));
-    memset(&rv->caller_context, 0, sizeof(rv->caller_context));
-
-    return OBJECT_TO_EJSVAL(rv);
-}
-
-// ---- the -fgen-eir state-machine path --------------------------------
+// ---- the state-machine resume driver ----------------------------------
 // The body closure is a compiled resume-dispatch state machine; the
 // driver below re-calls it as body(gen, mode, sent) and every yield
 // suspends by returning (the compiled code sets eir_state and
@@ -219,11 +138,9 @@ _ejs_generator_new_eir (ejsval generator_body)
     _ejs_init_object ((EJSObject*)rv, _ejs_Generator_prototype, &_ejs_Generator_specops);
 
     rv->body = generator_body;
-    rv->eir = EJS_TRUE;
     rv->eir_state = 0;
     rv->eir_suspended = EJS_FALSE;
     rv->eir_env = _ejs_undefined;
-    rv->yielded_value = _ejs_undefined;
     rv->sent_value = _ejs_undefined;
 
     return OBJECT_TO_EJSVAL(rv);
@@ -300,93 +217,6 @@ _ejs_generator_eir_resume (EJSGenerator* gen, int mode, ejsval arg)
     return _ejs_create_iter_result (rv, _ejs_true);
 }
 
-ejsval
-_ejs_generator_yield (ejsval generator, ejsval arg) {
-    EJSGenerator* gen = (EJSGenerator*)EJSVAL_TO_OBJECT(generator);
-    gen->yielded_value = _ejs_create_iter_result(arg, _ejs_false);
-    _ejs_gc_remember(gen, gen->yielded_value);
-    gen->sent_value = _ejs_undefined;
-
-    _ejs_gc_pop_generator();
-    swapcontext(&gen->generator_context, &gen->caller_context);
-    _ejs_gc_push_generator(gen);
-
-    if (gen->throwing) {
-        gen->throwing = EJS_FALSE;
-        _ejs_throw (gen->sent_value);
-    }
-
-    if (gen->returning) {
-        gen->returning = EJS_FALSE;
-        // unwind the generator body: finally blocks run; the desugared
-        // body's outer catch recognizes the sentinel and returns
-        // gen->sent_value (see DesugarGeneratorFunctions)
-        _ejs_throw (_ejs_generator_return_sentinel);
-    }
-
-    return gen->sent_value;
-}
-
-// every swap back from the generator lands here: if the body ended in
-// an uncaught throw, rethrow it now — on the caller's stack
-// A COMPLETED generator never runs again: its machine stack, saved
-// contexts, and pin cache are dead weight the collector otherwise keeps
-// conservatively scanning (and pinning through) until the object
-// happens to be collected — iterator-heavy workloads hold thousands of
-// completed generators, taxing every minor with dead-stack sweeps.
-// Release everything scan-visible as soon as the caller observes
-// completion; the finalizer remains the idempotent backstop.  Callers
-// must be on the CALLER's stack (never the generator's own).
-static void
-generator_release_resources (EJSGenerator* gen)
-{
-    if (gen->eir) return; // nothing stack-shaped exists
-    if (_ejs_generator_registry == gen) _ejs_generator_registry = gen->reg_next;
-    if (gen->reg_next) gen->reg_next->reg_prev = gen->reg_prev;
-    if (gen->reg_prev) gen->reg_prev->reg_next = gen->reg_next;
-    gen->reg_next = gen->reg_prev = NULL;
-    free (gen->stack);
-    gen->stack = NULL;
-    _ejs_gc_pin_cache_free (&gen->pin_cache);
-}
-
-static ejsval
-_ejs_generator_resume_result (EJSGenerator* gen)
-{
-    if (gen->completed)
-        generator_release_resources (gen);
-    if (gen->threw_out) {
-        gen->threw_out = EJS_FALSE;
-        ejsval exc = gen->yielded_value;
-        gen->yielded_value = _ejs_undefined;
-        _ejs_throw (exc);
-    }
-    return gen->yielded_value;
-}
-
-static ejsval
-_ejs_generator_send (ejsval generator, ejsval arg) {
-    EJSGenerator* gen = (EJSGenerator*)EJSVAL_TO_OBJECT(generator);
-    gen->started = EJS_TRUE;
-    gen->yielded_value = _ejs_undefined;
-    gen->sent_value = arg;
-    _ejs_gc_remember(gen, gen->sent_value);
-    gen->caller_stack_top = (void*)&gen; // GC: the suspended segment starts here
-    swapcontext(&gen->caller_context, &gen->generator_context);
-    return _ejs_generator_resume_result(gen);
-}
-
-static ejsval
-_ejs_generator_throw (ejsval generator, ejsval arg) {
-    EJSGenerator* gen = (EJSGenerator*)EJSVAL_TO_OBJECT(generator);
-    gen->yielded_value = _ejs_undefined;
-    gen->sent_value = arg;
-    gen->throwing = EJS_TRUE;
-    gen->caller_stack_top = (void*)&gen; // GC: the suspended segment starts here
-    swapcontext(&gen->caller_context, &gen->generator_context);
-    return _ejs_generator_resume_result(gen);
-}
-
 // the unforgeable value .return() throws through the generator body to
 // unwind it (running finally blocks); the desugared body's outermost
 // catch converts it into a normal return
@@ -419,10 +249,7 @@ static EJS_NATIVE_FUNC(_ejs_Generator_prototype_throw) {
     if (gen->completed || !gen->started)
         _ejs_throw (argc > 0 ? args[0] : _ejs_undefined);
 
-    if (gen->eir)
-        return _ejs_generator_eir_resume (gen, 1, argc > 0 ? args[0] : _ejs_undefined);
-
-    return _ejs_generator_throw(O, argc > 0 ? args[0] : _ejs_undefined);
+    return _ejs_generator_eir_resume (gen, 1, argc > 0 ? args[0] : _ejs_undefined);
 }
 
 static EJS_NATIVE_FUNC(_ejs_Generator_prototype_return) {
@@ -439,23 +266,13 @@ static EJS_NATIVE_FUNC(_ejs_Generator_prototype_return) {
     // not yet started, or already done: complete without running the body
     if (!gen->started || gen->completed) {
         gen->completed = EJS_TRUE;
-        generator_release_resources (gen);
         return _ejs_create_iter_result(arg, _ejs_true);
     }
-
-    if (gen->eir)
-        return _ejs_generator_eir_resume (gen, 2, arg);
 
     // suspended at a yield: resume with the return sentinel.  finally
     // blocks run; unless one of them yields or overrides the completion,
     // the body's outer catch returns `arg` and the generator completes.
-    gen->returning = EJS_TRUE;
-    gen->yielded_value = _ejs_undefined;
-    gen->sent_value = arg;
-    _ejs_gc_remember(gen, gen->sent_value);
-    gen->caller_stack_top = (void*)&gen; // GC: the suspended segment starts here
-    swapcontext(&gen->caller_context, &gen->generator_context);
-    return _ejs_generator_resume_result(gen);
+    return _ejs_generator_eir_resume (gen, 2, arg);
 }
 
 static EJS_NATIVE_FUNC(_ejs_Generator_prototype_next) {
@@ -472,10 +289,7 @@ static EJS_NATIVE_FUNC(_ejs_Generator_prototype_next) {
     if (gen->completed)
         return _ejs_create_iter_result(_ejs_undefined, _ejs_true);
 
-    if (gen->eir)
-        return _ejs_generator_eir_resume (gen, 0, argc > 0 ? args[0] : _ejs_undefined);
-
-    return _ejs_generator_send(O, argc > 0 ? args[0] : _ejs_undefined);
+    return _ejs_generator_eir_resume (gen, 0, argc > 0 ? args[0] : _ejs_undefined);
 }
 
 static EJS_NATIVE_FUNC(_ejs_Iterator_prototype_iterator) {
@@ -503,7 +317,7 @@ ejsval _ejs_Generator_prototype EJSVAL_ALIGNMENT;
 
 // ---- async generator surface -----------------------------------------
 //
-// async generators desugar to sync coroutines behind a driver object, so
+// async generators desugar to sync generators behind a driver object, so
 // there is no dedicated instance class; these objects provide the spec's
 // %AsyncIteratorPrototype% / %AsyncGeneratorPrototype% /
 // %AsyncGeneratorFunction.prototype% chain, and %markAsyncGen (emitted by
@@ -627,85 +441,12 @@ _ejs_generator_specop_allocate()
     return (EJSObject*)_ejs_gc_new (EJSGenerator);
 }
 
-// the live-generator registry — every generator's suspended
-// stack must be conservatively scanned BEFORE a minor collection starts
-// evacuating (see ejs-gc.c minor step 1)
-EJSGenerator* _ejs_generator_registry;
-
 static void
 _ejs_generator_specop_finalize (EJSObject* obj)
 {
-    generator_release_resources ((EJSGenerator*)obj);
-}
-
-// the conservative half of the generator scan: both saved register
-// files (the ucontexts) and the live suspended stack segment.  Shared
-// by the specop scan and the minor collection's pre-evacuation registry
-// walk (conservative ranges must all be seen before any
-// object moves).
-void
-_ejs_generator_scan_conservative (EJSGenerator* gen)
-{
-    // released (completed): the stack is freed and the saved contexts
-    // are dead — scanning them would only pin whatever stale pointers
-    // the last run left in the register files
-    if (gen->completed && gen->stack == NULL)
-        return;
-
-    // minor collections: a suspended generator's stack and saved
-    // register files are frozen, so the previous scan's pins replay in
-    // O(pins) instead of a word walk (no-ops outside a minor; the full
-    // collector's mark scan below runs unchanged).  A RUNNING
-    // generator's stack is still mutating — scan it plainly, cache
-    // nothing.
-    if (!gen->running) {
-        if (_ejs_gc_pin_cache_replay (&gen->pin_cache))
-            return;
-        _ejs_gc_pin_cache_begin (&gen->pin_cache);
-    }
-
-    _ejs_gc_mark_conservative_range(&gen->generator_context, (char*)&gen->generator_context + sizeof(ucontext_t));
-    _ejs_gc_mark_conservative_range(&gen->caller_context, (char*)&gen->caller_context + sizeof(ucontext_t));
-
-    if (gen->stack) {
-        void* stack_end = gen->stack + gen->stack_size;
-        void* saved_sp =
-#if __APPLE__
-#if TARGET_CPU_AMD64
-                         (void*)gen->generator_context.__mcontext_data.__ss.__rsp
-#elif TARGET_CPU_X86
-                         (void*)gen->generator_context.__mcontext_data.__ss.__esp
-#elif TARGET_CPU_ARM
-                         (void*)gen->generator_context.__mcontext_data.__ss.__sp
-#elif TARGET_CPU_ARM64
-                         (void*)gen->generator_context.__mcontext_data.__ss.__sp
-#else
-#error "unimplemented darwin cpu arch"
-#endif
-#elif linux
-#if TARGET_CPU_AMD64
-                         (void*)gen->generator_context.uc_mcontext.gregs[REG_RSP]
-#elif TARGET_CPU_ARM64
-                         (void*)gen->generator_context.uc_mcontext.sp
-#else
-#error "unimplemented linux cpu arch"
-#endif
-#else
-#error "unimplemented platform"
-#endif
-                         ;
-        // The stack grows DOWN: the live suspended frames sit between the
-        // suspension SP and the stack's END — [stack, sp) is the DEAD
-        // region.  An SP outside the range (never-started context,
-        // garbage) degrades to scanning the whole stack, which is merely
-        // conservative.
-        if (saved_sp < gen->stack || saved_sp > stack_end)
-            saved_sp = gen->stack;
-        _ejs_gc_mark_conservative_range(saved_sp, stack_end);
-    }
-
-    if (!gen->running)
-        _ejs_gc_pin_cache_end ();
+    // nothing beyond the object itself: the suspended state is the
+    // heap env, collected like any other object
+    (void)obj;
 }
 
 static void
@@ -713,16 +454,10 @@ _ejs_generator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSGenerator* gen = (EJSGenerator*)obj;
     scan_func(&(gen->body));
-    scan_func(&(gen->yielded_value));
     scan_func(&(gen->sent_value));
-
-    if (gen->eir) {
-        // the state machine's whole suspended state is the env — one
-        // precise edge, nothing conservative
-        scan_func(&(gen->eir_env));
-    } else {
-        _ejs_generator_scan_conservative (gen);
-    }
+    // the state machine's whole suspended state is the env — one
+    // precise edge, nothing conservative
+    scan_func(&(gen->eir_env));
 
     _ejs_Object_specops.Scan (obj, scan_func);
 }

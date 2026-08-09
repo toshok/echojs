@@ -10,7 +10,7 @@
 //   ejs-gc-heap.c   arena reservation, arenas/pages, LOS + lookup,
 //                   find_page_and_cell
 //   ejs-gc-mark.c   worklist, precise + conservative scanners,
-//                   gc-frame skip, generator stack bookkeeping
+//                   gc-frame skip
 //   ejs-gc-minor.c  the nursery and the mostly-copying minor
 //   ejs-gc-major.c  full collections: mark/sweep orchestration,
 //                   major compaction, the epoch advance
@@ -248,8 +248,8 @@ typedef struct {
     // the nursery arenas: contiguous (carved back-to-back at init,
     // before any old-gen arena), so [nursery_base, nursery_end) is one
     // span and is-young stays a two-compare range check.  Multiple
-    // arenas because survivor pins (thousands of suspended generators)
-    // can hold hundreds of MB of pages hostage; a starved nursery
+    // arenas because heavy survivor pinning can hold hundreds of MB
+    // of pages hostage; a starved nursery
     // pushes allocation onto the old-page fallback — correct (born
     // dirty) but slow.
 #define EJS_GC_MAX_NURSERY_ARENAS 32
@@ -285,9 +285,8 @@ typedef struct {
 
 // conservative-pin attribution for EJS_GC_PROFILE
 enum {
-    PROF_SRC_CSTACK = 0,   // conservative C-stack ranges (incl. suspended segments)
+    PROF_SRC_CSTACK = 0,   // conservative C-stack ranges
     PROF_SRC_REGS = 1,     // spilled register file
-    PROF_SRC_GENSTACK = 2, // suspended generator stacks + saved ucontexts
     PROF_SRC_COUNT
 };
 
@@ -367,7 +366,6 @@ size_t calc_heap_size(void);
 // ejs-gc-mark.c
 void _ejs_gc_worklist_init(void);
 void mark_thread_stack(void);
-void mark_generator_stacks(void);
 void mark_from_roots(void);
 void mark_from_modules(void);
 void mark_object_root(GCObjectPtr ptr);

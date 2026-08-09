@@ -7,91 +7,40 @@
 
 #include "ejs.h"
 #include "ejs-object.h"
-#include <ucontext.h>
 
 EJS_BEGIN_DECLS
 
 #define EJSVAL_IS_GENERATOR(v)  (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Generator_specops))
 
+// state-machine generators (docs/generator-eir-plan.md): the body is a
+// compiled resume-dispatch state machine the driver re-calls as
+// body(gen, mode, sent); every yield suspends by returning.  The
+// generator's entire suspended state is the precisely-scanned env —
+// no machine stack, no saved contexts, nothing conservative.
 typedef struct _EJSGenerator {
     /* object header */
     EJSObject obj;
 
     EJSBool started;
+    // the body ran to completion (normally, via an uncaught throw, or
+    // via the return sentinel); next/throw/return answer per spec
+    // without calling the body again
+    EJSBool completed;
+    // reentrancy fence: resuming a generator from inside its own body
+    // is a TypeError
+    EJSBool running;
 
     ejsval body;
 
-    ejsval yielded_value;
+    // the latest resume argument; the wrapper's sentinel catch reads
+    // .return(v)'s value back through _ejs_generator_return_value
     ejsval sent_value;
 
-    // when true, we throw from the yield point.  when false we simply return
-    EJSBool throwing;
-
-    // when true, the resume is a .return(): the yield point throws the
-    // return sentinel (sent_value holds the return value)
-    EJSBool returning;
-
-    // the body ran to completion (normally, or via the return sentinel);
-    // next/throw/return on a completed generator must not resume the
-    // dead context
-    EJSBool completed;
-
-    // the body ended with an uncaught throw; yielded_value holds the
-    // exception, which the resume site rethrows on the CALLER's stack
-    // (unwinding it on the generator stack would walk off the
-    // makecontext frame)
-    EJSBool threw_out;
-
-    void* stack;
-    size_t stack_size;
-
-    // all live generators sit on a registry so a minor
-    // collection can scan every suspended stack CONSERVATIVELY before
-    // any evacuation — a generator discovered mid-trace would pin its
-    // stack referents too late (they may already have moved)
-    struct _EJSGenerator* reg_next;
-    struct _EJSGenerator* reg_prev;
-
-    // the caller-side stack position recorded just before each swap INTO
-    // this generator (the address of a local in the resuming frame).  While
-    // the generator runs, its caller's frames live ABOVE this address (the
-    // stack grows down) — the GC scans [caller_stack_top, caller's stack
-    // end) to cover the suspended segment.
-    void* caller_stack_top;
-
-    // sticky-pin cache: the conservative hits of this generator's last
-    // minor-GC stack scan, replayed instead of rescanned while the
-    // generator stays suspended (a frozen stack's reference set cannot
-    // change).  Opaque to this module — owned by ejs-gc-minor.c,
-    // invalidated by the push hook on every resume, freed at finalize.
-    // `running` (maintained by the push/pop hooks) gates capture: a scan
-    // taken mid-execution describes a stack that keeps mutating and
-    // must not be cached.
-    void* pin_cache;
-    EJSBool running;
-
-    // each machine stack owns a disjoint gc-frame chain.
-    // The push hook parks the caller's chain head here and installs
-    // this generator's saved head (NULL on first entry); the pop hook
-    // does the reverse.  While suspended, gc_frame_head is the walk
-    // root for this stack's precise frames; while running it is NULL
-    // (the live chain is _ejs_heap.gc_frame_head) and the caller's
-    // segment is reachable via caller_gc_frame_head.
-    void* gc_frame_head;
-    void* caller_gc_frame_head;
-
-    ucontext_t generator_context;
-    ucontext_t caller_context;
-
-    // ---- the -fgen-eir state-machine path (docs/generator-eir-plan.md).
-    // The body compiles to a resume-dispatch state machine called as
-    // body(gen, mode, sent); nothing above (stack, contexts, registry,
-    // pin cache) exists for these generators.  eir_state: 0 = not
-    // started, k > 0 = suspended at yield #k.  eir_suspended is set by
-    // the compiled suspend and cleared by the driver before each resume
-    // — it distinguishes a yield's return from a completion return.
-    // eir_env: the body's persistent closure env, precisely scanned.
-    EJSBool eir;
+    // eir_state: 0 = not started, k > 0 = suspended at yield #k.
+    // eir_suspended is set by the compiled suspend
+    // (_ejs_generator_eir_suspend) and cleared by the driver before
+    // each resume — it distinguishes a yield's return from a
+    // completion return.  eir_env: the body's persistent closure env.
     int32_t eir_state;
     EJSBool eir_suspended;
     ejsval eir_env;
@@ -116,8 +65,6 @@ extern ejsval _ejs_Iterator_prototype;
 extern ejsval _ejs_Generator_prototype;
 extern EJSSpecOps _ejs_Generator_specops;
 
-extern ejsval _ejs_generator_new (ejsval generator_body);
-
 extern void _ejs_generator_init (ejsval global);
 extern ejsval _ejs_mark_async_generator (ejsval fn);
 
@@ -127,16 +74,6 @@ extern ejsval _ejs_destructure_iterator_new(ejsval iterator);
 extern void _ejs_iterator_wrapper_init (ejsval global);
 
 extern void _ejs_iterator_init_proto ();
-
-/* these live in ejs-gc.c but it's easier on everything to have the decls here */
-extern void _ejs_gc_push_generator(EJSGenerator *gen);
-extern void _ejs_gc_pop_generator();
-
-/* the live-generator registry (ejs-generator.c) + the
-   conservative half of the generator scan, shared by the specop and the
-   minor collection's pre-evacuation pass */
-extern EJSGenerator* _ejs_generator_registry;
-extern void _ejs_generator_scan_conservative(EJSGenerator* gen);
 
 EJS_END_DECLS
 
