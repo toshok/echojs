@@ -41,6 +41,9 @@ export interface PassConfig {
     shapeFusion: boolean;
     // lowering-time behaviors (oracle-gated where applicable)
     shapeGuards: boolean;
+    // class-this receiver coverage: this.x sites in base-class methods
+    // guard on the class's birth shape without analysis coverage
+    classThisGuards: boolean;
     // all-string-literal-case switches dispatch through a per-module
     // atom table instead of a linear strict_eq chain
     atomSwitch: boolean;
@@ -162,6 +165,12 @@ export const PASSES: readonly PassDesc[] = [
         field: "polyShapeGuards",
         minLevel: 0,
         help: "2-way polymorphic shape-guard chains (needs --types)",
+    },
+    {
+        name: "class-this-guards",
+        field: "classThisGuards",
+        minLevel: OPT_IN,
+        help: "guard this.x sites in base-class methods on the class birth shape (checked tier); opt-in: emission cost currently outweighs the hit rate on the self-compile",
     },
     {
         name: "atom-switch",

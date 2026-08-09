@@ -51,6 +51,10 @@ export interface ExoticRef {
 export type ModuleRef = SlotRef | ExoticRef;
 
 export interface ModCtx {
+    // class-this shape facts: class evidence (ctor fn node or the
+    // declared-field-names array) -> birth-shape fields (null = does
+    // not qualify), computed once per module (classBirthShape)
+    class_shapes?: Map<object, ShapeField[] | null>;
     refs: Map<string, ModuleRef>;
     this_module_info?: ModuleInfo | null;
     module_infos?: Map<string, ModuleInfo> | null;
@@ -205,6 +209,47 @@ function specFnLength(n: e.Function): number {
         count++;
     }
     return count;
+}
+
+// does a `this.<name> = ...` store OUTSIDE `allowed` (or any computed
+// `this[e] = ...` store) appear in these statements — including arrow
+// bodies, which share the enclosing `this`?  Used to reject class-this
+// birth shapes the constructor could extend: a store to an allowed
+// (already-defined) field is a plain set and leaves the shape alone.
+// Plain nested functions bind their own `this` and are skipped.
+function thisStoreOutside(stmts: e.Statement[], allowed: ReadonlySet<string>): boolean {
+    let found = false;
+    const walk = (n: unknown): void => {
+        if (found || n === null || typeof n !== "object") return;
+        if (Array.isArray(n)) {
+            for (const c of n) walk(c);
+            return;
+        }
+        const node = n as { type?: string } & Record<string, unknown>;
+        if (typeof node.type !== "string") return;
+        if (node.type === "FunctionDeclaration" || node.type === "FunctionExpression") return;
+        if (node.type === "AssignmentExpression") {
+            const left = node["left"] as
+                | { type?: string; computed?: boolean; object?: { type?: string }; property?: { type?: string; name?: string } }
+                | undefined;
+            if (left?.type === "MemberExpression" && left.object?.type === "ThisExpression") {
+                if (
+                    left.computed ||
+                    left.property?.type !== "Identifier" ||
+                    !allowed.has(left.property.name!)
+                ) {
+                    found = true;
+                    return;
+                }
+            }
+        }
+        for (const k of Object.keys(node)) {
+            if (k === "loc" || k === "range") continue;
+            walk(node[k]);
+        }
+    };
+    walk(stmts);
+    return found;
 }
 
 class LowerFunction {
@@ -1034,6 +1079,104 @@ class LowerFunction {
     // which only the generic path performs (criterion 2 — no near-misses).
     // -fno-poly-shape-guards bisects polymorphic chains: 2-shape sites
     // decline "polymorphic" exactly as they did before the extension.
+    // --- class-this receiver coverage ------------------------
+    //
+    // A base-class method's `this` receiver has the class's birth shape
+    // whenever the instance came from `new C(...)` and its constructor
+    // prefix took the batched fill — so `this.x` sites in methods can
+    // guard on that shape with NO analysis coverage of the method body.
+    // Checked tier: a foreign `this` (m.call(o)), a shape-transitioned
+    // instance, or EJS_SHAPES=off just misses the guard and runs the
+    // generic path.  The facts must match the fill EXACTLY, so they
+    // exist only when the ctor prefix qualifies for batching under the
+    // same rules (same fields, same reprs → same interned key) and no
+    // later `this.<x> =` store can extend the shape past the prefix
+    // (arrows inside the ctor share its `this` and are scanned too;
+    // plain nested functions have their own).
+
+    classBirthShape(
+        ctorFn: e.Function | undefined,
+        fieldNames: string[] | undefined
+    ): ShapeField[] | null {
+        const memo = (this.mod_ctx.class_shapes ??= new Map());
+        const memoKey = (fieldNames ?? ctorFn) as object;
+        const hit = memo.get(memoKey);
+        if (hit !== undefined) return hit;
+        const compute = (): ShapeField[] | null => {
+            if (fieldNames) {
+                // field-declaring class: the %defineField prologue makes
+                // the instance shape the declared list (all boxed —
+                // fields initialize undefined), and the constructor's
+                // leading `this.x = v` run then repr-transitions any
+                // field it stores a number into (the runtime's
+                // transition_set).  So the final shape is the declared
+                // ORDER with per-field reprs from the ctor stores; any
+                // this-store outside that leading run (conditional,
+                // effectful, or to an undeclared name) leaves the final
+                // repr unknowable and declines the class.
+                if (fieldNames.length < 1 || fieldNames.length > EJS_SHAPE_FIELD_CAP_MAX)
+                    return null;
+                const reprByName = new Map<string, "boxed" | "f64">();
+                if (ctorFn) {
+                    if (ctorFn.body.type !== "BlockStatement") return null;
+                    const { names: storeNames, valueNodes } = this.ctorPrefixExtract(ctorFn.body);
+                    if (thisStoreOutside(ctorFn.body.body.slice(storeNames.length), new Set()))
+                        return null;
+                    for (let i = 0; i < storeNames.length; i++) {
+                        if (!fieldNames.includes(storeNames[i]!)) return null;
+                        reprByName.set(
+                            storeNames[i]!,
+                            this.operandIsNumber(valueNodes[i]!) ? "f64" : "boxed"
+                        );
+                    }
+                }
+                return fieldNames.map((name) => ({
+                    name,
+                    repr: reprByName.get(name) ?? ("boxed" as const),
+                }));
+            }
+            if (!ctorFn || ctorFn.body.type !== "BlockStatement") return null;
+            const body = ctorFn.body;
+            const { names, valueNodes } = this.ctorPrefixExtract(body);
+            if (names.length < 2 || names.length > EJS_SHAPE_FIELD_CAP_MAX) return null;
+            if (thisStoreOutside(body.body.slice(names.length), new Set(names))) return null;
+            return names.map((name, i) => ({
+                name,
+                repr: this.operandIsNumber(valueNodes[i]!) ? ("f64" as const) : ("boxed" as const),
+            }));
+        };
+        const fields = compute();
+        memo.set(memoKey, fields);
+        return fields;
+    }
+
+    classThisFacts(
+        objNode: e.Expression,
+        atom: string
+    ): { key: string; slot: number; repr: "boxed" | "f64" }[] | null {
+        if (!passes().classThisGuards) return null;
+        if (objNode.type !== "ThisExpression") return null;
+        if (!passes().bornShaped) return null; // the fill is what makes the shape real
+        // `this` belongs to the nearest non-arrow ancestor — its node
+        // carries the desugar's marker when it is a base-class method
+        let fi: FnInfo | null = this.info;
+        while (fi && fi.node.type === "ArrowFunctionExpression") fi = fi.parent;
+        if (!fi) return null;
+        const marked = fi.node as unknown as Record<string, unknown>;
+        const ctorFn = marked["ejs_class_ctor_fn"] as e.Function | undefined;
+        const fieldNames = marked["ejs_class_field_names"] as string[] | undefined;
+        if (!ctorFn && !fieldNames) return null;
+        const fields = this.classBirthShape(ctorFn, fieldNames);
+        if (!fields) return null;
+        const slot = fields.findIndex((f) => f.name === atom);
+        if (slot < 0) return null; // method/proto access: leave the decline standing
+        const key = this.module.internShape(fields);
+        const stats = this.mod_ctx.typed_stats;
+        if (stats) stats.shape_guards = (stats.shape_guards ?? 0) + 1;
+        this.shapeDumpSite(objNode, atom, `guarded class-this shape="${key}" slot=${slot}`);
+        return [{ key, slot, repr: fields[slot]!.repr }];
+    }
+
     shapeFactFor(
         objNode: e.Expression | null,
         atom: string
@@ -1044,6 +1187,10 @@ class LowerFunction {
         if (stats) stats.shape_sites = (stats.shape_sites ?? 0) + 1;
         const q = this.oracle.receiverShapeOfNode(objNode);
         if (q.declined !== undefined) {
+            // no analysis coverage — the class-this birth shape may
+            // still answer (methods are exactly where coverage is thin)
+            const ctf = this.classThisFacts(objNode, atom);
+            if (ctf) return ctf;
             this.shapeDumpSite(objNode, atom, `declined ${q.declined}`);
             return this.shapeDecline(q.declined);
         }
@@ -1236,11 +1383,16 @@ class LowerFunction {
         }
     }
 
-    lowerBornShapedCtorPrefix(body: e.BlockStatement): number {
-        if (!this.oracle || !passes().bornShaped) return 0;
-        if (this.isToplevel || this.spec) return 0;
-        if (this.info.node.type === "ArrowFunctionExpression") return 0;
-
+    // the maximal leading `this.<name> = <literal-or-local>` run of a
+    // ctor-shaped body — shared by the ctor-prefix batching below and
+    // the class-this shape facts (classBirthShape), which must agree
+    // exactly on the fields for the guard key to match the fill
+    ctorPrefixExtract(body: e.BlockStatement): {
+        names: string[];
+        valueNodes: e.Expression[];
+        cutReason: string | null;
+        consumed: number;
+    } {
         const names: string[] = [];
         const valueNodes: e.Expression[] = [];
         let cutReason: string | null = null;
@@ -1270,6 +1422,15 @@ class LowerFunction {
             names.push(name);
             valueNodes.push(v);
         }
+        return { names, valueNodes, cutReason, consumed: names.length };
+    }
+
+    lowerBornShapedCtorPrefix(body: e.BlockStatement): number {
+        if (!this.oracle || !passes().bornShaped) return 0;
+        if (this.isToplevel || this.spec) return 0;
+        if (this.info.node.type === "ArrowFunctionExpression") return 0;
+
+        const { names, valueNodes, cutReason } = this.ctorPrefixExtract(body);
         if (names.length < 2) {
             // a ctor-looking body (at least one conforming this-store) that
             // did not reach the batching threshold is a counted decline;

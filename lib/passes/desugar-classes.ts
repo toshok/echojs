@@ -481,6 +481,59 @@ export class DesugarClasses extends TransformPass {
 
         const { properties, methods, sproperties, smethods } = this.gather_members(n);
 
+        // class-this receiver coverage (lower.ts shapeFactFor): every
+        // instance method and accessor carries its class's birth-shape
+        // evidence, so `this.x` sites can guard on it — checked tier, so
+        // a reused/foreign `this` only misses the guard.  Base classes
+        // only (a derived instance's shape starts with the super chain's
+        // fields).  Two shapes of evidence:
+        //   - field-declaring classes (`class C { x; y; ... }` — the
+        //     tsc-emitted style): the %defineField prologue runs before
+        //     the constructor body, so the instance shape IS the
+        //     declared field list in order; the marker carries the
+        //     names (every instance field must be a plain public name).
+        //   - otherwise: a pointer to the constructor function, whose
+        //     qualifying `this.x = ...` prefix defines the shape
+        //     (lower.ts classBirthShape re-derives it under the exact
+        //     ctor-fill batching rules).
+        if (!n.superClass && !instanceBrand) {
+            let ctorFn: e.Node | null = null;
+            for (const el of n.body.body)
+                if (el.type === "MethodDefinition" && el.kind === "constructor" && el.value)
+                    ctorFn = el.value;
+            let fieldNames: string[] | null = null;
+            if (instance_fields.length > 0) {
+                fieldNames = [];
+                for (const f of instance_fields) {
+                    const k = f.key as e.Node;
+                    if (f.computed || (k.type !== "Identifier" && k.type !== "Literal")) {
+                        fieldNames = null;
+                        break;
+                    }
+                    const name =
+                        k.type === "Identifier"
+                            ? (k as e.Identifier).name
+                            : String((k as e.Literal).value);
+                    if (name === "__proto__" || /^[0-9]/.test(name) || fieldNames.includes(name)) {
+                        fieldNames = null;
+                        break;
+                    }
+                    fieldNames.push(name);
+                }
+            }
+            const eligible = instance_fields.length === 0 ? ctorFn !== null : fieldNames !== null;
+            if (eligible) {
+                for (const el of n.body.body) {
+                    if (el.type !== "MethodDefinition" || el.static) continue;
+                    if ((el.key as e.Node).type === "PrivateIdentifier") continue;
+                    if (el.kind === "constructor" || !el.value) continue;
+                    const fn = el.value as unknown as Record<string, unknown>;
+                    if (ctorFn) fn["ejs_class_ctor_fn"] = ctorFn;
+                    if (fieldNames) fn["ejs_class_field_names"] = fieldNames;
+                }
+            }
+        }
+
         // ---- private declarations + field initializer functions ----------
         // computed field keys evaluate once, at class-definition time
         const privDecls: e.Statement[] = [];
@@ -893,6 +946,11 @@ export class DesugarClasses extends TransformPass {
         // the qualified id is the LLVM symbol; .name is the bare key
         if (!ast_method.computed)
             (method as unknown as Record<string, unknown>)["ejs_display_name"] = method_name;
+        // the class-this birth-shape evidence travels to the rebuilt node
+        for (const marker of ["ejs_class_ctor_fn", "ejs_class_field_names"]) {
+            const v = (ast_method.value as unknown as Record<string, unknown>)[marker];
+            if (v !== undefined) (method as unknown as Record<string, unknown>)[marker] = v;
+        }
 
         const Object_defineProperty = b.memberExpression(Object_id, defineProperty_id);
         // spec method attributes: writable, non-enumerable, configurable
