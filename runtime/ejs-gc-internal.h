@@ -320,6 +320,8 @@ extern int total_allocs;
 
 // heap geography (ejs-gc-heap.c)
 extern EJSList heap_pages[];
+// total pages across all heap_pages buckets (see calc_heap_size)
+extern size_t heap_page_count;
 extern LargeObjectInfo *los_list;
 extern Arena *heap_arenas[];
 extern int num_arenas;

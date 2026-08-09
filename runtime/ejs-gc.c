@@ -204,6 +204,7 @@ _ejs_finalize_obj(GCObjectPtr ptr, Arena* arena, PageInfo* info, uint32_t cell_i
                 // the page is empty, add it to the arena's free page list.
                 int bucket = ffs(info->cell_size) - OBJECT_SIZE_LOW_LIMIT_BITS;
                 _ejs_list_detach_node (&heap_pages[bucket], (EJSListNode*)info);
+                heap_page_count--;
                 EJS_LIST_PREPEND (info, arena->free_pages);
                 UNLOCK_PAGE(info);
             }
@@ -423,6 +424,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
             }
         }
         _ejs_list_prepend_node (&heap_pages[bucket], (EJSListNode*)info);
+        heap_page_count++;
     }
 
     rv = alloc_from_page(info);

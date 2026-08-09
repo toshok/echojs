@@ -173,6 +173,7 @@ old_alloc_cell_for_promotion(size_t cell_size)
             abort();
         }
         _ejs_list_prepend_node (&heap_pages[bucket], (EJSListNode*)info);
+        heap_page_count++;
     }
     GCObjectPtr rv = alloc_from_page(info);
     if (info->num_free_cells == 0

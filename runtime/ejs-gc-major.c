@@ -277,6 +277,7 @@ compact_old_gen(void)
             if (compact_page_has_pins(pg))
                 continue; // pinned cells sweep in place; the page stays a destination
             _ejs_list_detach_node (&heap_pages[bucket], (EJSListNode*)pg);
+            heap_page_count--;
             _ejs_list_append_node (&src_pages, (EJSListNode*)pg);
             dest_free -= pg->num_free_cells;
             src_live += live;

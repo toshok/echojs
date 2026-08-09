@@ -433,14 +433,28 @@ old_gen_walk(void (*fn)(GCObjectPtr))
     }
 }
 
+// Incremental count of pages across every heap_pages bucket, maintained
+// at the four net add/remove sites (mutator/promotion page prepend;
+// sweep-empty and compaction-source detach — full-page ROTATIONS are net
+// zero and don't touch it).  calc_heap_size runs unconditionally after
+// EVERY collection to feed the proportional trigger, so it must be O(1):
+// an O(all-pages) list walk here dominates collection cost outright
+// whenever collections are frequent (a collect-per-alloc cadence spends
+// ~all its time in the walk).  The walk survives below only as the
+// sanity-build cross-check.
+size_t heap_page_count = 0;
+
 size_t
 calc_heap_size()
 {
+#if sanity
     size_t size = 0;
     for (int hp = 0; hp < HEAP_PAGELISTS_COUNT; hp++) {
         size += _ejs_list_length(&heap_pages[hp]) * PAGE_SIZE;
     }
-    return size;
+    EJS_ASSERT (size == heap_page_count * PAGE_SIZE);
+#endif
+    return heap_page_count * PAGE_SIZE;
 }
 
 GCObjectPtr
