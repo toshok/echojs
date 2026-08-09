@@ -12,7 +12,7 @@ import { DesugarMetaProperties } from "./passes/desugar-metaproperties";
 import { HoistFuncDecls } from "./passes/hoist-func-decls";
 import { TransformPass } from "./node-visitor";
 
-import * as escodegen from "../external-deps/escodegen/escodegen-es6";
+import { generateDebug } from "./debug-codegen";
 import * as debug from "./debug";
 
 import type { Program } from "./estree";
@@ -80,11 +80,11 @@ function runPasses(
             debug.timeEnd(2, passType.name);
             if (options.debug_passes.has(passType.name)) {
                 console.log(`after: ${passType.name}`);
-                console.log(escodegen.generate(tree));
+                console.log(generateDebug(tree));
             }
 
             debug.log(2, `after: ${passType.name}`);
-            debug.log(2, () => escodegen.generate(tree));
+            debug.log(2, () => generateDebug(tree));
             debug.log(3, () => {
                 if (typeof __ejs != "undefined") __ejs.GC.dumpAllocationStats(`after ${passType.name}`);
                 return "";

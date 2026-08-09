@@ -60,6 +60,7 @@ cd "$SRCDIR"
 stage_one host-config.js "lib/host-config.js"
 
 for f in acorn/acorn-es6.js \
+         astring/astring-es6.js \
          esprima/esprima-es6.js \
          escodegen/escodegen-es6.js \
          estraverse/estraverse-es6.js \

@@ -122,6 +122,11 @@ filegroup(
     srcs = glob([
         "acorn/acorn-es6.js",
         "acorn/acorn-es6.d.ts",
+        "astring/astring-es6.js",
+        "astring/astring-es6.d.ts",
+        # esprima-family relics: no longer imported by the compiler
+        # (astring replaced escodegen for debug printing), still staged
+        # for the legacy esprima/escodegen roundtrip tests
         "esprima/esprima-es6.js",
         "esprima/esprima-es6.d.ts",
         "escodegen/escodegen-es6.js",
