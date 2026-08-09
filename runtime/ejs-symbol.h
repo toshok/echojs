@@ -29,7 +29,14 @@ struct _EJSPrimSymbol {
     
     // if lsb is 0 we haven't calculated it yet
     uint32_t hashcode;
+
+    // an engine-internal slot key (the weak-collection inverted rep):
+    // hidden from getOwnPropertySymbols — real engines use internal
+    // slots, not properties, so exposing these would leak internals
+    EJSBool internal;
 };
+
+#define EJS_SYMBOL_IS_INTERNAL(v) (EJSVAL_TO_SYMBOL(v)->internal)
 
 EJS_BEGIN_DECLS
 

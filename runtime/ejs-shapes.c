@@ -88,9 +88,9 @@ shape_alloc(uint32_t parent, ejsval name, uint8_t repr, uint8_t attrs,
         | (repr == EJS_SHAPE_REPR_F64 && field_count > 0
                ? (1u << (field_count - 1)) : 0);
 
-    /* keep the field name alive: shapes are process-global and never freed */
-    if (EJSVAL_IS_STRING(name))
-        _ejs_gc_add_root(&shape->name);
+    /* keep the field name alive (and relocatable — symbol names are
+       moving heap objects): shapes are process-global and never freed */
+    _ejs_gc_add_root(&shape->name);
 
     return index;
 }
@@ -107,15 +107,22 @@ transition_hash(uint32_t parent, uint32_t name_hash, uint8_t repr, uint8_t attrs
 static uint32_t
 shape_name_hash(ejsval name)
 {
+    /* symbols key by identity (the header identity-hash bits, stable
+       across moves — the svz convention) */
+    if (EJSVAL_IS_SYMBOL(name))
+        return _ejs_gc_identity_hash(EJSVAL_TO_GCTHING_IMPL(name)) * 0x9E3779B9u;
     return _ejs_string_hash(name);
 }
 
 /* property keys at a given site are almost always the same interned atom,
    so raw ejsval equality catches nearly every cache hit; fall back to
-   content comparison for equal strings from different allocations */
+   content comparison for equal strings from different allocations.
+   Symbols compare by identity alone. */
 static EJSBool
 shape_name_eq(ejsval a, ejsval b)
 {
+    if (EJSVAL_IS_SYMBOL(a) || EJSVAL_IS_SYMBOL(b))
+        return EJSVAL_EQ(a, b);
     return _ejs_string_eq(a, b);
 }
 
@@ -244,18 +251,21 @@ _ejs_shape_transition_add_attrs(uint32_t shape, ejsval name, ejsval value,
                                 uint8_t attrs, EJSShapeMigrateReason *reason)
 {
     EJS_ASSERT(shape != EJS_SHAPE_DICT);
-    EJS_ASSERT(EJSVAL_IS_STRING(name));
+    EJS_ASSERT(EJSVAL_IS_STRING(name) || EJSVAL_IS_SYMBOL(name));
 
     /* numeric/index-looking keys stay in the map (arrays own indexed
-       storage; indexed access on plain objects is rare enough to eat it) */
-    EJSPrimString *namestr = EJSVAL_TO_STRING(name);
-    if (namestr->length > 0) {
-        jschar c0 = EJS_PRIMSTR_GET_TYPE(namestr) == EJS_STRING_FLAT
-                        ? namestr->data.flat[0]
-                        : _ejs_string_ucs2_at(namestr, 0);
-        if (c0 >= '0' && c0 <= '9') {
-            *reason = EJS_SHAPE_MIGRATE_INDEX_KEY;
-            return EJS_SHAPE_DICT;
+       storage; indexed access on plain objects is rare enough to eat
+       it).  Symbol names can't look like indexes. */
+    if (EJSVAL_IS_STRING(name)) {
+        EJSPrimString *namestr = EJSVAL_TO_STRING(name);
+        if (namestr->length > 0) {
+            jschar c0 = EJS_PRIMSTR_GET_TYPE(namestr) == EJS_STRING_FLAT
+                            ? namestr->data.flat[0]
+                            : _ejs_string_ucs2_at(namestr, 0);
+            if (c0 >= '0' && c0 <= '9') {
+                *reason = EJS_SHAPE_MIGRATE_INDEX_KEY;
+                return EJS_SHAPE_DICT;
+            }
         }
     }
 
@@ -301,8 +311,11 @@ _ejs_shape_lookup_attrs(uint32_t shape, ejsval name, uint32_t *slot, uint8_t *at
     // heap-allocated names are excluded from the cache: the collector
     // can free and recycle their addresses, and a different string at a
     // recycled address would false-hit.  Statics (atoms, interned module
-    // literals) — the hot compiled-access case — cache safely.
-    EJSPrimString* n = EJSVAL_TO_STRING(name);
+    // literals) — the hot compiled-access case — cache safely.  Symbol
+    // names are heap objects, so the guard rejects them here and they
+    // always take the chain walk (the payload pointer is only ever an
+    // identity, never dereferenced before the guard).
+    EJSPrimString* n = (EJSPrimString*)EJSVAL_TO_GCTHING_IMPL(name);
     ShapeCacheEntry* e = NULL;
     if (!_ejs_gc_ptr_is_gc_managed(n)) {
         e = &shape_lookup_cache[

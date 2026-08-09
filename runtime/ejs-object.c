@@ -1659,15 +1659,17 @@ static EJS_NATIVE_FUNC(_ejs_Object_getOwnPropertyNames) {
         _ejs_array_push_dense(arr, 1, &length_name);
     }
 
-    // shaped mode: shaped objects report their (all-enumerable,
-    // string-keyed) shape fields in insertion order
+    // shaped mode: shaped objects report their STRING-keyed shape
+    // fields in insertion order (symbol-named fields belong to
+    // getOwnPropertySymbols)
     uint32_t O_shape = EJS_OBJECT_SHAPE(O_);
     if (O_shape != EJS_SHAPE_DICT) {
         uint32_t nfields = _ejs_shape_field_count(O_shape);
         ejsval names[256];
         _ejs_shape_fields (O_shape, names);
         for (uint32_t i = 0; i < nfields; i ++)
-            _ejs_array_push_dense(arr, 1, &names[i]);
+            if (!EJSVAL_IS_SYMBOL(names[i]))
+                _ejs_array_push_dense(arr, 1, &names[i]);
         return arr;
     }
 
@@ -1709,19 +1711,27 @@ static EJS_NATIVE_FUNC(_ejs_Object_getOwnPropertySymbols) {
 
     /* 3. Let n be 0. */
 
-    // shaped mode: shaped objects never carry symbol-keyed properties
-    if (EJS_OBJECT_SHAPE(O_) != EJS_SHAPE_DICT)
+    // shaped mode: symbol-named shape fields, in insertion order.
+    // 19.1.2.8 does NOT filter on enumerability (the dictionary path
+    // below used to, hiding non-enumerable symbols — a spec bug)
+    uint32_t O_shape = EJS_OBJECT_SHAPE(O_);
+    if (O_shape != EJS_SHAPE_DICT) {
+        uint32_t nfields = _ejs_shape_field_count(O_shape);
+        ejsval names[256];
+        _ejs_shape_fields (O_shape, names);
+        for (uint32_t i = 0; i < nfields; i ++)
+            if (EJSVAL_IS_SYMBOL(names[i]) && !EJS_SYMBOL_IS_INTERNAL(names[i]))
+                _ejs_array_push_dense(arr, 1, &names[i]);
         return arr;
+    }
 
     /* 4. For each named own property P of O */
     for (_EJSPropertyMapEntry* s = O_->map->head_insert; s; s = s->next_insert) {
-        if (!_ejs_property_desc_is_enumerable(s->desc))
-            continue;
 
         /*    a. Let name be the String value that is the name of P. */
         ejsval name = s->name;
 
-        if (EJSVAL_IS_SYMBOL(name)) {
+        if (EJSVAL_IS_SYMBOL(name) && !EJS_SYMBOL_IS_INTERNAL(name)) {
             /*    b. Call the [[DefineOwnProperty]] internal method of array with arguments ToString(n), the
                   PropertyDescriptor {[[Value]]: name, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: 
                   true}, and false. */
@@ -2886,10 +2896,10 @@ _ejs_object_specop_get (ejsval O, ejsval P, ejsval Receiver)
     uint32_t O_shape = EJS_OBJECT_SHAPE(O_);
     if (O_shape != EJS_SHAPE_DICT) {
         // shaped-mode fast path: a hit is a fixed-index slot load; a
-        // miss (including symbol keys, which shaped objects never
-        // carry) falls to the proto walk below
+        // miss falls to the proto walk below
         uint32_t slot;
-        if (EJSVAL_IS_STRING(pname) && _ejs_shape_lookup (O_shape, pname, &slot))
+        if ((EJSVAL_IS_STRING(pname) || EJSVAL_IS_SYMBOL(pname))
+            && _ejs_shape_lookup (O_shape, pname, &slot))
             return shaped_slots(O_)[slot];
         desc = NULL;
     }
@@ -2946,7 +2956,7 @@ _ejs_object_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval* ex
     if (shape != EJS_SHAPE_DICT) {
         uint32_t slot;
         uint8_t attrs;
-        if (EJSVAL_IS_STRING(property_str) &&
+        if ((EJSVAL_IS_STRING(property_str) || EJSVAL_IS_SYMBOL(property_str)) &&
             _ejs_shape_lookup_attrs (shape, property_str, &slot, &attrs))
             return shaped_synthesize_desc (shaped_slots(obj_)[slot], attrs);
         return NULL;
@@ -2976,7 +2986,8 @@ _ejs_object_specop_set (ejsval O, ejsval P, ejsval V, ejsval Receiver)
         uint32_t O_shape = EJS_OBJECT_SHAPE(O_);
         uint32_t slot;
         uint8_t field_attrs;
-        if (O_shape != EJS_SHAPE_DICT && EJSVAL_IS_STRING(P) &&
+        if (O_shape != EJS_SHAPE_DICT
+            && (EJSVAL_IS_STRING(P) || EJSVAL_IS_SYMBOL(P)) &&
             _ejs_shape_lookup_attrs (O_shape, P, &slot, &field_attrs) &&
             (field_attrs & EJS_SHAPE_ATTR_WRITABLE) /* non-writable: the
                 generic path below sees the synthesized desc and rejects */) {
@@ -3162,9 +3173,10 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
     if (obj_shape != EJS_SHAPE_DICT) {
         if (_ejs_property_desc_has_getter(Desc) || _ejs_property_desc_has_setter(Desc))
             _ejs_object_to_dictionary (obj, EJS_SHAPE_MIGRATE_ACCESSOR);
-        else if (!EJSVAL_IS_STRING(P))
-            _ejs_object_to_dictionary (obj, EJS_SHAPE_MIGRATE_SYMBOL_KEY);
         else {
+            // string AND symbol keys both live in slot storage (symbol
+            // shape names compare by identity) — a symbol-keyed method
+            // define no longer dict-converts its prototype
             uint32_t slot;
             uint8_t field_attrs;
             if (_ejs_shape_lookup_attrs (obj_shape, P, &slot, &field_attrs)) {

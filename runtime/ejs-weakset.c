@@ -233,6 +233,7 @@ _ejs_weakset_init(ejsval global)
 {
     _ejs_gc_add_root (&_ejs_WeakSetData_symbol);
     _ejs_WeakSetData_symbol = _ejs_symbol_new(_ejs_atom_WeakSetData);
+    EJSVAL_TO_SYMBOL(_ejs_WeakSetData_symbol)->internal = EJS_TRUE;
 
     _ejs_WeakSet = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_WeakSet, _ejs_WeakSet_impl);
     _ejs_object_setprop (global, _ejs_atom_WeakSet, _ejs_WeakSet);
