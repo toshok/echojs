@@ -53,6 +53,13 @@ export interface PassConfig {
     inlineEnvSlots: boolean;
     // opt-in probes
     lowtier: boolean;
+    // cross-module callable summaries (the export-harness pass;
+    // design: echojs-maam/docs/cross-module-summaries.md).
+    // OPT-IN until the self-hosted oracle is fast enough: the harness's
+    // iteration budget is deterministic (host-parity-safe) but exe-side
+    // iteration cost turns pipeline-shaped modules into minutes of wall
+    // (esprima's harness: 90+ CPU-minutes in the stage1 exe).
+    fnSummaries: boolean;
     // LLVM pipeline level escape hatch: null = follow the -O level
     llvmOpt: number | null;
 }
@@ -182,6 +189,12 @@ export const PASSES: readonly PassDesc[] = [
         field: "inlineEnvSlots",
         minLevel: 0,
         help: "inline env slot addressing instead of runtime accessor calls",
+    },
+    {
+        name: "fn-summaries",
+        field: "fnSummaries",
+        minLevel: OPT_IN,
+        help: "export-harness pass: publish imported-function result summaries (needs --types; exe-side analysis cost is why this is opt-in)",
     },
     {
         name: "lowtier",

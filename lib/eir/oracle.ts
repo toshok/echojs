@@ -24,6 +24,7 @@ import * as maam_namespace from "$maam";
 import type * as e from "../estree";
 import { reportWarning } from "../errors";
 import * as commonIds from "../common-ids";
+import { passes } from "../pass-config";
 
 // The slice of maam's AnalysisResult the probe consumes, typed
 // structurally so we never import (or resolve types from) the
@@ -39,6 +40,12 @@ interface MaamMetrics {
     stateCapHits?: number;
     stateCapFuncs?: number;
     shapeCapHits?: number;
+    // import bindings resolved from cross-module summaries (the precision
+    // counterpart of degradedBindings); absent in older builds
+    summaryBindings?: number;
+    // open-world call sites that bound a callable summary's result instead
+    // of plain ⊤; absent in older builds
+    summarizedCalls?: number;
 }
 
 // the slice of maam's Shape the shape queries consume (structural)
@@ -59,10 +66,34 @@ interface MaamResult {
     // builds (the oracle degrades to "no shape facts", never errors)
     receiverShapesOfNode?(n: unknown): MaamShape[] | undefined;
     fieldOrderOfShape?(s: MaamShape): readonly string[] | undefined;
+    // cross-module export summary for a toplevel binding; the payload is
+    // opaque to echojs — it only ferries summaries from an exporting
+    // module's analysis to its importers' importValue hooks.  absent in
+    // older maam builds (no summaries are published or consumed).
+    summarizeBinding?(name: string): unknown;
+    // which checked-tier imported objects this module's code mutates
+    // ("source#export" labels) — the empirical trigger for cross-module
+    // reanalysis; absent in older maam builds
+    mutatedImports?(): string[];
+    // a function export's ⊤-argument callable summary, present only on an
+    // export-harness run (analyzeExports); absent in older maam builds
+    summarizeExport?(name: string): unknown;
+}
+
+// the maam ImportHooks slice: cross-module linking (the analysis asks for
+// an imported binding's export summary by source specifier + export name)
+interface MaamHooks {
+    importValue(source: string, imported: string): unknown;
 }
 
 interface MaamModule {
-    analyze(program: unknown, spec: unknown): MaamResult;
+    analyze(program: unknown, spec: unknown, hooks?: MaamHooks): MaamResult;
+    // the export-harness pass: calls every syntactically-function
+    // export with ⊤ arguments in a repetition fixpoint; null = nothing to
+    // harness.  Run SEPARATELY from analyze(): the harness widens exported
+    // functions' parameter types, so its node types must never feed the
+    // type oracle — pass 1 stays the oracle, pass 2 only publishes.
+    analyzeExports?(program: unknown, spec: unknown, hooks?: MaamHooks): MaamResult | null;
     kCFA(...args: unknown[]): unknown;
 }
 
@@ -189,6 +220,94 @@ export function typeSigToShapeRepr(sig: string): "boxed" | "f64" | null {
         if (part === "num" || TAG_BY_SIG[part] === undefined) return null;
     }
     return "boxed";
+}
+
+// --- cross-module export summaries (maam docs/cross-module-summaries.md, C3+C5)
+//
+// Per-compilation registry: resolved module path → its export summaries.
+// Filled after each module's analysis and consumed (via the importValue
+// hook) by every module analyzed later — the driver compiles dependencies
+// before importers (ejs-es6's topological order), so an importer's
+// analysis runs with its importees already published.  A miss — import
+// cycle, native module, unsummarizable export, or a module whose analysis
+// failed — reproduces the summary-less behavior: the binding degrades to
+// ⊤ and is counted, never miscompiled.
+interface ModuleSummaries {
+    // every non-promoted export name, in slot order — the namespace
+    // object's exact (spec-frozen) field set
+    names: readonly string[];
+    byName: ReadonlyMap<string, unknown>;
+    // the synthesized `import * as ns` ("*") object summary, built on
+    // first request: fields = names, field values = the per-export
+    // summaries (⊤ where none exists)
+    namespace?: unknown;
+}
+const summaryRegistry = new Map<string, ModuleSummaries>();
+
+function namespaceSummaryOf(resolved: string): unknown {
+    const entry = summaryRegistry.get(resolved);
+    if (!entry) return undefined;
+    if (entry.namespace === undefined) {
+        entry.namespace = {
+            fields: entry.names.map((name) => {
+                const value = entry.byName.get(name);
+                return value !== undefined ? { name, value } : { name };
+            }),
+        };
+    }
+    return entry.namespace;
+}
+
+// The module-boundary facts the probe needs from the analyzed body: which
+// resolved module each source specifier names (imports AND re-export
+// declarations, keyed by the verbatim specifier maam hands the hook), and
+// the re-exported names whose summaries chain from another module's
+// registry entries rather than a local binding.
+interface ModuleBoundary {
+    specifierToResolved: Map<string, string>;
+    reexports: Array<{ name: string; from: string; importedAs: string }>;
+    // `export * as ns from "m"`: the exported name is m's namespace object
+    nsReexports: Array<{ name: string; from: string }>;
+}
+
+function scanModuleBoundary(body: e.Statement[]): ModuleBoundary {
+    const specifierToResolved = new Map<string, string>();
+    const reexports: ModuleBoundary["reexports"] = [];
+    const nsReexports: ModuleBoundary["nsReexports"] = [];
+    for (const stmt of body) {
+        const n = stmt as unknown as {
+            type?: string;
+            source?: { value?: unknown } | null;
+            source_path?: { value: string };
+            specifiers?: Array<{ local: { name: string }; exported: { name: string } }>;
+            exported?: unknown;
+            star_export_names?: string[];
+        };
+        if (
+            n.type !== "ImportDeclaration" &&
+            n.type !== "ExportNamedDeclaration" &&
+            n.type !== "ExportAllDeclaration"
+        )
+            continue;
+        if (!n.source || typeof n.source.value !== "string" || !n.source_path) continue;
+        const resolved = n.source_path.value;
+        specifierToResolved.set(n.source.value, resolved);
+        if (n.type === "ExportNamedDeclaration") {
+            // `export { a as b } from "m"`: b's summary is m's summary for a
+            for (const spec of n.specifiers ?? [])
+                reexports.push({ name: spec.exported.name, from: resolved, importedAs: spec.local.name });
+        } else if (n.type === "ExportAllDeclaration") {
+            if (n.exported) {
+                // `export * as ns from "m"`: ns is m's namespace object
+                nsReexports.push({ name: (n.exported as { name: string }).name, from: resolved });
+            } else {
+                // `export * from "m"`: each expanded name re-exports 1:1
+                for (const name of n.star_export_names ?? [])
+                    reexports.push({ name, from: resolved, importedAs: name });
+            }
+        }
+    }
+    return { specifierToResolved, reexports, nsReexports };
 }
 
 // The common-ids singleton identifier nodes (ONE object each, spliced into
@@ -321,12 +440,19 @@ function dumpBindingTypes(
 // Run the probe over the module's desugared tree.  `tree` is the
 // post-pre_eir_convert Program whose body[0] is the synthetic toplevel
 // FunctionDeclaration (insert_toplevel_func) holding the module's
-// statements.  Returns a TypeOracle over the analysis (so compile() can
-// thread it onward), or null when anything degraded; callers
-// must treat null as "no type information", never as an error.
+// statements.  `module_path` (the resolved, suffix-free module identity —
+// the same key gather-imports writes into import nodes' source_path) and
+// `export_names` drive the cross-module summary registry: the analysis
+// consumes summaries already published for this module's imports, then
+// publishes summaries for its own exports.  Returns a TypeOracle over the
+// analysis (so compile() can thread it onward), or null when anything
+// degraded; callers must treat null as "no type information", never as an
+// error.
 export function runTypeAnalysisProbe(
     tree: e.Program,
     source_filename: string,
+    module_path: string | null = null,
+    export_names: readonly string[] = [],
     dump = false
 ): ProbeOracle | null {
     const toplevel = tree.body[0];
@@ -341,21 +467,130 @@ export function runTypeAnalysisProbe(
     // Same body array, same node objects — no cloning.
     const program = { type: "Program", sourceType: "script", body: toplevel.body.body };
 
+    const boundary = scanModuleBoundary(toplevel.body.body);
+    const hooks: MaamHooks = {
+        importValue: (source, imported) => {
+            const resolved = boundary.specifierToResolved.get(source);
+            if (resolved === undefined) return undefined;
+            if (imported === "*") return namespaceSummaryOf(resolved);
+            return summaryRegistry.get(resolved)?.byName.get(imported);
+        },
+    };
+
     const started = Date.now();
     try {
+        // iteration budgets (the last kCFA arg): the hard stop that keeps
+        // "--types never hangs a compile" true now that summaries give big
+        // modules real cross-module values to explore.  A tripped budget
+        // degrades to a warning (no oracle / no summaries for the module).
         const result = maam.analyze(
             program,
-            maam.kCFA(1, "flow-sensitive", "call-site", /*shapeCap*/ 64, false, false, false, /*stateCap*/ 512)
+            maam.kCFA(1, "flow-sensitive", "call-site", /*shapeCap*/ 64, false, false, false,
+                /*stateCap*/ 512, false, false, /*iterationBudget*/ 300000),
+            hooks
         );
         const wall = Date.now() - started;
+        console.warn(`--types: ${source_filename}: pass1 wall=${wall}ms`);
         const m = result.metrics;
+
+        // Publish this module's export summaries for the modules analyzed
+        // after it.  A local binding's summary wins; a re-exported name
+        // chains to its source module's already-published summary.
+        let exportSummaries = 0;
+        let fnExports = 0;
+        if (module_path !== null && result.summarizeBinding) {
+            const summaries = new Map<string, unknown>();
+            for (const name of export_names) {
+                const s = result.summarizeBinding(name);
+                if (s !== undefined) summaries.set(name, s);
+            }
+            // pass 2 — the export harness: callable summaries for the
+            // syntactically-function exports.  Its widened node types never
+            // feed the oracle (pass 1 above is the oracle); it only
+            // publishes.  Failure degrades to "function exports
+            // unsummarized", never a compile error.
+            if (maam.analyzeExports && export_names.length > 0 && passes().fnSummaries) {
+                const started2 = Date.now();
+                try {
+                    // the harness only needs the ⊤-argument result JOINS, and a
+                    // flow-sensitive exploration of a ~100-arm nondet loop is a
+                    // state-space grind (ast-builder: minutes).  Flow-insensitive
+                    // 0-CFA computes the same joins over one global store in
+                    // milliseconds.
+                    const r2 = maam.analyzeExports(
+                        program,
+                        // tighter than pass 1: harnessing an entry-point-ish
+                        // module (lib/eir/lower exports the whole pipeline)
+                        // degenerates toward whole-program analysis, and its
+                        // per-iteration store joins are millisecond-scale — a
+                        // large budget is minutes of wall.  Leaf modules (the
+                        // ones whose summaries pay) fixpoint in far less.
+                        maam.kCFA(0, "flow-insensitive", "call-site", 64, false, false, false, 512,
+                            false, false,
+                            // 10k keeps every harness that ever produced a summary
+                            // on the self-compile (max observed: specialize at 8.5k
+                            // iters) and halves the pre-trip waste of the
+                            // pipeline-entry modules (lower/optimize/escodegen)
+                            // whose ⊤-arg exploration degenerates whole-program.
+                            /*iterationBudget*/ 10000),
+                        hooks
+                    );
+                    if (r2 && r2.summarizeExport) {
+                        for (const name of export_names) {
+                            if (summaries.has(name)) continue; // a pass-1 value fact wins
+                            const s = r2.summarizeExport(name) as
+                                | { fn?: { id?: string; result?: unknown } }
+                                | undefined;
+                            if (s !== undefined && s.fn !== undefined) {
+                                // stamp the program-wide id (the registry key)
+                                summaries.set(name, { ...s, fn: { ...s.fn, id: `${module_path}#${name}` } });
+                                fnExports++;
+                            }
+                        }
+                    }
+                    console.warn(
+                        `--types: ${source_filename}: export-harness wall=${Date.now() - started2}ms ` +
+                            `iters=${r2 ? r2.metrics.iterations : 0} fnExports=${fnExports}`
+                    );
+                } catch (err) {
+                    reportWarning(
+                        `--types: export-harness analysis failed after ${Date.now() - started2}ms (${errorMessage(err)}); function exports unsummarized.`,
+                        source_filename
+                    );
+                }
+            }
+            for (const r of boundary.reexports) {
+                if (summaries.has(r.name)) continue;
+                const s = summaryRegistry.get(r.from)?.byName.get(r.importedAs);
+                if (s !== undefined) summaries.set(r.name, s);
+            }
+            for (const r of boundary.nsReexports) {
+                if (summaries.has(r.name)) continue;
+                const s = namespaceSummaryOf(r.from);
+                if (s !== undefined) summaries.set(r.name, s);
+            }
+            summaryRegistry.set(module_path, { names: export_names, byName: summaries });
+            exportSummaries = summaries.size;
+        }
+
+        // A module that mutates an object it imported invalidates other
+        // importers' view of that export: report it (the future reanalysis
+        // trigger — for now, measurement).  Stats-line count + one detail
+        // line per mutated import.
+        const mutated = result.mutatedImports ? result.mutatedImports() : [];
+
         const statsLine =
             `--types: ${source_filename}: wall=${wall}ms reachedStates=${m.reachedStates} ` +
             `configs=${m.configs} iterations=${m.iterations} shapesInterned=${m.shapesInterned} ` +
             `unknownCalls=${m.unknownCalls} degradedBindings=${m.degradedBindings ?? 0} ` +
             `stateCapHits=${m.stateCapHits ?? 0} stateCapFuncs=${m.stateCapFuncs ?? 0} ` +
-            `shapeCapHits=${m.shapeCapHits ?? 0} warnings=${warningSummary(result.warnings())}`;
+            `shapeCapHits=${m.shapeCapHits ?? 0} summaryBindings=${m.summaryBindings ?? 0} ` +
+            `summarizedCalls=${m.summarizedCalls ?? 0} exportSummaries=${exportSummaries} ` +
+            `fnExports=${fnExports} mutatedImports=${mutated.length} ` +
+            `warnings=${warningSummary(result.warnings())}`;
         console.warn(statsLine);
+        for (const label of mutated)
+            console.warn(`--types: ${source_filename}: mutates imported object ${label}`);
         console.warn(result.describe());
         if (dump) dumpBindingTypes(result, program as { body: e.Statement[] }, source_filename);
 
@@ -375,7 +610,11 @@ export function runTypeAnalysisProbe(
             receiverShapeOfNode: (n): ShapeQuery => {
                 if (!result.receiverShapesOfNode || !result.fieldOrderOfShape)
                     return { declined: "unmapped" }; // older maam build
-                if ((m.shapeCapHits ?? 0) > 0) return { declined: "capped" };
+                // shapeCap widening is PER ADDRESS: a capped shape set widens
+                // to the megamorphic ⊤ class, which the per-shape screen below
+                // declines at exactly the affected receivers — a module-wide
+                // shapeCapHits veto here would discard every OTHER receiver's
+                // exact facts along with them.
                 const shapes = result.receiverShapesOfNode(n);
                 if (shapes === undefined || shapes.length === 0)
                     return { declined: "unmapped" };

@@ -1083,8 +1083,20 @@ export function compile(
     // per-binding types); the returned TypeOracle is not consumed by
     // codegen unless --types feeds the oracle onward; never fails the compile.
     let type_oracle = null;
-    if (options.types || options.types_dump)
-        type_oracle = runTypeAnalysisProbe(tree, source_filename, options.types_dump);
+    if (options.types || options.types_dump) {
+        // the promoted pseudo-exports share the slot table but are not
+        // importable, so they publish no summaries
+        const export_names = [...this_module_info.exports.entries()]
+            .filter(([, info]) => !info.promoted)
+            .map(([name]) => name);
+        type_oracle = runTypeAnalysisProbe(
+            tree,
+            source_filename,
+            module_filename,
+            export_names,
+            options.types_dump
+        );
+    }
 
     // EIR is the only pipeline: a module that can't lower is a compile
     // error, not a fallback

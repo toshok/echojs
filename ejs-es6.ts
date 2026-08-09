@@ -981,10 +981,38 @@ debug.log(1, () => {
 });
 let allModules = getAllModules();
 
-// now compile them
-//
-// reverse the list so the main program is the first thing we compile
-files.reverse();
+// now compile them, dependencies before importers: with --types, each
+// module's analysis publishes export summaries its importers' analyses
+// consume (lib/eir/oracle.ts), so an importee must compile first.  A
+// post-order DFS over the import graph gives that topological order; a
+// module in an import cycle just misses the not-yet-published summaries
+// for its back edges (those imports degrade to ⊤, the summary-less
+// behavior) — never an error.
+{
+    // module identity is suffix-free (gather-imports strips .js), but a
+    // command-line file arg keeps its suffix in `files` — normalize both
+    const moduleKey = (name: string): string =>
+        name.endsWith(".js") ? name.substring(0, name.length - 3) : name;
+    const byName = new Map(files.map((f) => [moduleKey(f.file_name), f]));
+    const ordered: typeof files = [];
+    const emitted = new Set<string>();
+    const visiting = new Set<string>();
+    const visit = (name: string): void => {
+        const key = moduleKey(name);
+        if (emitted.has(key) || visiting.has(key)) return;
+        const f = byName.get(key);
+        if (!f) return; // native module — compiled separately
+        visiting.add(key);
+        const info = allModules.get(key);
+        if (info) for (const dep of info.importList) visit(dep);
+        visiting.delete(key);
+        emitted.add(key);
+        ordered.push(f);
+    };
+    for (const f of files) visit(f.file_name);
+    // compileNextFile pops from the end, so store in reverse
+    files = ordered.reverse();
+}
 let files_count = files.length;
 const compileNextFile = (): void => {
     if (files.length === 0) {

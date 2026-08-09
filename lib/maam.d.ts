@@ -4,6 +4,7 @@
 // rewrites the specifier).  The surface is declared loosely here;
 // eir/oracle.ts narrows it structurally to the slice it consumes.
 declare module "$maam" {
-    export function analyze(program: unknown, spec: unknown): unknown;
+    export function analyze(program: unknown, spec: unknown, hooks?: unknown): unknown;
+    export function analyzeExports(program: unknown, spec: unknown, hooks?: unknown): unknown;
     export function kCFA(...args: unknown[]): unknown;
 }

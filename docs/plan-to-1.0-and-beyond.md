@@ -46,7 +46,11 @@ speed than it costs in compile time, at self-hosting scale.
   structural shapes, then ⊤-argument function results.  Success
   metric: unmapped/degraded-binding declines fall on the
   self-compile; cross-module shape sites start guarding;
-  specialized > 0.
+  specialized > 0.  **C1-C4 landed 2026-08-08** (primitive summaries
+  end-to-end; the driver now compiles dependencies before importers).
+  Measured: the tree's `import * as X` habit means the big wins wait
+  on C5 namespace-object summaries and C6 function results — see the
+  design doc's findings section.
 - **Self-hosted oracle speed**: analysis is <1s node-hosted but ~30s
   of the 66s exe self-compile (entry module alone 8s).  Close the
   self-hosted gap enough that default-on stays comfortable
@@ -58,6 +62,19 @@ speed than it costs in compile time, at self-hosting scale.
   feedback → recompile with guards, behind the same oracle interface
   the static analysis serves.  Static stays primary; the profile only
   fills residual ⊤.
+- **Discriminated-union switch dispatch** (toshok, 2026-08-08): the
+  compiler and the compiled-in maam oracle are dominated by
+  `switch (n.type)` / `switch (e.tag)` over string-discriminated
+  unions, and EIR lowers a switch as a LINEAR strict_eq chain
+  (lower.ts switchStmt).  Two stages: (1) all-literal-case switches
+  dispatch on the interned ATOM (module-init table + hash/binary
+  search, the shape-intern precedent) — no analysis needed, wins
+  today; (2) when the oracle knows the discriminant is `recv.tag` and
+  each receiver shape's tag-field constant is a singleton, dispatch on
+  the SHAPE INDEX (integer jump table, default arm = stage-1 fallback
+  — checked-tier, guard-by-default-arm).  Stage 2 is gated on the
+  same receiver-shape coverage as everything else (C6 freshness for
+  AST/core nodes) and is the "sum types recovered at AOT" endgame.
 - Watch item: analysis-on stress RSS ~910MB (vs ~570MB before) —
   revisit with the heap growth policy.
 
