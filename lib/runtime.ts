@@ -631,6 +631,23 @@ const runtime_interface = {
             ])
         );
     },
+    // the property-store IC entries (see _ejs_object_setprop_ic)
+    object_setprop_ic: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_object_setprop_ic", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+            ty.EjsValue,
+            ty.Int32.pointerTo(),
+        ]);
+    },
+    object_setprop_ic_strict: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(
+            this.module,
+            "_ejs_object_setprop_ic_strict",
+            ty.EjsValue,
+            [ty.EjsValue, ty.EjsValue, ty.EjsValue, ty.Int32.pointerTo()]
+        );
+    },
     // the property-load IC miss path: generic get + per-site cache
     // install (see _ejs_object_getprop_ic)
     object_getprop_ic: function (this: RuntimeContext) {

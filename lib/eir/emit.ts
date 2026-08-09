@@ -946,11 +946,26 @@ export class EIREmitter {
             }
             case "set_prop_atom": {
                 let key = this.v.getAtom(String(inst.imms["atom"]));
-                const fn = inst.imms["strict"] ? rt.object_setprop_strict : rt.object_setprop;
+                if (!passes().propIcs) {
+                    const fn = inst.imms["strict"] ? rt.object_setprop_strict : rt.object_setprop;
+                    return this.emitCallLike(
+                        inst,
+                        fn,
+                        [this.val(inst.operands[0]), key, this.val(inst.operands[1])],
+                        "setprop"
+                    );
+                }
+                // the store IC: same single call through a per-site cell
+                // (shape + slot/repr/writable bits) the runtime checks
+                // first; hits store the slot directly, kind-vs-repr
+                // mismatches (which owe a transition) miss to generic
+                const fn = inst.imms["strict"] ? rt.object_setprop_ic_strict : rt.object_setprop_ic;
+                const site = this.v.propICGlobal();
+                const site_base = ir.createBitCast(site, types.Int32.pointerTo(), "sic_site");
                 return this.emitCallLike(
                     inst,
                     fn,
-                    [this.val(inst.operands[0]), key, this.val(inst.operands[1])],
+                    [this.val(inst.operands[0]), key, this.val(inst.operands[1]), site_base],
                     "setprop"
                 );
             }

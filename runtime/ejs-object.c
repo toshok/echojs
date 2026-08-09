@@ -1302,6 +1302,65 @@ jschar* last_lookup = NULL;
 // site keeps calling here).  Shape identity carries slot layout, so a
 // stale cell can only MISS, never mis-load: any own-property change
 // transitions the shape (or dict-converts).
+// ---- the property-store IC ------------------------------------------
+// The store cell packs (slot | repr<<30 | 1<<31) beside the shape:
+// bit 31 set means "installed, writable"; bit 30 is the field's repr
+// at install time.  The hit path re-checks the value kind against the
+// repr — a number into an f64 slot (or a non-number into a boxed
+// slot) stores raw; anything else owes a repr TRANSITION and misses
+// to the generic path, which re-installs with the post-transition
+// shape.  Non-writable fields never install.
+#define EJS_PROPIC_INSTALLED (1u << 31)
+#define EJS_PROPIC_F64       (1u << 30)
+#define EJS_PROPIC_SLOT_MASK 0x00ffffffu
+
+ejsval
+_ejs_object_setprop_ic_impl (ejsval obj, ejsval key, ejsval value, uint32_t* site, EJSBool strict)
+{
+    if (EJSVAL_IS_OBJECT(obj)) {
+        EJSObject* obj_ = EJSVAL_TO_OBJECT(obj);
+        uint32_t shape = EJS_OBJECT_SHAPE(obj_);
+        uint32_t cell = site[1];
+        if (shape == site[0] && (cell & EJS_PROPIC_INSTALLED)) {
+            EJSBool val_is_num = EJSVAL_IS_NUMBER(value);
+            EJSBool slot_is_f64 = (cell & EJS_PROPIC_F64) != 0;
+            if (val_is_num == slot_is_f64) {
+                shaped_slots(obj_)[cell & EJS_PROPIC_SLOT_MASK] = value;
+                _ejs_gc_remember (obj_, value);
+                return value;
+            }
+        }
+        ejsval rv = strict ? _ejs_object_setprop_strict (obj, key, value)
+                           : _ejs_object_setprop (obj, key, value);
+        uint32_t post_shape = EJS_OBJECT_SHAPE(obj_);
+        if (post_shape != EJS_SHAPE_DICT) {
+            uint32_t slot;
+            uint8_t attrs;
+            if (_ejs_shape_lookup_attrs (post_shape, key, &slot, &attrs)
+                && (attrs & EJS_SHAPE_ATTR_WRITABLE)) {
+                site[1] = slot | EJS_PROPIC_INSTALLED
+                    | (EJSVAL_IS_NUMBER(value) ? EJS_PROPIC_F64 : 0);
+                site[0] = post_shape;
+            }
+        }
+        return rv;
+    }
+    return strict ? _ejs_object_setprop_strict (obj, key, value)
+                  : _ejs_object_setprop (obj, key, value);
+}
+
+ejsval
+_ejs_object_setprop_ic (ejsval obj, ejsval key, ejsval value, uint32_t* site)
+{
+    return _ejs_object_setprop_ic_impl (obj, key, value, site, EJS_FALSE);
+}
+
+ejsval
+_ejs_object_setprop_ic_strict (ejsval obj, ejsval key, ejsval value, uint32_t* site)
+{
+    return _ejs_object_setprop_ic_impl (obj, key, value, site, EJS_TRUE);
+}
+
 ejsval
 _ejs_object_getprop_ic (ejsval obj, ejsval key, uint32_t* site)
 {
