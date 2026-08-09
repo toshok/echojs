@@ -74,6 +74,8 @@ export interface VisitorSurface {
         ents_global: llvm.GlobalVariable;
     };
     ejsvalBitsEq(a: llvm.Value, b: llvm.Value, name: string): llvm.Value;
+    // per-site property-load IC cell ([2 x i32]: shape, slot)
+    propICGlobal(): llvm.GlobalVariable;
     loadBoolEjsValue(n: boolean): llvm.Value;
     loadDoubleEjsValue(n: number): llvm.Value;
     loadNullEjsValue(): llvm.Value;
@@ -910,13 +912,25 @@ export class EIREmitter {
             }
             case "get_prop_atom": {
                 let key = this.v.getAtom(String(inst.imms["atom"]));
+                const recv = this.val(inst.operands[0]);
+                if (!passes().propIcs)
+                    return this.emitCallLike(inst, rt.object_getprop, [recv, key], "getprop");
+                // the property-load IC: same single call, but through a
+                // per-site {shape, slot} cell the runtime checks first —
+                // a hit skips the whole lookup machinery, a miss falls
+                // to the generic get and installs the cell.  (The fully
+                // inline diamond was tried: the per-site IR bloat cost
+                // more llc time than the inline hit saved.)
+                const site = this.v.propICGlobal();
+                const site_base = ir.createBitCast(site, types.Int32.pointerTo(), "ic_site");
                 return this.emitCallLike(
                     inst,
-                    rt.object_getprop,
-                    [this.val(inst.operands[0]), key],
+                    rt.object_getprop_ic,
+                    [recv, key, site_base],
                     "getprop"
                 );
             }
+
             case "set_prop": {
                 const fn = inst.imms["strict"] ? rt.object_setprop_strict : rt.object_setprop;
                 return this.emitCallLike(

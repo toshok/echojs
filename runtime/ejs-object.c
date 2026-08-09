@@ -1291,6 +1291,42 @@ _ejs_object_setprop_strict (ejsval val, ejsval key, ejsval value)
 jschar* last_lookup = NULL;
 #endif
 
+// ---- the emitted property-load IC miss handler ----------------------
+// A compiled monomorphic load site carries a per-site i64 cell packing
+// (shape | slot<<32); the emitted fast path compares the receiver's
+// header shape against the cell and loads the slot inline.  This is
+// the miss path: do the generic get, then — when the key resolved to
+// an OWN data slot on a SHAPED receiver — install {shape, slot} so the
+// next load at this site takes the inline path.  A proto-chain hit,
+// dictionary receiver, or primitive receiver installs nothing (the
+// site keeps calling here).  Shape identity carries slot layout, so a
+// stale cell can only MISS, never mis-load: any own-property change
+// transitions the shape (or dict-converts).
+ejsval
+_ejs_object_getprop_ic (ejsval obj, ejsval key, uint32_t* site)
+{
+    if (EJSVAL_IS_OBJECT(obj)) {
+        EJSObject* obj_ = EJSVAL_TO_OBJECT(obj);
+        uint32_t shape = EJS_OBJECT_SHAPE(obj_);
+        // the hit path: one compare, one slot load (an f64 slot's raw
+        // double bits ARE its boxed value, so the plain load serves
+        // both reprs).  site[0] initializes to EJS_SHAPE_NOMATCH, which
+        // no header carries — dictionary receivers (shape 0) miss too.
+        if (shape == site[0])
+            return shaped_slots(obj_)[site[1]];
+        ejsval rv = _ejs_object_getprop (obj, key);
+        if (shape != EJS_SHAPE_DICT) {
+            uint32_t slot;
+            if (_ejs_shape_lookup (shape, key, &slot)) {
+                site[1] = slot;
+                site[0] = shape;
+            }
+        }
+        return rv;
+    }
+    return _ejs_object_getprop (obj, key);
+}
+
 ejsval
 _ejs_object_getprop (ejsval obj, ejsval key)
 {

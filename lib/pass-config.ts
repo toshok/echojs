@@ -47,6 +47,8 @@ export interface PassConfig {
     // all-string-literal-case switches dispatch through a per-module
     // atom table instead of a linear strict_eq chain
     atomSwitch: boolean;
+    // per-site monomorphic property-load ICs on get_prop_atom
+    propIcs: boolean;
     polyShapeGuards: boolean;
     bornShaped: boolean;
     promote: boolean;
@@ -171,6 +173,12 @@ export const PASSES: readonly PassDesc[] = [
         field: "classThisGuards",
         minLevel: OPT_IN,
         help: "guard this.x sites in base-class methods on the class birth shape (checked tier); opt-in: emission cost currently outweighs the hit rate on the self-compile",
+    },
+    {
+        name: "prop-ics",
+        field: "propIcs",
+        minLevel: 0,
+        help: "per-site monomorphic property-load ICs: a shape compare + inline slot load, generic-call miss path installs the cache",
     },
     {
         name: "atom-switch",

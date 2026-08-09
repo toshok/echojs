@@ -631,6 +631,15 @@ const runtime_interface = {
             ])
         );
     },
+    // the property-load IC miss path: generic get + per-site cache
+    // install (see _ejs_object_getprop_ic)
+    object_getprop_ic: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_object_getprop_ic", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+            ty.Int32.pointerTo(),
+        ]);
+    },
     // atom-table switch dispatch: module init sorts the packed
     // (hash, index) entries once the case atoms are interned; the probe
     // returns the first matching case's index as a boxed number (-1 =

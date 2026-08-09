@@ -984,6 +984,21 @@ class LLVMIRVisitor implements VisitorSurface {
         return entry.global;
     }
 
+    // one [2 x i32] property-load IC cell per compiled load site:
+    // [0] = cached shape (0xffffff = EJS_SHAPE_NOMATCH — matches no
+    // header, so an empty cell and a dictionary receiver both miss),
+    // [1] = the field's slot.  The miss path installs both.
+    propICGlobal(): llvm.GlobalVariable {
+        const ty2 = llvm.ArrayType.get(types.Int32, 2);
+        return new llvm.GlobalVariable(
+            this.module,
+            ty2,
+            `ejs_prop_ic-${this.idgen()}`,
+            llvm.ConstantArray.get(ty2, [consts.int32(0xffffff), consts.int32(0)]),
+            false
+        );
+    }
+
     // the module's switch dispatch table for this exact atom list,
     // minted on first use.  Zero-initialized globals: module init fills
     // the atoms (they're interned by then) and sorts the packed
