@@ -46,6 +46,59 @@ precision bonus, not a headline wall win on its own.  Sequencing
 respects that: receiver-coverage work can overtake it if the property
 storm gets a direct lever first.
 
+## G0 findings (2026-08-09) — the decided representation
+
+Inventory of the current machinery moved the design in four ways:
+
+1. **The storm source is `yield*` recursion.**  maam's `ast.walk()` is
+   a recursive generator (`yield* walk(child)` per AST node): a deep
+   tree suspends thousands of generators at once, each holding a
+   ucontext machine stack.  The current desugar's `yield*` runs in a
+   HELPER function that yields from a nested frame — only possible on
+   coroutine stacks.  The EIR lowering must inline delegation as a
+   loop in the body (regenerator's move), and that is also where the
+   payoff lives: a heap env per walk level instead of a 64K+ stack.
+2. **The activation record is the body's ordinary closure env.**  The
+   desugar already wraps the body in an arrow whose captured bindings
+   live in a precise heap env.  Persist THAT env across resumes (the
+   generator object holds it; state 0 creates it, resumes reload it)
+   and the "record" needs no new species: generator-local bindings
+   force-capture into env slots (scopes.ts), and the few ANF temps
+   live across a yield demote into extra env slots the transform
+   reserves (liveness.ts + the gc-P3 store-at-def/load-at-use
+   pattern).  EJSGenerator grows two native fields: `state` (i32) and
+   `env` (ejsval, precisely scanned); everything stack-shaped dies.
+3. **Resume dispatch needs NO handler re-establishment.**  EIR
+   exception routing is per-instruction unwind edges fixed at
+   lowering; a dispatch branch into a mid-try block is just an edge —
+   the region's instructions keep their unwind targets.  The plan's
+   G2 "hard part" mostly evaporates: what remains is the
+   throw()/return() resume modes at each state and `yield*`'s
+   completion forwarding.
+4. **The wrapper protocol survives.**  The sentinel-catch wrapper
+   (return() → sentinel throw → wrapper catch completes with the
+   value) and the driver-facing generator object are unchanged; async
+   functions desugar to sync generators BEFORE this pass and ride for
+   free (G3 is verification, not new machinery).
+
+Resume protocol: the body closure compiles to a state machine taking
+`(resume_mode, resume_value)`.  Entry loads `gen.state` (boxed small
+int) and dispatches via a `switch_index_eq` compare chain (the
+atom-switch lever's discipline; LLVM folds it).  `gen_yield` lowers
+to: store live temps to env slots, set state, set the suspended flag,
+return the yielded value — the body RETURNS to the driver, no stack
+switch.  The runtime distinguishes yield from completion by the
+suspended flag (cleared before each resume).  resume_mode: next binds
+the sent value as the yield's result; throw rethrows at the yield
+point (existing unwind edges apply); return throws the sentinel.  The
+only new EIR op is `gen_yield` (the transform marker); state/env
+plumbing goes through call_runtime entries.
+
+Test battery (fast, run before every G-phase gate): generator1-26,
+eir-generator1, gc-gennest, gc-gens1small/2small, gc-genstress1/2,
+gc5stress1, async1, async-generator1, forof1/2, iterators1,
+destructure1-4 + eir-destructure1 (destructuring drives iterators).
+
 ## Shape of the lowering
 
 - **Activation record = heap object.**  A precise-scanned cell:
