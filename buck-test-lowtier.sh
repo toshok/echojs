@@ -37,7 +37,9 @@ fi
 
 cd "$WORK/test"
 EXPECTED=expected/eir-lowtier1.js.expected-out
-EJS_ARGS=(--srcdir --moduledir ../node-compat --moduledir ../ejs-llvm)
+# -fverify-eir: the injected low-tier bodies must verify (opt-in for
+# plain compiles, on in every test lane)
+EJS_ARGS=(--srcdir --moduledir ../node-compat --moduledir ../ejs-llvm -fverify-eir)
 
 # NOTE: `run` is invoked in an `if` condition, which disables `set -e`
 # inside it (the classic bash trap — an early version of this script

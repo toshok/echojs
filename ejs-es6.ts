@@ -13,6 +13,7 @@ import type { Program } from "./lib/estree";
 
 import * as debug from "./lib/debug";
 import { compile } from "./lib/compiler";
+import { timePhase, phaseStart, phaseEnd, reportPhases } from "./lib/phase-timing";
 import { dumpModules, getAllModules, gatherAllModules } from "./lib/passes/gather-imports";
 
 import { bold, reset, genFreshFileName, Writer } from "./lib/echo-util";
@@ -768,7 +769,7 @@ function compileFile(
     ]);
 
     debug.log(1, `writing ${bc_filename}`);
-    compiled_module.writeBitcodeToFile(bc_filename);
+    timePhase("bitcode", () => compiled_module.writeBitcodeToFile(bc_filename));
     debug.log(1, `done writing ${bc_filename}`);
 
     // textual IR is a debug artifact: written only under --leave-temp
@@ -836,12 +837,14 @@ function flushLLVMJobs(): void {
             `${bold()}OPT+LLC${reset()} ${llvm_jobs.length} module(s), ${jobs} jobs`
         );
     const sh_cmd = `/usr/bin/xargs -n1 -P ${jobs} /bin/sh < ${q(jobs_list)}`;
+    const pool_started = phaseStart();
     let status: number;
     if (isNode()) {
         status = child_process.spawnSync("/bin/sh", ["-c", sh_cmd], { stdio: "inherit" }).status ?? -1;
     } else {
         status = spawn("/bin/sh", ["-c", sh_cmd]) as unknown as number;
     }
+    phaseEnd("opt+llc pool", pool_started);
     if (status !== 0) {
         console.warn(`LLVM pipeline pool failed (exit status ${status})`);
         process.exit(-1);
@@ -960,8 +963,11 @@ function do_final_link(main_file: string, modules: Map<string, ModuleInfo>): voi
 
     debug.log(1, `executing '${target_linker} ${clang_args.join(" ")}'`);
 
+    const link_started = phaseStart();
     if (typeof __ejs != "undefined") {
         spawnSyncChecked(target_linker, clang_args);
+        phaseEnd("link", link_started);
+        reportPhases((line) => console.warn(line));
         // we ignore leave_tmp_files here
         if (!options.quiet) console.warn(`${bold()}done.${reset()}`);
     } else {
@@ -976,6 +982,8 @@ function do_final_link(main_file: string, modules: Map<string, ModuleInfo>): voi
                 console.warn(`${target_linker} failed (exit status ${code})`);
                 process.exit(-1);
             }
+            phaseEnd("link", link_started);
+            reportPhases((line) => console.warn(line));
             if (!options.leave_temp_files) {
                 cleanup(() => {
                     if (!options.quiet) console.warn(`${bold()}done.${reset()}`);
@@ -998,7 +1006,7 @@ function cleanup(done: () => void): void {
 const main_file = file_args[0]!;
 
 if (!options.srcdir) options.native_module_dirs.push(relative_to_ejs_exe("../lib"));
-let files = gatherAllModules(file_args, options, target_triple);
+let files = timePhase("parse+gather", () => gatherAllModules(file_args, options, target_triple));
 debug.log(1, () => {
     dumpModules();
     return "";

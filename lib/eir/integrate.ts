@@ -31,6 +31,7 @@ import { isLowerNotSupported } from "./errors";
 import { Module } from "./ir";
 import { FunctionBuilder } from "./builder";
 import { verifyModule } from "./verifier";
+import { timePhase } from "../phase-timing";
 import { injectLowTierProbes } from "./lowtier-probe";
 import { eliminateDeadInFunction, optimizeModule } from "./optimize";
 import { devirtualizeModule } from "./devirt";
@@ -403,6 +404,14 @@ function normalizeDefaultExports(body: e.Statement[]): void {
     }
 }
 
+// invariant checking: a full every-instruction pass, run at several
+// points per module.  -fverify-eir gates it — the test lanes and stage
+// builds enable it; plain compiles skip it and keep the wall.
+function verify(m: Module): void {
+    if (!passes().verifyEir) return;
+    timePhase("verify", () => verifyModule(m));
+}
+
 export function collectEIRToplevel(
     tree: e.Program,
     filename: string,
@@ -458,7 +467,7 @@ export function collectEIRToplevel(
         let eir_module = new Module(filename);
         lowerAnalyzedFunction(info, analysis, eir_module, mod_ctx);
         let accessors = buildModuleAccessors(eir_module, this_module_info);
-        verifyModule(eir_module);
+        verify(eir_module);
         // the as-lowered dump must precede optimization (which mutates
         // the module in place)
         if (dumpRequested(options)) dumpModule(filename, "toplevel-as-EIR", eir_module);
@@ -469,7 +478,7 @@ export function collectEIRToplevel(
         // lowering emits them.  Same mold as -fno-eir-opt.
         if (passes().lowtier) {
             const n = injectLowTierProbes(eir_module);
-            if (n > 0) verifyModule(eir_module);
+            if (n > 0) verify(eir_module);
         }
 
         // -fno-eir-opt disables the EIR optimizer without touching the
@@ -525,7 +534,7 @@ export function collectEIRToplevel(
                         `${stats.lattice_arith} lattice-typed op(s) lowered, ` +
                         `${stats.slot_loads_cse} slot load(s) CSE'd`
                 );
-            verifyModule(eir_module);
+            verify(eir_module);
 
             // function specialization.  Runs AFTER the first
             // optimizer pass (EIR inlining has already taken the
@@ -546,9 +555,9 @@ export function collectEIRToplevel(
                     spec_stats
                 );
                 if (changed) {
-                    verifyModule(eir_module);
+                    verify(eir_module);
                     optimizeModule(eir_module, info.name);
-                    verifyModule(eir_module);
+                    verify(eir_module);
                     // untrusted (wrapper) clones need a second pass: the
                     // loop-carried number proofs that fold their entry
                     // guards only fit provenNumberAt's depth cap after
@@ -557,7 +566,7 @@ export function collectEIRToplevel(
                     // compiles skip it (byte-pure).
                     if (spec_stats.wrapped > 0) {
                         optimizeModule(eir_module, info.name);
-                        verifyModule(eir_module);
+                        verify(eir_module);
                     }
                     debug.log(
                         1,
@@ -591,9 +600,9 @@ export function collectEIRToplevel(
                     });
                 const n = sinkConstructResults(eir_module, promoted, info.name);
                 if (n > 0) {
-                    verifyModule(eir_module);
+                    verify(eir_module);
                     optimizeModule(eir_module, info.name);
-                    verifyModule(eir_module);
+                    verify(eir_module);
                     typed_stats.ctor_sunk = n;
                     debug.log(
                         1,
@@ -613,7 +622,7 @@ export function collectEIRToplevel(
                 if (dstats.ssa_sites || dstats.slot_sites) {
                     // sweep the closures/loads the rewrites just orphaned
                     for (const fn of eir_module.functions) eliminateDeadInFunction(fn);
-                    verifyModule(eir_module);
+                    verify(eir_module);
                     debug.log(
                         1,
                         `EIR-devirt: ${filename}: ` +
@@ -634,7 +643,7 @@ export function collectEIRToplevel(
         {
             const n = lowerGeneratorBodies(eir_module);
             if (n > 0) {
-                verifyModule(eir_module);
+                verify(eir_module);
                 debug.log(1, `EIR-gen: ${filename}: ${n} generator body(ies) lowered`);
                 if (dumpOptRequested(options)) dumpModule(filename, "gen-lowered", eir_module);
             }

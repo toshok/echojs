@@ -61,6 +61,11 @@ export interface PassConfig {
     inlineEnvSlots: boolean;
     // opt-in probes
     lowtier: boolean;
+    // the EIR verifier: a full every-instruction invariant pass, run
+    // after lowering and again after each optimizer/specializer/sink
+    // rerun.  Test lanes and stage builds enable it for invariant
+    // coverage; plain compiles skip it.
+    verifyEir: boolean;
     // cross-module callable summaries (the export-harness pass;
     // design: echojs-maam/docs/cross-module-summaries.md).
     // OPT-IN until the self-hosted oracle is fast enough: the harness's
@@ -227,6 +232,12 @@ export const PASSES: readonly PassDesc[] = [
         field: "lowtier",
         minLevel: OPT_IN,
         help: "swap the lowtier_* probe function bodies for hand-built low-tier EIR (test hook)",
+    },
+    {
+        name: "verify-eir",
+        field: "verifyEir",
+        minLevel: OPT_IN,
+        help: "run the EIR verifier after lowering and after each optimizer rerun (test lanes and stage builds enable it; a full every-instruction pass, several times per module)",
     },
 ];
 

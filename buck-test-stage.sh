@@ -59,9 +59,10 @@ export NODE_PATH="$REPO/node_modules:$REPO/node-llvm/build/Release"
 # (FORCE_COLOR writes ANSI into the expected files and poisons the diffs)
 export NO_COLOR=1
 unset FORCE_COLOR
-if [ -n "$EXTRA_FLAGS" ]; then
-    export EJS_EXTRA_FLAGS="$EXTRA_FLAGS"
-fi
+# the EIR verifier is opt-in for plain compiles; the test lanes keep it
+# on for invariant coverage
+EXTRA_FLAGS="${EXTRA_FLAGS:+$EXTRA_FLAGS }-fverify-eir"
+export EJS_EXTRA_FLAGS="$EXTRA_FLAGS"
 if [ -n "$TEST_ENV" ]; then
     export $TEST_ENV
 fi

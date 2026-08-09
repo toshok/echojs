@@ -19,6 +19,7 @@ import { collectEIRToplevel } from "./eir/integrate";
 import type { ModuleAccessor } from "./eir/integrate";
 import { EIREmitter, VisitorSurface } from "./eir/emit";
 import { runTypeAnalysisProbe } from "./eir/oracle";
+import { timePhase, phaseStart, phaseEnd } from "./phase-timing";
 import type * as e from "./estree";
 import type { CompilerOptions } from "./options";
 import type { ModuleInfo, JSModuleInfo } from "./module-info";
@@ -1203,7 +1204,9 @@ export function compile(
 
     // pipeline-agnostic desugars run before EIR collection so both
     // pipelines see their %-intrinsic output
-    tree = pre_eir_convert(tree, module_filename, module_infos, options);
+    tree = timePhase("desugar", () =>
+        pre_eir_convert(tree, module_filename, module_infos, options)
+    );
 
     // --types (the MAAM oracle): type analysis over the desugared
     // toplevel.  Must run before collectEIRToplevel, which consumes (and
@@ -1217,24 +1220,28 @@ export function compile(
         const export_names = [...this_module_info.exports.entries()]
             .filter(([, info]) => !info.promoted)
             .map(([name]) => name);
-        type_oracle = runTypeAnalysisProbe(
-            tree,
-            source_filename,
-            module_filename,
-            export_names,
-            options.types_dump
+        type_oracle = timePhase("analysis", () =>
+            runTypeAnalysisProbe(
+                tree,
+                source_filename,
+                module_filename,
+                export_names,
+                options.types_dump
+            )
         );
     }
 
     // EIR is the only pipeline: a module that can't lower is a compile
     // error, not a fallback
-    let lowered = collectEIRToplevel(
-        tree,
-        source_filename,
-        module_infos,
-        this_module_info,
-        options,
-        type_oracle
+    let lowered = timePhase("lower+opt", () =>
+        collectEIRToplevel(
+            tree,
+            source_filename,
+            module_infos,
+            this_module_info,
+            options,
+            type_oracle
+        )
     );
     if (lowered.error) throw new Error(`${source_filename}: ${lowered.error}`);
     // telemetry: how many guarded diamonds lowering emitted, and
@@ -1289,6 +1296,7 @@ export function compile(
     const toplevel_node = tree.body[0] as e.FunctionDeclaration;
     const toplevel_name = toplevel_node.id.name;
 
+    const emit_started = phaseStart();
     let module = new llvm.Module(base_output_filename);
     module.setTriple(triple.llvmTriple());
     module.setDataLayout(triple.dataLayout());
@@ -1358,5 +1366,6 @@ export function compile(
 
     visitor.emitModuleResolution(lowered.accessors!);
 
+    phaseEnd("emit", emit_started);
     return module;
 }

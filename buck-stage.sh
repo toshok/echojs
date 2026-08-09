@@ -46,6 +46,9 @@ fi
 # is the stable "external-deps/echojs-maam/dist/src/index" in every stage
 EJS_ARGS=(--srcdir --leave-temp --moduledir node-compat --moduledir ejs-llvm
           -I "maam=$WORK/external-deps/echojs-maam/dist/src/index")
+# the EIR verifier is opt-in for plain compiles; stage self-compiles keep
+# it on for invariant coverage over the whole compiler
+EJS_ARGS+=(-fverify-eir)
 if [ -n "$EXTRA_FLAGS" ]; then
     EJS_ARGS+=($EXTRA_FLAGS)
 fi
