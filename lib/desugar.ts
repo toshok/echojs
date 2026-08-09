@@ -11,6 +11,7 @@ import { DesugarSpread } from "./passes/desugar-spread";
 import { DesugarMetaProperties } from "./passes/desugar-metaproperties";
 import { HoistFuncDecls } from "./passes/hoist-func-decls";
 import { TransformPass } from "./node-visitor";
+import { clearClassShapeEvidence } from "./class-evidence";
 
 import { generateDebug } from "./debug-codegen";
 import * as debug from "./debug";
@@ -106,5 +107,8 @@ export function preEIRConvert(
     modules: Map<string, ModuleInfo>,
     options: CompilerOptions
 ): Program {
+    // class-shape evidence flows desugar -> lowering within one module;
+    // dropping the previous module's entries here bounds the table
+    clearClassShapeEvidence();
     return runPasses(pre_eir_passes, tree, filename, modules, options);
 }

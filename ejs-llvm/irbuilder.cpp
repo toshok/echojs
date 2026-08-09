@@ -385,6 +385,14 @@ namespace ejsllvm {
         return Value_new(_llvm_builder.CreateNSWSub(lhs, rhs, name));
     }
 
+    static EJS_NATIVE_FUNC(IRBuilder_createNswAdd) {
+        REQ_LLVM_VAL_ARG(0, lhs);
+        REQ_LLVM_VAL_ARG(1, rhs);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
+
+        return Value_new(_llvm_builder.CreateNSWAdd(lhs, rhs, name));
+    }
+
     static EJS_NATIVE_FUNC(IRBuilder_createLandingPad) {
         REQ_LLVM_TYPE_ARG(0, ty);
         REQ_INT_ARG(1, num_clauses);
@@ -474,6 +482,7 @@ namespace ejsllvm {
         OBJ_METHOD(createSelect);
 
         OBJ_METHOD(createNswSub);
+        OBJ_METHOD(createNswAdd);
     
         OBJ_METHOD(createLandingPad);
         OBJ_METHOD(createResume);

@@ -532,6 +532,67 @@ census_print_shape_fields(uint32_t shape)
     _ejs_logstr("}");
 }
 
+/* ---- compiled guard-site census (-fshape-census builds) -------------
+   Modules compiled with -fshape-census register one [taken, total]
+   counter cell per has_shape site at module init; the table dumps here
+   at exit, one machine-readable line per evaluated site.  Without
+   EJS_SHAPES_CENSUS in the environment registration is a no-op, so an
+   instrumented binary run normally only pays the (never-registered)
+   inline counter stores. */
+typedef struct {
+    const char *site;
+    uint64_t *counters; /* [0] = taken, [1] = total */
+} GuardCensusEnt;
+
+static GuardCensusEnt *guard_census;
+static uint32_t guard_census_count;
+static uint32_t guard_census_alloc;
+static EJSBool guard_census_checked = EJS_FALSE;
+static EJSBool guard_census_on = EJS_FALSE;
+
+static void
+guard_census_dump(void)
+{
+    uint64_t taken_total = 0, evals_total = 0;
+    uint32_t evaluated = 0;
+    _ejs_log("=== ejs shape-guard site census (taken total site) ===\n");
+    for (uint32_t i = 0; i < guard_census_count; i++) {
+        uint64_t taken = guard_census[i].counters[0];
+        uint64_t total = guard_census[i].counters[1];
+        if (total == 0)
+            continue;
+        evaluated++;
+        taken_total += taken;
+        evals_total += total;
+        _ejs_log("GUARD %llu %llu %s\n", (unsigned long long)taken,
+                 (unsigned long long)total, guard_census[i].site);
+    }
+    _ejs_log("guard sites: %u registered, %u evaluated; taken %llu / %llu evals\n",
+             guard_census_count, evaluated, (unsigned long long)taken_total,
+             (unsigned long long)evals_total);
+}
+
+void
+_ejs_shape_guard_census_register(const char *site, uint64_t *counters)
+{
+    if (!guard_census_checked) {
+        guard_census_checked = EJS_TRUE;
+        guard_census_on = getenv("EJS_SHAPES_CENSUS") != NULL;
+        if (guard_census_on)
+            atexit(guard_census_dump);
+    }
+    if (!guard_census_on)
+        return;
+    if (guard_census_count == guard_census_alloc) {
+        guard_census_alloc = guard_census_alloc ? guard_census_alloc * 2 : 1024;
+        guard_census = (GuardCensusEnt *)realloc(
+            guard_census, guard_census_alloc * sizeof(GuardCensusEnt));
+    }
+    guard_census[guard_census_count].site = site;
+    guard_census[guard_census_count].counters = counters;
+    guard_census_count++;
+}
+
 static void
 census_dump(void)
 {

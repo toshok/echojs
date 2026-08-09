@@ -59,6 +59,7 @@ namespace jsllvm {
     static NAN_METHOD(CreateSelect);
 
     static NAN_METHOD(CreateNswSub);
+    static NAN_METHOD(CreateNswAdd);
 
     static NAN_METHOD(CreateLandingPad);
     static NAN_METHOD(CreateResume);

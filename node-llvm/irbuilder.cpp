@@ -78,6 +78,7 @@ namespace jsllvm {
     Nan::SetMethod(ctor_func, "createSelect", IRBuilder::CreateSelect);
 
     Nan::SetMethod(ctor_func, "createNswSub", IRBuilder::CreateNswSub);
+    Nan::SetMethod(ctor_func, "createNswAdd", IRBuilder::CreateNswAdd);
 
     Nan::SetMethod(ctor_func, "createLandingPad", IRBuilder::CreateLandingPad);
     Nan::SetMethod(ctor_func, "createResume", IRBuilder::CreateResume);
@@ -647,7 +648,7 @@ namespace jsllvm {
 
   NAN_METHOD(IRBuilder::CreateNswSub) {
     v8::Isolate *isolate = info.GetIsolate();
-    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();
     Nan::HandleScope scope;
 
     REQ_LLVM_VAL_ARG(context, 0, lhs);
@@ -655,6 +656,19 @@ namespace jsllvm {
     FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateNSWSub(lhs, rhs, *name)));
+    info.GetReturnValue().Set(result);
+  }
+
+  NAN_METHOD(IRBuilder::CreateNswAdd) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();
+    Nan::HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(context, 0, lhs);
+    REQ_LLVM_VAL_ARG(context, 1, rhs);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
+
+    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateNSWAdd(lhs, rhs, *name)));
     info.GetReturnValue().Set(result);
   }
 

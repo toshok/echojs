@@ -247,6 +247,12 @@ uint32_t _ejs_shape_transition_set(uint32_t shape, uint32_t slot_index,
 uint32_t _ejs_shape_intern(uint32_t nfields, const ejsval *names,
                            uint32_t f64_mask);
 
+/* -fshape-census module init: register one compiled guard site's
+   [taken, total] counter cell under its site string.  The per-site
+   table dumps at exit when EJS_SHAPES_CENSUS is set; without the env
+   var registration is a no-op. */
+void _ejs_shape_guard_census_register(const char *site, uint64_t *counters);
+
 EJS_END_DECLS
 
 #endif /* _ejs_shapes_h_ */

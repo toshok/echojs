@@ -66,6 +66,10 @@ export interface PassConfig {
     // rerun.  Test lanes and stage builds enable it for invariant
     // coverage; plain compiles skip it.
     verifyEir: boolean;
+    // instrumentation: every emitted has_shape guard counts its
+    // taken/total per site into a module global; the runtime dumps the
+    // per-site table at exit under EJS_SHAPES_CENSUS
+    shapeCensus: boolean;
     // cross-module callable summaries (the export-harness pass;
     // design: echojs-maam/docs/cross-module-summaries.md).
     // OPT-IN until the self-hosted oracle is fast enough: the harness's
@@ -176,8 +180,8 @@ export const PASSES: readonly PassDesc[] = [
     {
         name: "class-this-guards",
         field: "classThisGuards",
-        minLevel: OPT_IN,
-        help: "guard this.x sites in base-class methods on the class birth shape (checked tier); opt-in: emission cost currently outweighs the hit rate on the self-compile",
+        minLevel: 0,
+        help: "guard this.x sites in base-class methods on the class birth shape (checked tier, needs --types); birth reprs come from field initializers + ctor stores",
     },
     {
         name: "prop-ics",
@@ -238,6 +242,12 @@ export const PASSES: readonly PassDesc[] = [
         field: "verifyEir",
         minLevel: OPT_IN,
         help: "run the EIR verifier after lowering and after each optimizer rerun (test lanes and stage builds enable it; a full every-instruction pass, several times per module)",
+    },
+    {
+        name: "shape-census",
+        field: "shapeCensus",
+        minLevel: OPT_IN,
+        help: "instrument every has_shape guard with per-site taken/total counters, dumped at exit under EJS_SHAPES_CENSUS (guard-coverage measurement builds)",
     },
 ];
 

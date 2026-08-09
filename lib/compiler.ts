@@ -89,6 +89,10 @@ class LLVMIRVisitor implements VisitorSurface {
     // same contract for the atom-table switch dispatch tables
     // (emitSwitchTableInits / emitModuleResolution)
     switch_init_function: llvm.EjsFunction | null = null;
+    // -fshape-census: the per-site guard counter cells, flushed into a
+    // registration init function by emitShapeCensusRegs (same contract)
+    module_census: { global: llvm.GlobalVariable; desc: string }[] = [];
+    census_init_function: llvm.EjsFunction | null = null;
 
     constructor(
         module: llvm.Module,
@@ -248,6 +252,10 @@ class LLVMIRVisitor implements VisitorSurface {
         // initialized by now, same as the shapes')
         if (this.switch_init_function)
             ir.createCall(this.switch_init_function.type, this.switch_init_function, [], "");
+
+        // -fshape-census: register the per-site guard counters
+        if (this.census_init_function)
+            ir.createCall(this.census_init_function.type, this.census_init_function, [], "");
 
         // fill in the information we know about this module
         //  our name
@@ -985,6 +993,22 @@ class LLVMIRVisitor implements VisitorSurface {
         return entry.global;
     }
 
+    // -fshape-census: one zero-initialized [2 x i64] taken/total cell
+    // per has_shape site; emitShapeCensusRegs registers each with the
+    // runtime under its site string at module init
+    shapeCensusGlobal(desc: string): llvm.GlobalVariable {
+        const ty2 = llvm.ArrayType.get(types.Int64, 2);
+        const g = new llvm.GlobalVariable(
+            this.module,
+            ty2,
+            `ejs_shape_census-${this.idgen()}`,
+            llvm.Constant.getAggregateZero(ty2),
+            false
+        );
+        this.module_census.push({ global: g, desc: `${this.filename}|${desc}` });
+        return g;
+    }
+
     // one [2 x i32] property-load IC cell per compiled load site:
     // [0] = cached shape (0xffffff = EJS_SHAPE_NOMATCH — matches no
     // header, so an empty cell and a dictionary receiver both miss),
@@ -1081,6 +1105,39 @@ class LLVMIRVisitor implements VisitorSurface {
                 [consts.int32(n), atoms_base, ents_base],
                 ""
             );
+        }
+        ir.createRetVoid();
+
+        this.currentFunction = saved_function;
+        if (saved_insert) ir.setInsertPoint(saved_insert);
+        return fn;
+    }
+
+    // flush the pending census cells into a registration init function
+    // (one _ejs_shape_guard_census_register call per has_shape site);
+    // same separate-function contract and call site as the shape interns
+    emitShapeCensusRegs(): llvm.EjsFunction | null {
+        if (this.module_census.length === 0) return null;
+        const saved_insert = ir.getInsertBlock();
+        const saved_function = this.currentFunction;
+
+        const fname = `_ejs_module_init_shape_census_${this.filename}`;
+        const fn = this.module.getOrInsertFunction(fname, types.Void, []);
+        fn.setInternalLinkage();
+        this.currentFunction = fn;
+        const body_bb = new llvm.BasicBlock("entry", fn);
+        ir.setInsertPoint(body_bb);
+
+        const ty2 = llvm.ArrayType.get(types.Int64, 2);
+        for (const entry of this.module_census) {
+            const desc = ir.createGlobalStringPtr(entry.desc, "census_site");
+            const cell = ir.createGetElementPointer(
+                ty2,
+                entry.global,
+                [consts.int32(0), consts.int64(0)],
+                "census_cell"
+            );
+            this.createCall(this.ejs_runtime.shape_guard_census_register, [desc, cell], "");
         }
         ir.createRetVoid();
 
@@ -1363,6 +1420,8 @@ export function compile(
     visitor.shape_init_function = visitor.emitShapeInterns();
     // likewise every atom_switch_index: flush the switch dispatch tables
     visitor.switch_init_function = visitor.emitSwitchTableInits();
+    // and the -fshape-census counter registrations
+    visitor.census_init_function = visitor.emitShapeCensusRegs();
 
     visitor.emitModuleResolution(lowered.accessors!);
 

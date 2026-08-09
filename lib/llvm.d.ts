@@ -220,6 +220,7 @@ declare module "@llvm" {
         createLandingPad(type: Type, numClauses: number, name: string): LandingPad;
         createLoad(type: Type, ptr: Value, name: string): Value;
         createNswSub(l: Value, r: Value, name: string): Value;
+        createNswAdd(l: Value, r: Value, name: string): Value;
         createOr(l: Value, r: Value, name: string): Value;
         createPhi(type: Type, count: number, name: string): PhiNode;
         createPointerCast(value: Value, type: Type, name: string): Value;

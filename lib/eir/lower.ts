@@ -24,6 +24,7 @@ import type * as e from "../estree";
 import type { ModuleInfo } from "../module-info";
 import type { TypeOracle } from "./oracle";
 import { passes } from "../pass-config";
+import { getClassShapeEvidence } from "../class-evidence";
 
 // --- module-scope interop types (integrate.ts imports these) -----------------
 
@@ -1096,7 +1097,8 @@ class LowerFunction {
 
     classBirthShape(
         ctorFn: e.Function | undefined,
-        fieldNames: string[] | undefined
+        fieldNames: string[] | undefined,
+        fieldInits: (e.Expression | null)[] | undefined
     ): ShapeField[] | null {
         const memo = (this.mod_ctx.class_shapes ??= new Map());
         const memoKey = (fieldNames ?? ctorFn) as object;
@@ -1105,18 +1107,26 @@ class LowerFunction {
         const compute = (): ShapeField[] | null => {
             if (fieldNames) {
                 // field-declaring class: the %defineField prologue makes
-                // the instance shape the declared list (all boxed —
-                // fields initialize undefined), and the constructor's
-                // leading `this.x = v` run then repr-transitions any
-                // field it stores a number into (the runtime's
-                // transition_set).  So the final shape is the declared
-                // ORDER with per-field reprs from the ctor stores; any
+                // the instance shape the declared list, each field's repr
+                // set by the VALUE it defines with (a numeric initializer
+                // makes the field f64 at birth; no initializer defines
+                // undefined = boxed), and the constructor's leading
+                // `this.x = v` run then repr-transitions any field whose
+                // stored kind differs (the runtime's transition_set).  So
+                // the final shape is the declared ORDER with per-field
+                // reprs from initializers overridden by ctor stores; any
                 // this-store outside that leading run (conditional,
                 // effectful, or to an undeclared name) leaves the final
                 // repr unknowable and declines the class.
                 if (fieldNames.length < 1 || fieldNames.length > EJS_SHAPE_FIELD_CAP_MAX)
                     return null;
                 const reprByName = new Map<string, "boxed" | "f64">();
+                if (fieldInits)
+                    for (let i = 0; i < fieldNames.length; i++) {
+                        const init = fieldInits[i];
+                        if (init && this.operandIsNumber(init))
+                            reprByName.set(fieldNames[i]!, "f64");
+                    }
                 if (ctorFn) {
                     if (ctorFn.body.type !== "BlockStatement") return null;
                     const { names: storeNames, valueNodes } = this.ctorPrefixExtract(ctorFn.body);
@@ -1158,15 +1168,13 @@ class LowerFunction {
         if (objNode.type !== "ThisExpression") return null;
         if (!passes().bornShaped) return null; // the fill is what makes the shape real
         // `this` belongs to the nearest non-arrow ancestor — its node
-        // carries the desugar's marker when it is a base-class method
+        // carries the desugar's evidence when it is a base-class method
         let fi: FnInfo | null = this.info;
         while (fi && fi.node.type === "ArrowFunctionExpression") fi = fi.parent;
         if (!fi) return null;
-        const marked = fi.node as unknown as Record<string, unknown>;
-        const ctorFn = marked["ejs_class_ctor_fn"] as e.Function | undefined;
-        const fieldNames = marked["ejs_class_field_names"] as string[] | undefined;
-        if (!ctorFn && !fieldNames) return null;
-        const fields = this.classBirthShape(ctorFn, fieldNames);
+        const ev = getClassShapeEvidence(fi.node);
+        if (!ev || (!ev.ctorFn && !ev.fieldNames)) return null;
+        const fields = this.classBirthShape(ev.ctorFn, ev.fieldNames, ev.fieldInits);
         if (!fields) return null;
         const slot = fields.findIndex((f) => f.name === atom);
         if (slot < 0) return null; // method/proto access: leave the decline standing

@@ -76,6 +76,9 @@ export interface VisitorSurface {
     ejsvalBitsEq(a: llvm.Value, b: llvm.Value, name: string): llvm.Value;
     // per-site property-load IC cell ([2 x i32]: shape, slot)
     propICGlobal(): llvm.GlobalVariable;
+    // -fshape-census: the per-site [2 x i64] taken/total counter cell,
+    // registered with the runtime at module init under `desc`
+    shapeCensusGlobal(desc: string): llvm.GlobalVariable;
     loadBoolEjsValue(n: boolean): llvm.Value;
     loadDoubleEjsValue(n: number): llvm.Value;
     loadNullEjsValue(): llvm.Value;
@@ -790,6 +793,40 @@ export class EIREmitter {
                 const phi = ir.createPhi(types.Int1, 2, "has_shape");
                 phi.addIncoming(eq, check_bb);
                 phi.addIncoming(consts.int1(0), from_bb);
+
+                // -fshape-census instrumentation: count taken/total per
+                // site ([2 x i64] cell; miss = total - taken at dump)
+                if (passes().shapeCensus) {
+                    const cell = this.v.shapeCensusGlobal(`${this.eirFn.name}|${key}`);
+                    const ty2 = llvm.ArrayType.get(types.Int64, 2);
+                    const taken_ptr = ir.createInBoundsGetElementPointer(
+                        ty2,
+                        cell,
+                        [consts.int64(0), consts.int64(0)],
+                        "census_taken_ptr"
+                    );
+                    const total_ptr = ir.createInBoundsGetElementPointer(
+                        ty2,
+                        cell,
+                        [consts.int64(0), consts.int64(1)],
+                        "census_total_ptr"
+                    );
+                    const taken = ir.createLoad(types.Int64, taken_ptr, "census_taken");
+                    ir.createStore(
+                        ir.createNswAdd(
+                            taken,
+                            ir.createZExt(phi, types.Int64, "census_hit"),
+                            "census_taken1"
+                        ),
+                        taken_ptr
+                    );
+                    const total = ir.createLoad(types.Int64, total_ptr, "census_total");
+                    ir.createStore(
+                        ir.createNswAdd(total, consts.int64(1), "census_total1"),
+                        total_ptr
+                    );
+                }
+
                 this.values.set(inst, phi);
                 return;
             }

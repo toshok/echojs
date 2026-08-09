@@ -51,6 +51,11 @@ import { Stack } from "../stack-es6";
 import { reportError } from "../errors";
 import { TransformPass, VisitResult } from "../node-visitor";
 import { intrinsic, is_intrinsic, startGenerator } from "../echo-util";
+import {
+    setClassShapeEvidence,
+    copyClassShapeEvidence,
+    type ClassShapeEvidence,
+} from "../class-evidence";
 import type * as e from "../estree";
 
 // identifiers that appear in VALUE position must be fresh AST nodes per
@@ -502,12 +507,20 @@ export class DesugarClasses extends TransformPass {
                 if (el.type === "MethodDefinition" && el.kind === "constructor" && el.value)
                     ctorFn = el.value;
             let fieldNames: string[] | null = null;
+            // the field initializer expressions, parallel to fieldNames
+            // (null = no initializer -> the field defines undefined):
+            // classBirthShape derives per-field reprs from them — the
+            // %defineField prologue stores the initializer VALUE, so a
+            // numeric initializer makes the field f64 at birth
+            let fieldInits: (e.Expression | null)[] | null = null;
             if (instance_fields.length > 0) {
                 fieldNames = [];
+                fieldInits = [];
                 for (const f of instance_fields) {
                     const k = f.key as e.Node;
                     if (f.computed || (k.type !== "Identifier" && k.type !== "Literal")) {
                         fieldNames = null;
+                        fieldInits = null;
                         break;
                     }
                     const name =
@@ -516,20 +529,24 @@ export class DesugarClasses extends TransformPass {
                             : String((k as e.Literal).value);
                     if (name === "__proto__" || /^[0-9]/.test(name) || fieldNames.includes(name)) {
                         fieldNames = null;
+                        fieldInits = null;
                         break;
                     }
                     fieldNames.push(name);
+                    fieldInits.push(f.value ?? null);
                 }
             }
             const eligible = instance_fields.length === 0 ? ctorFn !== null : fieldNames !== null;
             if (eligible) {
+                const ev: ClassShapeEvidence = {};
+                if (ctorFn) ev.ctorFn = ctorFn as e.Function;
+                if (fieldNames) ev.fieldNames = fieldNames;
+                if (fieldInits) ev.fieldInits = fieldInits;
                 for (const el of n.body.body) {
                     if (el.type !== "MethodDefinition" || el.static) continue;
                     if ((el.key as e.Node).type === "PrivateIdentifier") continue;
                     if (el.kind === "constructor" || !el.value) continue;
-                    const fn = el.value as unknown as Record<string, unknown>;
-                    if (ctorFn) fn["ejs_class_ctor_fn"] = ctorFn;
-                    if (fieldNames) fn["ejs_class_field_names"] = fieldNames;
+                    setClassShapeEvidence(el.value, ev);
                 }
             }
         }
@@ -947,10 +964,7 @@ export class DesugarClasses extends TransformPass {
         if (!ast_method.computed)
             (method as unknown as Record<string, unknown>)["ejs_display_name"] = method_name;
         // the class-this birth-shape evidence travels to the rebuilt node
-        for (const marker of ["ejs_class_ctor_fn", "ejs_class_field_names"]) {
-            const v = (ast_method.value as unknown as Record<string, unknown>)[marker];
-            if (v !== undefined) (method as unknown as Record<string, unknown>)[marker] = v;
-        }
+        copyClassShapeEvidence(ast_method.value, method);
 
         const Object_defineProperty = b.memberExpression(Object_id, defineProperty_id);
         // spec method attributes: writable, non-enumerable, configurable

@@ -631,6 +631,18 @@ const runtime_interface = {
             ])
         );
     },
+    // -fshape-census: register one guard site's [taken, total] counter
+    // cell under its site string (dumped at exit under EJS_SHAPES_CENSUS)
+    shape_guard_census_register: function (this: RuntimeContext) {
+        return does_not_throw(
+            this.abi.createExternalFunction(
+                this.module,
+                "_ejs_shape_guard_census_register",
+                ty.Void,
+                [ty.Int8Pointer, ty.Int64.pointerTo()]
+            )
+        );
+    },
     // the property-store IC entries (see _ejs_object_setprop_ic)
     object_setprop_ic: function (this: RuntimeContext) {
         return this.abi.createExternalFunction(this.module, "_ejs_object_setprop_ic", ty.EjsValue, [
