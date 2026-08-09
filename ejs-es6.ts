@@ -132,6 +132,7 @@ const options: CompilerOptions = {
     srcdir: false,
     stdout_writer: new Writer(process.stdout),
     script: false,
+    ic_profile: null,
 };
 
 function add_native_module_dir(dir: string): void {
@@ -319,6 +320,10 @@ const args: Record<string, ArgSpec | undefined> = {
         handlerArgc: 0,
         help: "print the effective pass configuration (after the -O suite and any -f flags) and exit.",
     },
+    "--ic-profile": {
+        option: "ic_profile",
+        help: "inline guarded fast paths at load sites a -fic-profile-dump training run proved monomorphic (checked tier; see EJS_IC_PROFILE).",
+    },
 };
 
 // -f<pass>/-fno-<pass> tokens, in command-line order (applied after the
@@ -410,6 +415,58 @@ if (print_passes) {
 if (!file_args || file_args.length === 0) {
     output_usage();
     process.exit(0);
+}
+
+// --ic-profile: parse the training dump once.  "ICPROF <evals> <slot>
+// <site> <shape-key>" per line; a site with records naming different
+// shapes was polymorphic across specialization clones — drop it (the
+// inline guard wants one shape).  Duplicate same-shape records keep the
+// larger eval count.
+if (options.ic_profile) {
+    let text: string;
+    try {
+        text = fs.readFileSync(options.ic_profile, "utf-8") as unknown as string;
+    } catch (e) {
+        console.warn(`--ic-profile: cannot read '${options.ic_profile}': ${e}`);
+        process.exit(-1);
+        throw new Error("unreachable");
+    }
+    const map = new Map<string, { key: string; slot: number; evals: number }>();
+    const conflicted = new Set<string>();
+    for (const line of text.split("\n")) {
+        const m = line.match(/ICPROF (\d+) (\d+) (\S+) (\S+)/);
+        if (!m) continue;
+        const evals = parseInt(m[1]!, 10);
+        const slot = parseInt(m[2]!, 10);
+        const site = m[3]!;
+        const key = m[4]!;
+        const prev = map.get(site);
+        if (prev) {
+            if (prev.key !== key || prev.slot !== slot) {
+                conflicted.add(site);
+                map.delete(site);
+            } else prev.evals += evals; // specialization clones split traffic
+            continue;
+        }
+        if (!conflicted.has(site)) map.set(site, { key, slot, evals });
+    }
+    // inline only genuinely hot sites — each inlined guard is IR the
+    // backend pays for (the inline-diamond-everywhere variant lost to
+    // llc bloat).  EJS_IC_PROFILE_MIN overrides the eval threshold.
+    const min_evals = Math.max(0, parseInt(process.env["EJS_IC_PROFILE_MIN"] || "1000", 10) || 0);
+    let cold = 0;
+    for (const [site, rec] of map)
+        if (rec.evals < min_evals) {
+            map.delete(site);
+            cold++;
+        }
+    options.ic_profile_map = map;
+    if (!options.quiet)
+        options.stdout_writer.write(
+            `${bold()}IC-PROFILE${reset()} ${map.size} hot monomorphic site(s)` +
+                (cold > 0 ? `, ${cold} cold skipped` : "") +
+                (conflicted.size > 0 ? `, ${conflicted.size} conflicted dropped` : "")
+        );
 }
 
 if (!options.quiet) {

@@ -79,6 +79,9 @@ export interface VisitorSurface {
     // -fshape-census: the per-site [2 x i64] taken/total counter cell,
     // registered with the runtime at module init under `desc`
     shapeCensusGlobal(desc: string): llvm.GlobalVariable;
+    // -fic-profile-dump: register a load-IC cell under its site id and
+    // mint the i64 eval counter the emitted code bumps
+    icProfileSite(desc: string, cell: llvm.GlobalVariable): llvm.GlobalVariable;
     loadBoolEjsValue(n: boolean): llvm.Value;
     loadDoubleEjsValue(n: number): llvm.Value;
     loadNullEjsValue(): llvm.Value;
@@ -960,6 +963,16 @@ export class EIREmitter {
                 // more llc time than the inline hit saved.)
                 const site = this.v.propICGlobal();
                 const site_base = ir.createBitCast(site, types.Int32.pointerTo(), "ic_site");
+                // -fic-profile-dump: register the cell under its stable
+                // site id and bump the per-site eval counter inline
+                if (passes().icProfileDump && inst.imms["ic_site"] !== undefined) {
+                    const counter = this.v.icProfileSite(String(inst.imms["ic_site"]), site);
+                    const n = ir.createLoad(types.Int64, counter, "icprof_evals");
+                    ir.createStore(
+                        ir.createNswAdd(n, consts.int64(1), "icprof_evals1"),
+                        counter
+                    );
+                }
                 return this.emitCallLike(
                     inst,
                     rt.object_getprop_ic,

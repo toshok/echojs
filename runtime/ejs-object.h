@@ -287,6 +287,10 @@ EJSBool _ejs_object_define_accessor_property_desc (ejsval obj, ejsval key, ejsva
 ejsval _ejs_object_setprop (ejsval obj, ejsval key, ejsval value);
 ejsval _ejs_object_getprop (ejsval obj, ejsval key);
 ejsval _ejs_object_getprop_ic (ejsval obj, ejsval key, uint32_t* site);
+// -fic-profile-dump module init: register a load-IC site's cell +
+// eval counter under its stable site string (dumped at exit under
+// EJS_IC_PROFILE; no-op without the env var)
+void _ejs_prop_ic_profile_register (const char *site, uint32_t *cell, uint64_t *evals);
 ejsval _ejs_object_setprop_ic (ejsval obj, ejsval key, ejsval value, uint32_t* site);
 ejsval _ejs_object_setprop_ic_strict (ejsval obj, ejsval key, ejsval value, uint32_t* site);
 

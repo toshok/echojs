@@ -61,6 +61,8 @@ export type CollectResult =
           shape_guards: number;
           // 2-way polymorphic chains (subset of guards)
           shape_poly_guards: number;
+          // sites inlined from an --ic-profile training dump
+          ic_profile_guards: number;
           shape_declined: Record<string, number>;
           // born-with-shape telemetry
           born_shaped: number;
@@ -83,6 +85,7 @@ export type CollectResult =
           shape_sites?: undefined;
           shape_guards?: undefined;
           shape_poly_guards?: undefined;
+          ic_profile_guards?: undefined;
           shape_declined?: undefined;
           born_shaped?: undefined;
           ctor_fills?: undefined;
@@ -459,6 +462,8 @@ export function collectEIRToplevel(
             module_infos: module_infos,
             oracle: oracle,
             typed_stats: typed_stats,
+            // --ic-profile: the training run's monomorphic sites
+            ic_profile: options.ic_profile_map ?? null,
             // --types-dump grows the per-site shape census
             shape_dump: !!options.types_dump,
             script: !!options.script,
@@ -664,6 +669,7 @@ export function collectEIRToplevel(
             shape_sites: typed_stats.shape_sites ?? 0,
             shape_guards: typed_stats.shape_guards ?? 0,
             shape_poly_guards: typed_stats.shape_poly_guards ?? 0,
+            ic_profile_guards: typed_stats.ic_profile_guards ?? 0,
             shape_declined: typed_stats.shape_declined ?? {},
             born_shaped: typed_stats.born_shaped ?? 0,
             ctor_fills: typed_stats.ctor_fills ?? 0,

@@ -66,6 +66,14 @@ export interface ModCtx {
     // guards = shape diamonds emitted, declined = counted reasons
     // (promotion criterion 5 — visible degradation).
     oracle?: TypeOracle | null;
+    // --ic-profile: site-id -> the training run's installed monomorphic
+    // {key, slot} (ejs-es6.ts parses the dump); propGet inlines the
+    // guarded fast path at listed sites the oracle declined
+    ic_profile?: Map<string, { key: string; slot: number; evals: number }> | null;
+    // per-module load-site counter — the site-id half.  Both the
+    // training build and the consuming build count EVERY propGet in
+    // lowering order, so the ids agree across builds
+    ic_site_counter?: number;
     typed_stats?: {
         diamonds: number;
         trusted?: number;
@@ -74,6 +82,8 @@ export interface ModCtx {
         // sites guarded with the 2-way polymorphic
         // chain (a subset of shape_guards)
         shape_poly_guards?: number;
+        // sites inlined from an --ic-profile training dump
+        ic_profile_guards?: number;
         shape_declined?: Record<string, number>;
         // born-with-shape telemetry — literal sites
         // batched into make_object_shaped, constructor prefixes batched
@@ -1239,9 +1249,44 @@ class LowerFunction {
     // second shape on the first guard's miss edge, so each fast arm sits
     // under its own same-block-fresh has_shape fact and the verifier's
     // rules apply per arm unchanged.
+    // the profile's answer for one load site: parse the dumped shape
+    // key back into fields, re-intern (the round-trip must reproduce
+    // the key exactly), and hand back a single checked-tier fact.
+    // Conservative declines: unparseable key, non-identifier field
+    // name (the dump prints raw names; a name holding ':' or ',' would
+    // have corrupted the format), out-of-range slot.
+    icProfileFacts(site: string): { key: string; slot: number; repr: "boxed" | "f64" }[] | null {
+        const map = this.mod_ctx.ic_profile;
+        if (!map) return null;
+        const rec = map.get(site);
+        if (!rec) return null;
+        const fields: ShapeField[] = [];
+        for (const part of rec.key.split(",")) {
+            const ci = part.lastIndexOf(":");
+            if (ci <= 0) return null;
+            const name = part.substring(0, ci);
+            const repr = part.substring(ci + 1);
+            if (repr !== "boxed" && repr !== "f64") return null;
+            if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) return null;
+            fields.push({ name, repr });
+        }
+        if (rec.slot < 0 || rec.slot >= fields.length) return null;
+        const key = this.module.internShape(fields);
+        if (key !== rec.key) return null;
+        const stats = this.mod_ctx.typed_stats;
+        if (stats) stats.ic_profile_guards = (stats.ic_profile_guards ?? 0) + 1;
+        return [{ key, slot: rec.slot, repr: fields[rec.slot]!.repr }];
+    }
+
     propGet(objNode: e.Expression | null, obj: Inst, atom: string): Inst {
-        const facts = this.shapeFactFor(objNode, atom);
-        if (!facts) return this.b.emit("get_prop_atom", [obj], { atom: atom });
+        // the stable site id; ic_site travels on get_prop_atom only in
+        // -fic-profile-dump builds (the imm shows in printed EIR)
+        const site = `${this.module.name}#${(this.mod_ctx.ic_site_counter =
+            (this.mod_ctx.ic_site_counter ?? 0) + 1)}`;
+        const site_imm = passes().icProfileDump ? { ic_site: site } : {};
+        let facts = this.shapeFactFor(objNode, atom);
+        if (!facts) facts = this.icProfileFacts(site);
+        if (!facts) return this.b.emit("get_prop_atom", [obj], { atom: atom, ...site_imm });
 
         const fast_bbs = facts.map(() => this.b.newBlock("shape_fast"));
         const chk_bbs = facts.slice(1).map(() => this.b.newBlock("shape_chk"));
@@ -1280,7 +1325,7 @@ class LowerFunction {
         }
 
         this.b.setInsertPoint(slow_bb);
-        const g = this.b.emit("get_prop_atom", [obj], { atom: atom });
+        const g = this.b.emit("get_prop_atom", [obj], { atom: atom, ...site_imm });
         this.b.br(join_bb, [g]);
         this.b.sealBlock(join_bb);
 

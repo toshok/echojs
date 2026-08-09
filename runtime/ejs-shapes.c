@@ -532,6 +532,50 @@ census_print_shape_fields(uint32_t shape)
     _ejs_logstr("}");
 }
 
+/* the compiler's shape-key spelling for an interned shape —
+   "name:boxed,other:f64" in insertion order (lib/eir/ir.ts shapeKey) —
+   malloc'd; NULL when the shape can't be spelled (dictionary/NOMATCH,
+   symbol-keyed field, over the walk buffer).  The IC-profile dump uses
+   this so -fic-profile can re-intern the same key at compile time. */
+char *
+_ejs_shape_key_dup(uint32_t shape)
+{
+    if (shape == EJS_SHAPE_DICT || shape >= shape_count)
+        return NULL;
+    ejsval names[256];
+    uint8_t reprs[256];
+    uint32_t depth = shape_get(shape)->field_count;
+    if (depth == 0 || depth > 256)
+        return NULL;
+
+    uint32_t s = shape;
+    for (uint32_t i = depth; i > 0; i--) {
+        EJSShape *cur = shape_get(s);
+        if (!EJSVAL_IS_STRING(cur->name))
+            return NULL; /* symbol-keyed field: no compiler spelling */
+        names[i - 1] = cur->name;
+        reprs[i - 1] = cur->repr;
+        s = cur->parent;
+    }
+
+    size_t cap = 64, len = 0;
+    char *key = (char *)malloc(cap);
+    key[0] = 0;
+    for (uint32_t i = 0; i < depth; i++) {
+        char *utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(names[i]));
+        const char *repr = reprs[i] == EJS_SHAPE_REPR_F64 ? "f64" : "boxed";
+        size_t need = len + strlen(utf8) + strlen(repr) + 3;
+        if (need > cap) {
+            while (need > cap) cap *= 2;
+            key = (char *)realloc(key, cap);
+        }
+        len += (size_t)snprintf(key + len, cap - len, "%s%s:%s",
+                                i > 0 ? "," : "", utf8, repr);
+        free(utf8);
+    }
+    return key;
+}
+
 /* ---- compiled guard-site census (-fshape-census builds) -------------
    Modules compiled with -fshape-census register one [taken, total]
    counter cell per has_shape site at module init; the table dumps here

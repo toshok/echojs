@@ -1373,6 +1373,69 @@ _ejs_object_setprop_ic_strict (ejsval obj, ejsval key, ejsval value, uint32_t* s
     return _ejs_object_setprop_ic_impl (obj, key, value, site, EJS_TRUE);
 }
 
+// ---- the IC training-run profile (-fic-profile-dump builds) ----------
+// Instrumented modules register every load-IC site at module init:
+// the site string (module#N, stable across builds), the IC cell, and
+// a per-site eval counter the emitted code bumps.  At exit — only when
+// EJS_IC_PROFILE is set; registration is a no-op otherwise — each site
+// whose cell installed an OWN monomorphic hit dumps one line:
+//   ICPROF <evals> <slot> <site> <shape-key>
+// with the shape spelled in the compiler's key format, so a later
+// compile can re-intern it and inline the guarded fast path
+// (-fic-profile=<file>).  Proto-tier installs don't dump — the inline
+// guard machinery is own-slot only.
+typedef struct {
+    const char *site;
+    uint32_t *cell;
+    uint64_t *evals;
+} ICProfileEnt;
+
+static ICProfileEnt *ic_profile;
+static uint32_t ic_profile_count;
+static uint32_t ic_profile_alloc;
+static EJSBool ic_profile_checked = EJS_FALSE;
+static EJSBool ic_profile_on = EJS_FALSE;
+
+static void
+ic_profile_dump(void)
+{
+    for (uint32_t i = 0; i < ic_profile_count; i++) {
+        uint32_t *cell = ic_profile[i].cell;
+        if (cell[0] == EJS_SHAPE_NOMATCH || cell[1] == EJS_PROPIC_PROTO)
+            continue;
+        char *key = _ejs_shape_key_dup(cell[0]);
+        if (!key)
+            continue;
+        _ejs_log("ICPROF %llu %u %s %s\n",
+                 (unsigned long long)*ic_profile[i].evals, cell[1],
+                 ic_profile[i].site, key);
+        free(key);
+    }
+    _ejs_log("ic-profile: %u sites registered\n", ic_profile_count);
+}
+
+void
+_ejs_prop_ic_profile_register (const char *site, uint32_t *cell, uint64_t *evals)
+{
+    if (!ic_profile_checked) {
+        ic_profile_checked = EJS_TRUE;
+        ic_profile_on = getenv("EJS_IC_PROFILE") != NULL;
+        if (ic_profile_on)
+            atexit(ic_profile_dump);
+    }
+    if (!ic_profile_on)
+        return;
+    if (ic_profile_count == ic_profile_alloc) {
+        ic_profile_alloc = ic_profile_alloc ? ic_profile_alloc * 2 : 1024;
+        ic_profile = (ICProfileEnt *)realloc(
+            ic_profile, ic_profile_alloc * sizeof(ICProfileEnt));
+    }
+    ic_profile[ic_profile_count].site = site;
+    ic_profile[ic_profile_count].cell = cell;
+    ic_profile[ic_profile_count].evals = evals;
+    ic_profile_count++;
+}
+
 ejsval
 _ejs_object_getprop_ic (ejsval obj, ejsval key, uint32_t* site)
 {

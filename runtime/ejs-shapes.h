@@ -253,6 +253,11 @@ uint32_t _ejs_shape_intern(uint32_t nfields, const ejsval *names,
    var registration is a no-op. */
 void _ejs_shape_guard_census_register(const char *site, uint64_t *counters);
 
+/* the compiler's shape-key spelling ("name:boxed,other:f64") for an
+   interned shape, malloc'd; NULL when unspellable (dict, symbol-keyed
+   field).  The -fic-profile-dump exit dump uses it. */
+char *_ejs_shape_key_dup(uint32_t shape);
+
 EJS_END_DECLS
 
 #endif /* _ejs_shapes_h_ */

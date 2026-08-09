@@ -70,6 +70,10 @@ export interface PassConfig {
     // taken/total per site into a module global; the runtime dumps the
     // per-site table at exit under EJS_SHAPES_CENSUS
     shapeCensus: boolean;
+    // instrumentation: every load-IC site registers its cell + an eval
+    // counter; the runtime dumps installed monomorphic sites at exit
+    // under EJS_IC_PROFILE — the training half of --ic-profile
+    icProfileDump: boolean;
     // cross-module callable summaries (the export-harness pass;
     // design: echojs-maam/docs/cross-module-summaries.md).
     // OPT-IN until the self-hosted oracle is fast enough: the harness's
@@ -248,6 +252,12 @@ export const PASSES: readonly PassDesc[] = [
         field: "shapeCensus",
         minLevel: OPT_IN,
         help: "instrument every has_shape guard with per-site taken/total counters, dumped at exit under EJS_SHAPES_CENSUS (guard-coverage measurement builds)",
+    },
+    {
+        name: "ic-profile-dump",
+        field: "icProfileDump",
+        minLevel: OPT_IN,
+        help: "instrument every load-IC site to dump installed monomorphic {site, shape, slot, evals} at exit under EJS_IC_PROFILE — training runs for --ic-profile",
     },
 ];
 

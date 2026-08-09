@@ -93,6 +93,14 @@ class LLVMIRVisitor implements VisitorSurface {
     // registration init function by emitShapeCensusRegs (same contract)
     module_census: { global: llvm.GlobalVariable; desc: string }[] = [];
     census_init_function: llvm.EjsFunction | null = null;
+    // -fic-profile-dump: load-IC cells + eval counters, flushed by
+    // emitICProfileRegs (same contract again)
+    module_ic_profile: {
+        desc: string;
+        cell: llvm.GlobalVariable;
+        counter: llvm.GlobalVariable;
+    }[] = [];
+    ic_profile_init_function: llvm.EjsFunction | null = null;
 
     constructor(
         module: llvm.Module,
@@ -256,6 +264,15 @@ class LLVMIRVisitor implements VisitorSurface {
         // -fshape-census: register the per-site guard counters
         if (this.census_init_function)
             ir.createCall(this.census_init_function.type, this.census_init_function, [], "");
+
+        // -fic-profile-dump: register the load-IC cells + counters
+        if (this.ic_profile_init_function)
+            ir.createCall(
+                this.ic_profile_init_function.type,
+                this.ic_profile_init_function,
+                [],
+                ""
+            );
 
         // fill in the information we know about this module
         //  our name
@@ -1121,6 +1138,57 @@ class LLVMIRVisitor implements VisitorSurface {
         return fn;
     }
 
+    // -fic-profile-dump: the per-site i64 eval counter; the cell rides
+    // along for registration
+    icProfileSite(desc: string, cell: llvm.GlobalVariable): llvm.GlobalVariable {
+        const counter = new llvm.GlobalVariable(
+            this.module,
+            types.Int64,
+            `ejs_ic_prof-${this.idgen()}`,
+            consts.int64(0),
+            false
+        );
+        this.module_ic_profile.push({ desc, cell, counter });
+        return counter;
+    }
+
+    // flush the pending IC-profile registrations (one
+    // _ejs_prop_ic_profile_register call per load-IC site); the census
+    // flush contract
+    emitICProfileRegs(): llvm.EjsFunction | null {
+        if (this.module_ic_profile.length === 0) return null;
+        const saved_insert = ir.getInsertBlock();
+        const saved_function = this.currentFunction;
+
+        const fname = `_ejs_module_init_ic_profile_${this.filename}`;
+        const fn = this.module.getOrInsertFunction(fname, types.Void, []);
+        fn.setInternalLinkage();
+        this.currentFunction = fn;
+        const body_bb = new llvm.BasicBlock("entry", fn);
+        ir.setInsertPoint(body_bb);
+
+        const cell_ty = llvm.ArrayType.get(types.Int32, 4);
+        for (const entry of this.module_ic_profile) {
+            const desc = ir.createGlobalStringPtr(entry.desc, "icprof_site");
+            const cell = ir.createGetElementPointer(
+                cell_ty,
+                entry.cell,
+                [consts.int32(0), consts.int64(0)],
+                "icprof_cell"
+            );
+            this.createCall(
+                this.ejs_runtime.prop_ic_profile_register,
+                [desc, cell, entry.counter],
+                ""
+            );
+        }
+        ir.createRetVoid();
+
+        this.currentFunction = saved_function;
+        if (saved_insert) ir.setInsertPoint(saved_insert);
+        return fn;
+    }
+
     // flush the pending census cells into a registration init function
     // (one _ejs_shape_guard_census_register call per has_shape site);
     // same separate-function contract and call site as the shape interns
@@ -1354,7 +1422,11 @@ export function compile(
                           .join(",")}`
                     : "") +
                 // constructor-result sinking telemetry (additive)
-                ((lowered.ctor_sunk ?? 0) > 0 ? ` ctorSunk=${lowered.ctor_sunk}` : "")
+                ((lowered.ctor_sunk ?? 0) > 0 ? ` ctorSunk=${lowered.ctor_sunk}` : "") +
+                // --ic-profile telemetry (additive)
+                ((lowered.ic_profile_guards ?? 0) > 0
+                    ? ` icProfileGuards=${lowered.ic_profile_guards}`
+                    : "")
         );
     }
 
@@ -1430,6 +1502,8 @@ export function compile(
     visitor.switch_init_function = visitor.emitSwitchTableInits();
     // and the -fshape-census counter registrations
     visitor.census_init_function = visitor.emitShapeCensusRegs();
+    // and the -fic-profile-dump registrations
+    visitor.ic_profile_init_function = visitor.emitICProfileRegs();
 
     visitor.emitModuleResolution(lowered.accessors!);
 
