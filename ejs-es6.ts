@@ -785,44 +785,68 @@ function compileFile(
         module_toplevel: (compiled_module as unknown as { toplevel_name: string }).toplevel_name,
     });
 
+    // the opt+llc pipeline is queued and flushed as one parallel pool
+    // right before the link (flushLLVMJobs): a serial pipeline blocked
+    // the whole build on every module's backend while every core but
+    // one idled — the subprocess share of the self-compile ran wall ==
+    // user
+    llvm_jobs.push({ opt_args, llc_args });
+    o_filenames.push(o_filename);
+    compileCallback();
+}
+
+interface LLVMJob {
+    opt_args: string[];
+    llc_args: string[];
+}
+const llvm_jobs: LLVMJob[] = [];
+
+// run every queued opt+llc pipeline, EJS_LLVM_JOBS-wide (default 8):
+// one job script per module, one synchronous xargs pool over them —
+// identical in both hosts (the self-hosted spawn is synchronous, and
+// the pool is a single child either way).  xargs exits non-zero if any
+// job fails; the job scripts exit at the first failing tool.
+function flushLLVMJobs(): void {
+    if (llvm_jobs.length === 0) return;
     const opt_cmd = llvm_tool("opt");
     const llc_cmd = llvm_tool("llc");
-    if (!isNode()) {
-        // in ejs spawn is synchronous.
-        spawnSyncChecked(opt_cmd, opt_args);
-        spawnSyncChecked(llc_cmd, llc_args);
-        o_filenames.push(o_filename);
-        compileCallback();
+    const jobs = Math.max(1, parseInt(process.env["EJS_LLVM_JOBS"] || "8", 10) || 8);
+    const q = (s: string): string => `'${s.split("'").join(`'\\''`)}'`;
+    const stamp = genFreshFileName("lljobs");
+    const script_paths: string[] = [];
+    llvm_jobs.forEach((j, i) => {
+        const sp = `${os.tmpdir()}/${stamp}-${i}.sh`;
+        fs.writeFileSync(
+            sp,
+            [
+                "#!/bin/sh",
+                `${q(opt_cmd)} ${j.opt_args.map(q).join(" ")} || exit 1`,
+                `${q(llc_cmd)} ${j.llc_args.map(q).join(" ")} || exit 1`,
+                "",
+            ].join("\n")
+        );
+        temp_files.push(sp);
+        script_paths.push(sp);
+    });
+    const jobs_list = `${os.tmpdir()}/${stamp}.list`;
+    fs.writeFileSync(jobs_list, script_paths.join("\n") + "\n");
+    temp_files.push(jobs_list);
+    if (!options.quiet)
+        options.stdout_writer.write(
+            `${bold()}OPT+LLC${reset()} ${llvm_jobs.length} module(s), ${jobs} jobs`
+        );
+    const sh_cmd = `/usr/bin/xargs -n1 -P ${jobs} /bin/sh < ${q(jobs_list)}`;
+    let status: number;
+    if (isNode()) {
+        status = child_process.spawnSync("/bin/sh", ["-c", sh_cmd], { stdio: "inherit" }).status ?? -1;
     } else {
-        debug.log(1, `executing '${opt_cmd} ${opt_args.join(" ")}'`);
-        let opt = spawn(opt_cmd, opt_args);
-        opt.stderr.on("data", (data) => console.warn(`${data}`));
-        opt.on("error", (err) => {
-            console.warn(`error executing ${opt_cmd}: ${err}`);
-            process.exit(-1);
-        });
-        opt.on("exit", (code) => {
-            if (code !== 0) {
-                console.warn(`${opt_cmd} failed (exit status ${code})`);
-                process.exit(-1);
-            }
-            debug.log(1, `executing '${llc_cmd} ${llc_args.join(" ")}'`);
-            let llc = spawn(llc_cmd, llc_args);
-            llc.stderr.on("data", (data) => console.warn(`${data}`));
-            llc.on("error", (err) => {
-                console.warn(`error executing ${llc_cmd}: ${err}`);
-                process.exit(-1);
-            });
-            llc.on("exit", (code) => {
-                if (code !== 0) {
-                    console.warn(`${llc_cmd} failed (exit status ${code})`);
-                    process.exit(-1);
-                }
-                o_filenames.push(o_filename);
-                compileCallback();
-            });
-        });
+        status = spawn("/bin/sh", ["-c", sh_cmd]) as unknown as number;
     }
+    if (status !== 0) {
+        console.warn(`LLVM pipeline pool failed (exit status ${status})`);
+        process.exit(-1);
+    }
+    llvm_jobs.length = 0;
 }
 
 function generate_import_map(
@@ -1016,6 +1040,7 @@ let allModules = getAllModules();
 let files_count = files.length;
 const compileNextFile = (): void => {
     if (files.length === 0) {
+        flushLLVMJobs();
         do_final_link(main_file, allModules);
         return;
     }
