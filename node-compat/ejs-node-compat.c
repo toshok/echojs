@@ -664,6 +664,14 @@ static EJS_NATIVE_FUNC(_ejs_os_arch) {
     return _ejs_string_new_utf8(arch);
 }
 
+// node's os.availableParallelism(): the schedulable core count
+// (the driver sizes its opt+llc pool with it)
+static EJS_NATIVE_FUNC(_ejs_os_availableParallelism) {
+    long n = sysconf(_SC_NPROCESSORS_ONLN);
+    if (n < 1) n = 1;
+    return NUMBER_TO_EJSVAL(n);
+}
+
 static EJS_NATIVE_FUNC(_ejs_os_endianness) {
 #ifdef IS_LITTLE_ENDIAN
     const char* endianness= "LE";
@@ -724,6 +732,7 @@ _ejs_os_module_func (ejsval exports)
 {
     EJS_INSTALL_FUNCTION(exports, "tmpdir", _ejs_os_tmpdir);
     EJS_INSTALL_FUNCTION(exports, "arch", _ejs_os_arch);
+    EJS_INSTALL_FUNCTION(exports, "availableParallelism", _ejs_os_availableParallelism);
     EJS_INSTALL_FUNCTION(exports, "endianness", _ejs_os_endianness);
     EJS_INSTALL_FUNCTION(exports, "hostname", _ejs_os_hostname);
     EJS_INSTALL_FUNCTION(exports, "platform", _ejs_os_platform);

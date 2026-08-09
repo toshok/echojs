@@ -818,12 +818,9 @@ function compileFile(
     // (no -S), and llc consumes the optimized bitcode.  Both binding sets
     // (node-llvm and the self-hosted ejs-llvm) expose writeBitcodeToFile,
     // so stage0 and stage1+ run the identical pipeline.
+    const key_flags = target_llc_args(target_triple).concat(["-filetype=obj"]);
     let opt_args = [`-passes=${opt_level}strip-dead-prototypes`, `-o=${bc_opt_filename}`, bc_filename];
-    let llc_args = target_llc_args(target_triple).concat([
-        "-filetype=obj",
-        `-o=${o_filename}`,
-        bc_opt_filename,
-    ]);
+    let llc_args = key_flags.concat([`-o=${o_filename}`, bc_opt_filename]);
 
     debug.log(1, `writing ${bc_filename}`);
     timePhase("bitcode", () => compiled_module.writeBitcodeToFile(bc_filename));
@@ -848,7 +845,15 @@ function compileFile(
     // the whole build on every module's backend while every core but
     // one idled — the subprocess share of the self-compile ran wall ==
     // user
-    llvm_jobs.push({ opt_args, llc_args });
+    llvm_jobs.push({
+        opt_args,
+        llc_args,
+        bc_opt: bc_opt_filename,
+        o_file: o_filename,
+        // the cache key's flag half: llc flags without the run-specific
+        // -o/input paths
+        key_flags: key_flags.join(" "),
+    });
     o_filenames.push(o_filename);
     compileCallback();
 }
@@ -856,10 +861,27 @@ function compileFile(
 interface LLVMJob {
     opt_args: string[];
     llc_args: string[];
+    bc_opt: string;
+    o_file: string;
+    key_flags: string;
 }
 const llvm_jobs: LLVMJob[] = [];
 
-// run every queued opt+llc pipeline, EJS_LLVM_JOBS-wide (default 8):
+// the content-addressed .o cache: key = sha256(optimized bitcode +
+// llc flags + llc --version), so a hit is byte-equivalent to rerunning
+// llc.  EJS_OBJ_CACHE=off disables, =<dir> relocates; default is
+// ~/.cache/echojs/objcache (off when HOME is unset).
+function objCacheDir(): string | null {
+    const env = process.env["EJS_OBJ_CACHE"];
+    if (env === "off" || env === "0") return null;
+    if (env) return env;
+    const home = process.env["HOME"];
+    if (!home) return null;
+    return `${home}/.cache/echojs/objcache`;
+}
+
+// run every queued opt+llc pipeline, EJS_LLVM_JOBS-wide (default: the
+// machine's core count):
 // one job script per module, one synchronous xargs pool over them —
 // identical in both hosts (the self-hosted spawn is synchronous, and
 // the pool is a single child either way).  xargs exits non-zero if any
@@ -868,21 +890,40 @@ function flushLLVMJobs(): void {
     if (llvm_jobs.length === 0) return;
     const opt_cmd = llvm_tool("opt");
     const llc_cmd = llvm_tool("llc");
-    const jobs = Math.max(1, parseInt(process.env["EJS_LLVM_JOBS"] || "8", 10) || 8);
+    // pool width follows the machine (EJS_LLVM_JOBS overrides)
+    const default_jobs = os.availableParallelism();
+    const jobs = Math.max(
+        1,
+        parseInt(process.env["EJS_LLVM_JOBS"] || String(default_jobs), 10) || default_jobs
+    );
     const q = (s: string): string => `'${s.split("'").join(`'\\''`)}'`;
     const stamp = genFreshFileName("lljobs");
+    const cache_dir = objCacheDir();
     const script_paths: string[] = [];
     llvm_jobs.forEach((j, i) => {
         const sp = `${os.tmpdir()}/${stamp}-${i}.sh`;
-        fs.writeFileSync(
-            sp,
-            [
-                "#!/bin/sh",
-                `${q(opt_cmd)} ${j.opt_args.map(q).join(" ")} || exit 1`,
-                `${q(llc_cmd)} ${j.llc_args.map(q).join(" ")} || exit 1`,
-                "",
-            ].join("\n")
-        );
+        const llc_line = `${q(llc_cmd)} ${j.llc_args.map(q).join(" ")} || exit 1`;
+        const lines = ["#!/bin/sh", `${q(opt_cmd)} ${j.opt_args.map(q).join(" ")} || exit 1`];
+        if (cache_dir) {
+            // key on what determines the object bytes: the optimized
+            // bitcode, the llc flags, and the llc identity.  A hit
+            // copies the cached object; a miss runs llc and installs
+            // atomically (tmp + rename).
+            lines.push(
+                `C=${q(cache_dir)}`,
+                `k=$({ cat ${q(j.bc_opt)}; echo ${q(j.key_flags)}; ${q(llc_cmd)} --version 2>&1 | head -2; } | /usr/bin/shasum -a 256 | cut -d' ' -f1)`,
+                `if [ -f "$C/$k.o" ]; then`,
+                `  cp "$C/$k.o" ${q(j.o_file)} || exit 1`,
+                `else`,
+                `  ${llc_line}`,
+                `  mkdir -p "$C" && cp ${q(j.o_file)} "$C/.tmp$k.$$" && mv "$C/.tmp$k.$$" "$C/$k.o"`,
+                `fi`
+            );
+        } else {
+            lines.push(llc_line);
+        }
+        lines.push("");
+        fs.writeFileSync(sp, lines.join("\n"));
         temp_files.push(sp);
         script_paths.push(sp);
     });
@@ -905,6 +946,22 @@ function flushLLVMJobs(): void {
     if (status !== 0) {
         console.warn(`LLVM pipeline pool failed (exit status ${status})`);
         process.exit(-1);
+    }
+
+    // dumb size-capped eviction: over EJS_OBJ_CACHE_MB (default 2048),
+    // drop the oldest half by mtime.  Failure is ignorable — the cache
+    // is an accelerator, never a correctness dependency.
+    if (cache_dir) {
+        const cap_mb = Math.max(64, parseInt(process.env["EJS_OBJ_CACHE_MB"] || "2048", 10) || 2048);
+        const evict_cmd =
+            `if [ -d ${q(cache_dir)} ] && [ "$(du -sm ${q(cache_dir)} | cut -f1)" -gt ${cap_mb} ]; then ` +
+            `cd ${q(cache_dir)} && n=$(ls -1 *.o 2>/dev/null | wc -l) && ` +
+            `ls -1t *.o | tail -n $((n / 2)) | xargs rm -f; fi; true`;
+        if (isNode()) {
+            child_process.spawnSync("/bin/sh", ["-c", evict_cmd], { stdio: "inherit" });
+        } else {
+            spawn("/bin/sh", ["-c", evict_cmd]);
+        }
     }
     llvm_jobs.length = 0;
 }
