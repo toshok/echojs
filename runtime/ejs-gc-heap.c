@@ -78,9 +78,14 @@ int num_arenas;
 #define ARENA_SHIFT 25
 _Static_assert((1L << ARENA_SHIFT) == ARENA_SIZE, "ARENA_SHIFT matches ARENA_SIZE");
 
-static char* arena_space;      // base, ARENA_SIZE-aligned
+// exported (with the LOS span below) for ejs-gc.h's inlined
+// _ejs_gc_ptr_is_gc_managed — the shape/propertymap cache admission
+// test runs it per lookup
+char* _ejs_gc_arena_space;     // base, ARENA_SIZE-aligned
+#define arena_space _ejs_gc_arena_space
 static char* arena_space_pos;  // next uncommitted chunk
-static char* arena_space_end;  // base + MAX_HEAP_SIZE
+char* _ejs_gc_arena_space_end; // base + MAX_HEAP_SIZE
+#define arena_space_end _ejs_gc_arena_space_end
 static Arena* arena_map[MAX_ARENAS]; // direct map: (ptr - base) >> ARENA_SHIFT
 
 static void
@@ -134,22 +139,11 @@ conservative_bounds_add(void* start, size_t size)
 // with blocks scattered by mmap — costs hundreds of ms per pin scan
 // on deep-recursion minors; the [los_lo, los_hi) bounds check is the
 // quick reject.
-static char *los_lo = (char*)UINTPTR_MAX;
-static char *los_hi = NULL;
+char *_ejs_gc_los_lo = (char*)UINTPTR_MAX;
+char *_ejs_gc_los_hi = NULL;
+#define los_lo _ejs_gc_los_lo
+#define los_hi _ejs_gc_los_hi
 
-// TRUE when ptr lies in GC-managed storage (the arena reservation or the
-// LOS span): such an address can be freed and recycled by the collector,
-// so identity caches keyed on it (the shape-lookup and propertymap
-// caches) must not admit it — a recycled address would false-hit with
-// the previous occupant's entry.  Statics (runtime atoms, module string
-// literals) are outside both ranges and cache safely.
-EJSBool
-_ejs_gc_ptr_is_gc_managed (void* ptr)
-{
-    if ((uintptr_t)((char*)ptr - arena_space) < (uintptr_t)MAX_HEAP_SIZE)
-        return EJS_TRUE;
-    return (char*)ptr >= los_lo && (char*)ptr < los_hi;
-}
 
 EJSList heap_pages[HEAP_PAGELISTS_COUNT];
 LargeObjectInfo *los_list;

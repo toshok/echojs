@@ -64,7 +64,25 @@ extern GCObjectPtr _ejs_gc_alloc(size_t size, EJSScanType scan_type);
 // TRUE when ptr lies in GC-managed storage (arena reservation or LOS) —
 // addresses the collector can free and recycle.  Identity caches keyed
 // on pointer values must not admit such pointers.
-extern EJSBool _ejs_gc_ptr_is_gc_managed(void* ptr);
+// TRUE when ptr lies in GC-managed storage (the arena reservation or
+// the LOS span): such an address can be freed and recycled by the
+// collector, so identity caches keyed on it (the shape-lookup and
+// propertymap caches) must not admit it — a recycled address would
+// false-hit with the previous occupant's entry.  Statics (runtime
+// atoms, module string literals) are outside both ranges and cache
+// safely.  Inline: the cache admission test runs per lookup
+// (globals in ejs-gc-heap.c).
+extern char* _ejs_gc_arena_space;
+extern char* _ejs_gc_arena_space_end;
+extern char* _ejs_gc_los_lo;
+extern char* _ejs_gc_los_hi;
+static inline EJSBool
+_ejs_gc_ptr_is_gc_managed (void* ptr)
+{
+    if ((char*)ptr >= _ejs_gc_arena_space && (char*)ptr < _ejs_gc_arena_space_end)
+        return EJS_TRUE;
+    return (char*)ptr >= _ejs_gc_los_lo && (char*)ptr < _ejs_gc_los_hi;
+}
 
 // EJS_GC_ENV_GUARD=1 (also on under EJS_GC_VERIFY / EJS_GC_PARANOID):
 // scanners validate a closureenv against its heap cell — bounds, cell
