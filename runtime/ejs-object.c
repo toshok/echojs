@@ -1291,17 +1291,26 @@ _ejs_object_setprop_strict (ejsval val, ejsval key, ejsval value)
 jschar* last_lookup = NULL;
 #endif
 
-// ---- the emitted property-load IC miss handler ----------------------
-// A compiled monomorphic load site carries a per-site i64 cell packing
-// (shape | slot<<32); the emitted fast path compares the receiver's
-// header shape against the cell and loads the slot inline.  This is
-// the miss path: do the generic get, then — when the key resolved to
-// an OWN data slot on a SHAPED receiver — install {shape, slot} so the
-// next load at this site takes the inline path.  A proto-chain hit,
-// dictionary receiver, or primitive receiver installs nothing (the
-// site keeps calling here).  Shape identity carries slot layout, so a
-// stale cell can only MISS, never mis-load: any own-property change
-// transitions the shape (or dict-converts).
+// ---- the emitted property-load IC ------------------------------------
+// A compiled load site carries a per-site uint32_t[4] cell:
+// [0] = receiver shape, [1] = own slot or EJS_PROPIC_PROTO, [2]/[3] =
+// the immediate proto's shape and slot for proto hits.  Own hit = one
+// shape compare + slot load.  Proto hit (methods live on prototypes) =
+// receiver shape compare + proto load + proto shape compare + proto
+// slot load; the receiver's shape identity vouches the key is NOT an
+// own property (any own add would transition it), and the cell caches
+// the SLOT, never the value — the load always goes through the CURRENT
+// proto, so a same-shaped replacement proto or an in-place method
+// value write stays correct, and a shadowing own-store transitions the
+// receiver shape into a miss.  Depth 1 only: receiver -> immediate
+// proto covers class instances calling class methods.  The miss path
+// does the generic get, then installs: own data slot of the receiver
+// shape when there is one, else an own data slot of the immediate
+// (shaped) proto.  Shaped shapes hold data properties only — accessor
+// defines dict-convert — so a shape-table hit IS a data slot.  A
+// dictionary receiver/proto or primitive receiver installs nothing.
+// Shape identity carries slot layout, so a stale cell can only MISS,
+// never mis-load.
 // ---- the property-store IC ------------------------------------------
 // The store cell packs (slot | repr<<30 | 1<<31) beside the shape:
 // bit 31 set means "installed, writable"; bit 30 is the field's repr
@@ -1313,6 +1322,9 @@ jschar* last_lookup = NULL;
 #define EJS_PROPIC_INSTALLED (1u << 31)
 #define EJS_PROPIC_F64       (1u << 30)
 #define EJS_PROPIC_SLOT_MASK 0x00ffffffu
+// load-cell site[1] sentinel: the hit lives on the immediate proto
+// (site[2]/site[3]); no real slot index reaches 2^32-1
+#define EJS_PROPIC_PROTO     0xffffffffu
 
 ejsval
 _ejs_object_setprop_ic_impl (ejsval obj, ejsval key, ejsval value, uint32_t* site, EJSBool strict)
@@ -1367,18 +1379,44 @@ _ejs_object_getprop_ic (ejsval obj, ejsval key, uint32_t* site)
     if (EJSVAL_IS_OBJECT(obj)) {
         EJSObject* obj_ = EJSVAL_TO_OBJECT(obj);
         uint32_t shape = EJS_OBJECT_SHAPE(obj_);
-        // the hit path: one compare, one slot load (an f64 slot's raw
-        // double bits ARE its boxed value, so the plain load serves
-        // both reprs).  site[0] initializes to EJS_SHAPE_NOMATCH, which
-        // no header carries — dictionary receivers (shape 0) miss too.
-        if (shape == site[0])
-            return shaped_slots(obj_)[site[1]];
+        // the hit paths: an f64 slot's raw double bits ARE its boxed
+        // value, so the plain loads serve both reprs.  site[0]
+        // initializes to EJS_SHAPE_NOMATCH, which no header carries —
+        // dictionary receivers (shape 0) miss too.
+        if (shape == site[0]) {
+            uint32_t own = site[1];
+            if (own != EJS_PROPIC_PROTO)
+                return shaped_slots(obj_)[own];
+            ejsval protov = obj_->proto;
+            if (EJSVAL_IS_OBJECT(protov)) {
+                EJSObject* proto_ = EJSVAL_TO_OBJECT(protov);
+                if (EJS_OBJECT_SHAPE(proto_) == site[2])
+                    return shaped_slots(proto_)[site[3]];
+            }
+        }
         ejsval rv = _ejs_object_getprop (obj, key);
         if (shape != EJS_SHAPE_DICT) {
             uint32_t slot;
             if (_ejs_shape_lookup (shape, key, &slot)) {
                 site[1] = slot;
                 site[0] = shape;
+            } else {
+                // the key is not own under this shape (so a matching
+                // receiver never needs the own tier again): cache the
+                // depth-1 proto hit when the resolve landed on an own
+                // data slot of the immediate shaped proto
+                ejsval protov = obj_->proto;
+                if (EJSVAL_IS_OBJECT(protov)) {
+                    EJSObject* proto_ = EJSVAL_TO_OBJECT(protov);
+                    uint32_t pshape = EJS_OBJECT_SHAPE(proto_);
+                    if (pshape != EJS_SHAPE_DICT
+                        && _ejs_shape_lookup (pshape, key, &slot)) {
+                        site[2] = pshape;
+                        site[3] = slot;
+                        site[1] = EJS_PROPIC_PROTO;
+                        site[0] = shape;
+                    }
+                }
             }
         }
         return rv;

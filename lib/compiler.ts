@@ -1009,17 +1009,25 @@ class LLVMIRVisitor implements VisitorSurface {
         return g;
     }
 
-    // one [2 x i32] property-load IC cell per compiled load site:
-    // [0] = cached shape (0xffffff = EJS_SHAPE_NOMATCH — matches no
-    // header, so an empty cell and a dictionary receiver both miss),
-    // [1] = the field's slot.  The miss path installs both.
+    // one [4 x i32] property IC cell per compiled load/store site:
+    // [0] = cached receiver shape (0xffffff = EJS_SHAPE_NOMATCH —
+    // matches no header, so an empty cell and a dictionary receiver
+    // both miss), [1] = the field's own slot (loads: EJS_PROPIC_PROTO
+    // = the hit lives on the immediate prototype instead), [2]/[3] =
+    // the proto's shape and slot for proto hits (loads only; store
+    // sites use [0..1]).  The runtime miss paths install everything.
     propICGlobal(): llvm.GlobalVariable {
-        const ty2 = llvm.ArrayType.get(types.Int32, 2);
+        const ty4 = llvm.ArrayType.get(types.Int32, 4);
         return new llvm.GlobalVariable(
             this.module,
-            ty2,
+            ty4,
             `ejs_prop_ic-${this.idgen()}`,
-            llvm.ConstantArray.get(ty2, [consts.int32(0xffffff), consts.int32(0)]),
+            llvm.ConstantArray.get(ty4, [
+                consts.int32(0xffffff),
+                consts.int32(0),
+                consts.int32(0xffffff),
+                consts.int32(0),
+            ]),
             false
         );
     }
