@@ -41,6 +41,9 @@ export interface PassConfig {
     shapeFusion: boolean;
     // lowering-time behaviors (oracle-gated where applicable)
     shapeGuards: boolean;
+    // all-string-literal-case switches dispatch through a per-module
+    // atom table instead of a linear strict_eq chain
+    atomSwitch: boolean;
     polyShapeGuards: boolean;
     bornShaped: boolean;
     promote: boolean;
@@ -159,6 +162,12 @@ export const PASSES: readonly PassDesc[] = [
         field: "polyShapeGuards",
         minLevel: 0,
         help: "2-way polymorphic shape-guard chains (needs --types)",
+    },
+    {
+        name: "atom-switch",
+        field: "atomSwitch",
+        minLevel: 0,
+        help: "all-string-literal-case switches dispatch via an interned-atom table probe instead of a strict_eq chain",
     },
     {
         name: "born-shaped",

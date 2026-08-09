@@ -47,6 +47,10 @@ EJSBool SameValueZero(ejsval x, ejsval y);
 // identity-hash bits (stable across GC moves)
 uint32_t _ejs_svz_hash(ejsval v);
 
+// atom-table switch dispatch (compiler-emitted; see ejs-ops.c)
+void _ejs_switch_table_init(uint32_t n, ejsval* atoms, uint64_t* ents);
+ejsval _ejs_switch_index(ejsval disc, uint32_t n, ejsval* atoms, uint64_t* ents);
+
 ejsval _ejs_op_typeof_is_object(ejsval exp);
 ejsval _ejs_op_typeof_is_function(ejsval exp);
 ejsval _ejs_op_typeof_is_string(ejsval exp);

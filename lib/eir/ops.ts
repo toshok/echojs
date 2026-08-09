@@ -90,6 +90,34 @@ export const OPS = {
     typeof_is: { arity: 1, effects: E.NONE, imms: ["type"] },
     logical_not: { arity: 1, effects: E.NONE },
 
+    // --- switch dispatch ---------------------------------------------------
+    // all-string-literal-case switches dispatch through a per-module
+    // atom table instead of a linear strict_eq chain (lower.ts
+    // switchStmt).  atom_switch_index probes the table (hash reject +
+    // binary search over interned case atoms) and produces the matching
+    // case's table position as a BOXED number — -1 when the
+    // discriminant is not a string or matches no case — so the value
+    // can cross the test-chain blocks (raw values may not).
+    // imms.atoms is the case-order string list; emit dedups tables by
+    // content, so equal-atom switches share one.  Duplicate case
+    // strings resolve to the FIRST occurrence, preserving
+    // document-order chain semantics.
+    atom_switch_index: {
+        arity: 1,
+        effects: E.NONE,
+        imms: ["atoms"],
+        sig: { params: ["ejsval"], result: "any" },
+    },
+    // per-case probe of an atom_switch_index result: unbox + exact
+    // f64 compare against imms.index, producing a machine i1 consumed
+    // by the same block's cond_br (the has_tag pattern)
+    switch_index_eq: {
+        arity: 1,
+        effects: E.NONE,
+        imms: ["index"],
+        sig: { params: ["ejsval"], result: "i1" },
+    },
+
     // --- properties --------------------------------------------------------
     get_prop: { arity: 2, effects: GENERIC_OP },
     set_prop: { arity: 3, effects: GENERIC_OP, imms: ["strict"] },

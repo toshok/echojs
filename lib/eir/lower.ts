@@ -2313,17 +2313,48 @@ class LowerFunction {
         let bodies = n.cases.map((c, i) => this.b.newBlock(`case_body${i}`));
         let defaultIdx = n.cases.findIndex((c) => !c.test);
 
-        // test chain, in document order, skipping default
+        // When every case test is a string literal, one table probe
+        // replaces the whole strict_eq chain: atom_switch_index returns
+        // the first matching case's table position (boxed; -1 for a
+        // non-string or unmatched discriminant) and each case tests its
+        // own position with a machine compare.  Chain semantics hold
+        // exactly — positions follow document order, duplicate strings
+        // resolve to the first occurrence inside the probe, and string
+        // literals have no evaluation effects to skip.
+        const stringCases: number[] = [];
         for (let i = 0; i < n.cases.length; i++) {
             const test = n.cases[i]!.test;
             if (!test) continue;
-            const tv = this.expr(test);
-            const cmp = this.b.emit("strict_eq", [disc, tv], {});
-            const cbool = this.b.emit("to_boolean", [cmp], {});
-            const next_test = this.b.newBlock(`case_test${i}`);
-            this.b.condBr(cbool, bodies[i]!, [], next_test, []);
-            this.b.sealBlock(next_test);
-            this.b.setInsertPoint(next_test);
+            if (test.type !== "Literal" || typeof (test as e.Literal).value !== "string") {
+                stringCases.length = 0;
+                break;
+            }
+            stringCases.push(i);
+        }
+        if (passes().atomSwitch && stringCases.length >= 2) {
+            const atoms = stringCases.map((i) => String((n.cases[i]!.test as e.Literal).value));
+            const idx = this.b.emit("atom_switch_index", [disc], { atoms });
+            for (let k = 0; k < stringCases.length; k++) {
+                const i = stringCases[k]!;
+                const cmp = this.b.emit("switch_index_eq", [idx], { index: k });
+                const next_test = this.b.newBlock(`case_test${i}`);
+                this.b.condBr(cmp, bodies[i]!, [], next_test, []);
+                this.b.sealBlock(next_test);
+                this.b.setInsertPoint(next_test);
+            }
+        } else {
+            // test chain, in document order, skipping default
+            for (let i = 0; i < n.cases.length; i++) {
+                const test = n.cases[i]!.test;
+                if (!test) continue;
+                const tv = this.expr(test);
+                const cmp = this.b.emit("strict_eq", [disc, tv], {});
+                const cbool = this.b.emit("to_boolean", [cmp], {});
+                const next_test = this.b.newBlock(`case_test${i}`);
+                this.b.condBr(cbool, bodies[i]!, [], next_test, []);
+                this.b.sealBlock(next_test);
+                this.b.setInsertPoint(next_test);
+            }
         }
         // no test matched: default body, or out
         this.b.br(defaultIdx >= 0 ? bodies[defaultIdx]! : exit, []);

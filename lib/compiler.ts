@@ -57,6 +57,14 @@ class LLVMIRVisitor implements VisitorSurface {
         string,
         { global: llvm.GlobalVariable; fields: { name: string; repr: string }[] }
     >;
+    // the module's atom-table switch dispatch tables (content key ->
+    // atoms/entries globals), filled by the EIR emitter's
+    // atom_switch_index lowering; equal-atom switches share one table.
+    // emitSwitchTableInits flushes the fills + sort call.
+    module_switch_tables: Map<
+        string,
+        { atoms: string[]; atoms_global: llvm.GlobalVariable; ents_global: llvm.GlobalVariable }
+    >;
     literalInitializationFunction: llvm.EjsFunction;
     literalInitializationDebugInfo: llvm.DISubprogram | undefined;
     literalInitializationBB: llvm.BasicBlock;
@@ -77,6 +85,9 @@ class LLVMIRVisitor implements VisitorSurface {
     // module guards no shapes), built by emitShapeInterns and called by
     // emitModuleResolution after literal initialization
     shape_init_function: llvm.EjsFunction | null = null;
+    // same contract for the atom-table switch dispatch tables
+    // (emitSwitchTableInits / emitModuleResolution)
+    switch_init_function: llvm.EjsFunction | null = null;
 
     constructor(
         module: llvm.Module,
@@ -115,6 +126,7 @@ class LLVMIRVisitor implements VisitorSurface {
 
         this.module_atoms = new Map();
         this.module_shapes = new Map();
+        this.module_switch_tables = new Map();
 
         const init_function_name = `_ejs_module_init_string_literals_${this.filename}`;
         this.literalInitializationFunction = this.module.getOrInsertFunction(
@@ -230,6 +242,11 @@ class LLVMIRVisitor implements VisitorSurface {
         // the atoms they name are initialized
         if (this.shape_init_function)
             ir.createCall(this.shape_init_function.type, this.shape_init_function, [], "");
+
+        // fill + sort the switch dispatch tables (their atoms are
+        // initialized by now, same as the shapes')
+        if (this.switch_init_function)
+            ir.createCall(this.switch_init_function.type, this.switch_init_function, [], "");
 
         // fill in the information we know about this module
         //  our name
@@ -666,6 +683,13 @@ class LLVMIRVisitor implements VisitorSurface {
         if (!fn.bits_alloca) fn.bits_alloca = alloca;
         return ir.createLoad(types.EjsValue, alloca, "boxed_f64");
     }
+    // raw bit equality of two ejsvals (EJSVAL_EQ).  The switch-dispatch
+    // probe compares its boxed-number result against boxed small-int
+    // constants — doubles are stored raw (storeDouble), so equal numbers
+    // have equal bits on every target.
+    ejsvalBitsEq(a: llvm.Value, b: llvm.Value, name: string): llvm.Value {
+        return ir.createICmpEq(this.getEjsvalBits(a), this.getEjsvalBits(b), name);
+    }
     isNumber(val: llvm.Value): llvm.Value {
         if (this.triple.pointerSize() === 64) {
             return this.createEjsvalICmpULt(
@@ -960,6 +984,95 @@ class LLVMIRVisitor implements VisitorSurface {
         return entry.global;
     }
 
+    // the module's switch dispatch table for this exact atom list,
+    // minted on first use.  Zero-initialized globals: module init fills
+    // the atoms (they're interned by then) and sorts the packed
+    // (hash, index) entries via _ejs_switch_table_init.
+    moduleSwitchTable(atoms: string[]): {
+        atoms_global: llvm.GlobalVariable;
+        ents_global: llvm.GlobalVariable;
+    } {
+        const key = JSON.stringify(atoms);
+        let entry = this.module_switch_tables.get(key);
+        if (!entry) {
+            const atoms_ty = llvm.ArrayType.get(types.EjsValue, atoms.length);
+            const ents_ty = llvm.ArrayType.get(types.Int64, atoms.length);
+            entry = {
+                atoms: atoms.slice(),
+                atoms_global: new llvm.GlobalVariable(
+                    this.module,
+                    atoms_ty,
+                    `ejs_switch_atoms-${this.idgen()}`,
+                    llvm.Constant.getAggregateZero(atoms_ty),
+                    false
+                ),
+                ents_global: new llvm.GlobalVariable(
+                    this.module,
+                    ents_ty,
+                    `ejs_switch_ents-${this.idgen()}`,
+                    llvm.Constant.getAggregateZero(ents_ty),
+                    false
+                ),
+            };
+            this.module_switch_tables.set(key, entry);
+        }
+        return entry;
+    }
+
+    // flush the pending switch dispatch tables into their own init
+    // function; same separate-function reasons (and call site) as
+    // emitShapeInterns below
+    emitSwitchTableInits(): llvm.EjsFunction | null {
+        if (this.module_switch_tables.size === 0) return null;
+        const saved_insert = ir.getInsertBlock();
+        const saved_function = this.currentFunction;
+
+        const fname = `_ejs_module_init_switch_tables_${this.filename}`;
+        const fn = this.module.getOrInsertFunction(fname, types.Void, []);
+        fn.setInternalLinkage();
+        this.currentFunction = fn;
+        const body_bb = new llvm.BasicBlock("entry", fn);
+        ir.setInsertPoint(body_bb);
+
+        for (const entry of this.module_switch_tables.values()) {
+            const n = entry.atoms.length;
+            const atoms_ty = llvm.ArrayType.get(types.EjsValue, n);
+            const ents_ty = llvm.ArrayType.get(types.Int64, n);
+            for (let i = 0; i < n; i++) {
+                const atom = this.getAtom(entry.atoms[i]!);
+                const gep = ir.createGetElementPointer(
+                    atoms_ty,
+                    entry.atoms_global,
+                    [consts.int32(0), consts.int64(i)],
+                    "switch_atom_slot"
+                );
+                ir.createStore(atom, gep);
+            }
+            const atoms_base = ir.createGetElementPointer(
+                atoms_ty,
+                entry.atoms_global,
+                [consts.int32(0), consts.int64(0)],
+                "switch_atoms_base"
+            );
+            const ents_base = ir.createGetElementPointer(
+                ents_ty,
+                entry.ents_global,
+                [consts.int32(0), consts.int64(0)],
+                "switch_ents_base"
+            );
+            this.createCall(
+                this.ejs_runtime.switch_table_init,
+                [consts.int32(n), atoms_base, ents_base],
+                ""
+            );
+        }
+        ir.createRetVoid();
+
+        this.currentFunction = saved_function;
+        if (saved_insert) ir.setInsertPoint(saved_insert);
+        return fn;
+    }
+
     // flush the pending shape interns into their own init function (one
     // _ejs_shape_intern call per shape), called by emitModuleResolution
     // right after the literal-initialization call — so every atom the
@@ -1225,6 +1338,8 @@ export function compile(
     // interns into their init function —
     // emitModuleResolution calls it after literal initialization
     visitor.shape_init_function = visitor.emitShapeInterns();
+    // likewise every atom_switch_index: flush the switch dispatch tables
+    visitor.switch_init_function = visitor.emitSwitchTableInits();
 
     visitor.emitModuleResolution(lowered.accessors!);
 

@@ -66,6 +66,14 @@ export interface VisitorSurface {
         key: string,
         fields: { name: string; repr: string }[]
     ): llvm.GlobalVariable;
+    // atom-table switch dispatch: the module's (deduped) table globals
+    // for this atom list, and the raw ejsval bit compare the per-case
+    // probes use (layout knowledge stays in compiler.ts)
+    moduleSwitchTable(atoms: string[]): {
+        atoms_global: llvm.GlobalVariable;
+        ents_global: llvm.GlobalVariable;
+    };
+    ejsvalBitsEq(a: llvm.Value, b: llvm.Value, name: string): llvm.Value;
     loadBoolEjsValue(n: boolean): llvm.Value;
     loadDoubleEjsValue(n: number): llvm.Value;
     loadNullEjsValue(): llvm.Value;
@@ -675,6 +683,42 @@ export class EIREmitter {
                 let truthy = this.call(rt.truthy, [this.val(inst.operands[0])], "truthy");
                 let b = ir.createICmpEq(truthy, consts.True(), "tobool");
                 this.values.set(inst, b);
+                return;
+            }
+
+            // --- atom-table switch dispatch --------------------
+            case "atom_switch_index": {
+                const atoms = (inst.imms["atoms"] as readonly string[]).slice();
+                const tbl = this.v.moduleSwitchTable(atoms);
+                const atoms_ty = llvm.ArrayType.get(types.EjsValue, atoms.length);
+                const ents_ty = llvm.ArrayType.get(types.Int64, atoms.length);
+                const atoms_base = ir.createInBoundsGetElementPointer(
+                    atoms_ty,
+                    tbl.atoms_global,
+                    [consts.int64(0), consts.int64(0)],
+                    "switch_atoms_base"
+                );
+                const ents_base = ir.createInBoundsGetElementPointer(
+                    ents_ty,
+                    tbl.ents_global,
+                    [consts.int64(0), consts.int64(0)],
+                    "switch_ents_base"
+                );
+                return this.emitCallLike(
+                    inst,
+                    rt.switch_index,
+                    [this.val(inst.operands[0]), consts.int32(atoms.length), atoms_base, ents_base],
+                    "switch_idx"
+                );
+            }
+            case "switch_index_eq": {
+                const k = Number(inst.imms["index"]);
+                const cmp = this.v.ejsvalBitsEq(
+                    this.val(inst.operands[0]),
+                    this.v.loadDoubleEjsValue(k),
+                    "swidx_eq"
+                );
+                this.values.set(inst, cmp);
                 return;
             }
 

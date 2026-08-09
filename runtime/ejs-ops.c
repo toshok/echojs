@@ -636,6 +636,54 @@ _ejs_svz_hash (ejsval v)
     return (uint32_t)((v.asBits * 0x9E3779B97F4A7C15ull) >> 32);
 }
 
+// ---- atom-table switch dispatch ------------------------------------
+// The compiler lowers an all-string-literal-case switch to one probe of
+// a per-module table (lib/eir/lower.ts switchStmt): atoms[] holds the
+// case strings in document order (module init fills it from the
+// interned literals), ents[] packs (hash << 32 | index) sorted by
+// _ejs_switch_table_init — hash-major, index-minor, so duplicate case
+// strings resolve to the FIRST occurrence, matching the strict_eq
+// chain the probe replaces.
+
+static int
+switch_ent_cmp (const void* a, const void* b)
+{
+    uint64_t ea = *(const uint64_t*)a;
+    uint64_t eb = *(const uint64_t*)b;
+    return ea < eb ? -1 : ea > eb ? 1 : 0;
+}
+
+void
+_ejs_switch_table_init (uint32_t n, ejsval* atoms, uint64_t* ents)
+{
+    for (uint32_t i = 0; i < n; i ++)
+        ents[i] = ((uint64_t)_ejs_string_hash (atoms[i]) << 32) | i;
+    qsort (ents, n, sizeof(uint64_t), switch_ent_cmp);
+}
+
+// index of the first case string equal to `disc`, as a boxed number
+// (-1 when disc is not a string or matches no case); the emitted test
+// chain compares the boxed bits per case
+ejsval
+_ejs_switch_index (ejsval disc, uint32_t n, ejsval* atoms, uint64_t* ents)
+{
+    if (!EJSVAL_IS_STRING(disc))
+        return NUMBER_TO_EJSVAL(-1);
+    uint64_t h = (uint64_t)_ejs_string_hash (disc) << 32;
+    uint32_t lo = 0, hi = n;
+    while (lo < hi) {
+        uint32_t mid = lo + (hi - lo) / 2;
+        if (ents[mid] < h) lo = mid + 1;
+        else hi = mid;
+    }
+    for (; lo < n && (ents[lo] & 0xffffffff00000000ull) == h; lo ++) {
+        uint32_t idx = (uint32_t)ents[lo];
+        if (_ejs_string_eq (disc, atoms[idx]))
+            return NUMBER_TO_EJSVAL(idx);
+    }
+    return NUMBER_TO_EJSVAL(-1);
+}
+
 // ECMA262 7.2.10
 // SameValueZero(x, y)
 // same as SameValue, except in its treatment of +/- 0

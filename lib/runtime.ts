@@ -577,6 +577,29 @@ const runtime_interface = {
             ])
         );
     },
+    // atom-table switch dispatch: module init sorts the packed
+    // (hash, index) entries once the case atoms are interned; the probe
+    // returns the first matching case's index as a boxed number (-1 =
+    // non-string or unmatched discriminant)
+    switch_table_init: function (this: RuntimeContext) {
+        return does_not_throw(
+            this.abi.createExternalFunction(this.module, "_ejs_switch_table_init", ty.Void, [
+                ty.Int32,
+                ty.EjsValue.pointerTo(),
+                ty.Int64.pointerTo(),
+            ])
+        );
+    },
+    switch_index: function (this: RuntimeContext) {
+        return does_not_throw(
+            this.abi.createExternalFunction(this.module, "_ejs_switch_index", ty.EjsValue, [
+                ty.EjsValue,
+                ty.Int32,
+                ty.EjsValue.pointerTo(),
+                ty.Int64.pointerTo(),
+            ])
+        );
+    },
     init_string_literal: function (this: RuntimeContext) {
         return this.abi.createExternalFunction(this.module, "_ejs_string_init_literal", ty.Void, [
             ty.String,
