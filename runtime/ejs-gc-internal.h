@@ -394,7 +394,15 @@ void profile_note_pin(PageInfo* page, uint32_t cell_idx, GCObjectPtr raw);
 void profile_pre_sweep(void);
 void profile_report_cycle_end(uint64_t pause_usec);
 void profile_report_shutdown(void);
-void gc_watch_hit(const char* what, void* p);
+// gc_watch_hit's fast path inlines to a load + branch on the (almost
+// always zero) watch address — the call sites live in sweep/evacuate
+// loops, where even a no-op out-of-line call shows in profiles.  The
+// logger stays out of line.
+void gc_watch_hit_slow(const char* what, void* p);
+static inline void gc_watch_hit(const char* what, void* p)
+{
+    if (gc_watch_addr != 0) gc_watch_hit_slow(what, p);
+}
 void paranoid_sweep_check(void);
 int paranoid_report_referrers(GCObjectPtr p);
 extern void** paranoid_stack_floor; // raw-stack sweep floor, set at minor entry

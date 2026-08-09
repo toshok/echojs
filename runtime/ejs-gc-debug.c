@@ -243,9 +243,8 @@ profile_report_shutdown(void)
 #include <execinfo.h>
 uintptr_t gc_watch_addr;
 void
-gc_watch_hit(const char* what, void* p)
+gc_watch_hit_slow(const char* what, void* p)
 {
-    if (EJS_LIKELY(gc_watch_addr == 0)) return;
     if ((uintptr_t)p > gc_watch_addr || gc_watch_addr - (uintptr_t)p >= 256) return;
     _ejs_log ("EJS_GC_WATCH: %s cell=%p (minor#%llu, in_minor=%d)\n",
               what, p, (unsigned long long)heap_priv.minors, (int)in_minor_gc);
