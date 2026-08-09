@@ -207,6 +207,65 @@ const runtime_interface = {
             ty.EjsValue,
         ]);
     },
+    // the -fgen-eir state-machine path (docs/generator-eir-plan.md):
+    // stackless generators over a persistent closure env
+    make_generator_eir: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_generator_new_eir", ty.EjsValue, [
+            ty.EjsValue,
+        ]);
+    },
+    generator_eir_state: function (this: RuntimeContext) {
+        return does_not_throw(
+            only_reads_memory(
+                this.abi.createExternalFunction(
+                    this.module,
+                    "_ejs_generator_eir_state",
+                    ty.EjsValue,
+                    [ty.EjsValue]
+                )
+            )
+        );
+    },
+    generator_eir_get_env: function (this: RuntimeContext) {
+        return does_not_throw(
+            only_reads_memory(
+                this.abi.createExternalFunction(
+                    this.module,
+                    "_ejs_generator_eir_get_env",
+                    ty.EjsValue,
+                    [ty.EjsValue]
+                )
+            )
+        );
+    },
+    generator_eir_set_env: function (this: RuntimeContext) {
+        return does_not_throw(
+            this.abi.createExternalFunction(this.module, "_ejs_generator_eir_set_env", ty.Void, [
+                ty.EjsValue,
+                ty.EjsValue,
+            ])
+        );
+    },
+    generator_eir_suspend: function (this: RuntimeContext) {
+        return does_not_throw(
+            this.abi.createExternalFunction(this.module, "_ejs_generator_eir_suspend", ty.Void, [
+                ty.EjsValue,
+                ty.EjsValue,
+            ])
+        );
+    },
+    generator_eir_sentinel: function (this: RuntimeContext) {
+        return does_not_throw(
+            only_reads_memory(
+                this.abi.createExternalFunction(
+                    this.module,
+                    "_ejs_generator_eir_sentinel",
+                    ty.EjsValue,
+                    []
+                )
+            )
+        );
+    },
     generator_is_return_sentinel: function (this: RuntimeContext) {
         return this.abi.createExternalFunction(
             this.module,

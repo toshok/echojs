@@ -785,9 +785,10 @@ export function cseModuleSlotLoads(
     let suspends = false;
     fn.forEachInst((inst) => {
         if (
-            inst.op === "call_runtime" &&
-            typeof inst.imms["name"] === "string" &&
-            (inst.imms["name"] as string).indexOf("generator_") === 0
+            inst.op === "gen_yield" || // the -fgen-eir suspension point
+            (inst.op === "call_runtime" &&
+                typeof inst.imms["name"] === "string" &&
+                (inst.imms["name"] as string).indexOf("generator_") === 0)
         )
             suspends = true;
     });

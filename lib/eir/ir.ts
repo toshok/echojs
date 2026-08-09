@@ -98,6 +98,9 @@ export class Func {
     entry: Block | null = null;
     // non-null only on specialized clones (specialize.ts)
     sig: FuncSig | null = null;
+    // a generator body marked by the desugar: gen-lower.ts rewrites its
+    // gen_yield suspends into resume dispatch before emission
+    genBody = false;
 
     constructor(name: string, paramNames?: string[]) {
         this.name = name;

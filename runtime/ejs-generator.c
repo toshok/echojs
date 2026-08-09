@@ -204,6 +204,102 @@ _ejs_generator_new (ejsval generator_body)
     return OBJECT_TO_EJSVAL(rv);
 }
 
+// ---- the -fgen-eir state-machine path --------------------------------
+// The body closure is a compiled resume-dispatch state machine; the
+// driver below re-calls it as body(gen, mode, sent) and every yield
+// suspends by returning (the compiled code sets eir_state and
+// eir_suspended through _ejs_generator_eir_suspend first).  No machine
+// stack, no contexts, no registry entry — the generator's entire
+// suspended state is the precisely-scanned eir_env.
+
+ejsval
+_ejs_generator_new_eir (ejsval generator_body)
+{
+    EJSGenerator* rv = _ejs_gc_new(EJSGenerator);
+    _ejs_init_object ((EJSObject*)rv, _ejs_Generator_prototype, &_ejs_Generator_specops);
+
+    rv->body = generator_body;
+    rv->eir = EJS_TRUE;
+    rv->eir_state = 0;
+    rv->eir_suspended = EJS_FALSE;
+    rv->eir_env = _ejs_undefined;
+    rv->yielded_value = _ejs_undefined;
+    rv->sent_value = _ejs_undefined;
+
+    return OBJECT_TO_EJSVAL(rv);
+}
+
+ejsval
+_ejs_generator_eir_state (ejsval generator)
+{
+    EJSGenerator* gen = (EJSGenerator*)EJSVAL_TO_OBJECT(generator);
+    return NUMBER_TO_EJSVAL(gen->eir_state);
+}
+
+ejsval
+_ejs_generator_eir_get_env (ejsval generator)
+{
+    EJSGenerator* gen = (EJSGenerator*)EJSVAL_TO_OBJECT(generator);
+    return gen->eir_env;
+}
+
+void
+_ejs_generator_eir_set_env (ejsval generator, ejsval env)
+{
+    EJSGenerator* gen = (EJSGenerator*)EJSVAL_TO_OBJECT(generator);
+    gen->eir_env = env;
+    _ejs_gc_remember (gen, env);
+}
+
+void
+_ejs_generator_eir_suspend (ejsval generator, ejsval state)
+{
+    EJSGenerator* gen = (EJSGenerator*)EJSVAL_TO_OBJECT(generator);
+    gen->eir_state = (int32_t)EJSVAL_TO_NUMBER(state);
+    gen->eir_suspended = EJS_TRUE;
+}
+
+ejsval
+_ejs_generator_eir_sentinel (void)
+{
+    return _ejs_generator_return_sentinel;
+}
+
+// modes match gen-lower.ts: 0 = next, 1 = throw, 2 = return
+static ejsval
+_ejs_generator_eir_resume (EJSGenerator* gen, int mode, ejsval arg)
+{
+    if (gen->running)
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "generator is already running");
+
+    gen->started = EJS_TRUE;
+    gen->eir_suspended = EJS_FALSE;
+    // speculative: an uncaught throw out of the body must leave the
+    // generator completed; a yield un-completes through eir_suspended
+    gen->completed = EJS_TRUE;
+    gen->running = EJS_TRUE;
+    // the wrapper's sentinel catch reads the .return() value from here
+    gen->sent_value = arg;
+    _ejs_gc_remember (gen, gen->sent_value);
+
+    ejsval genval = OBJECT_TO_EJSVAL(gen);
+    ejsval body_args[3] = { genval, NUMBER_TO_EJSVAL(mode), arg };
+    ejsval undef_this = _ejs_undefined;
+    ejsval rv;
+    EJSBool ok = _ejs_invoke_closure_catch (&rv, gen->body, &undef_this, 3, body_args, _ejs_undefined);
+    gen->running = EJS_FALSE;
+    if (!ok) {
+        // uncaught throw: the generator is completed; rethrow on our
+        // caller's stack
+        _ejs_throw (rv);
+    }
+    if (gen->eir_suspended) {
+        gen->completed = EJS_FALSE;
+        return _ejs_create_iter_result (rv, _ejs_false);
+    }
+    return _ejs_create_iter_result (rv, _ejs_true);
+}
+
 ejsval
 _ejs_generator_yield (ejsval generator, ejsval arg) {
     EJSGenerator* gen = (EJSGenerator*)EJSVAL_TO_OBJECT(generator);
@@ -244,6 +340,7 @@ _ejs_generator_yield (ejsval generator, ejsval arg) {
 static void
 generator_release_resources (EJSGenerator* gen)
 {
+    if (gen->eir) return; // nothing stack-shaped exists
     if (_ejs_generator_registry == gen) _ejs_generator_registry = gen->reg_next;
     if (gen->reg_next) gen->reg_next->reg_prev = gen->reg_prev;
     if (gen->reg_prev) gen->reg_prev->reg_next = gen->reg_next;
@@ -322,6 +419,9 @@ static EJS_NATIVE_FUNC(_ejs_Generator_prototype_throw) {
     if (gen->completed || !gen->started)
         _ejs_throw (argc > 0 ? args[0] : _ejs_undefined);
 
+    if (gen->eir)
+        return _ejs_generator_eir_resume (gen, 1, argc > 0 ? args[0] : _ejs_undefined);
+
     return _ejs_generator_throw(O, argc > 0 ? args[0] : _ejs_undefined);
 }
 
@@ -342,6 +442,9 @@ static EJS_NATIVE_FUNC(_ejs_Generator_prototype_return) {
         generator_release_resources (gen);
         return _ejs_create_iter_result(arg, _ejs_true);
     }
+
+    if (gen->eir)
+        return _ejs_generator_eir_resume (gen, 2, arg);
 
     // suspended at a yield: resume with the return sentinel.  finally
     // blocks run; unless one of them yields or overrides the completion,
@@ -368,6 +471,9 @@ static EJS_NATIVE_FUNC(_ejs_Generator_prototype_next) {
     // (resuming the dead context would be undefined behavior)
     if (gen->completed)
         return _ejs_create_iter_result(_ejs_undefined, _ejs_true);
+
+    if (gen->eir)
+        return _ejs_generator_eir_resume (gen, 0, argc > 0 ? args[0] : _ejs_undefined);
 
     return _ejs_generator_send(O, argc > 0 ? args[0] : _ejs_undefined);
 }
@@ -610,7 +716,13 @@ _ejs_generator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     scan_func(&(gen->yielded_value));
     scan_func(&(gen->sent_value));
 
-    _ejs_generator_scan_conservative (gen);
+    if (gen->eir) {
+        // the state machine's whole suspended state is the env — one
+        // precise edge, nothing conservative
+        scan_func(&(gen->eir_env));
+    } else {
+        _ejs_generator_scan_conservative (gen);
+    }
 
     _ejs_Object_specops.Scan (obj, scan_func);
 }

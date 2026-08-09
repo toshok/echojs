@@ -62,6 +62,15 @@ export const eir_intrinsics: Record<string, IntrinsicEntry> = {
     "%generatorIsReturnSentinel": { runtime: "generator_is_return_sentinel" },
     "%generatorReturnValue": { runtime: "generator_return_value" },
 
+    // DesugarGeneratorFunctions, -fgen-eir: the state-machine path
+    // (docs/generator-eir-plan.md).  %generatorYield in a marked body
+    // and %generatorDelegate lower specially in lower.ts (gen_yield op
+    // / an inline delegation loop) — the entries here exist so
+    // scopes.ts accepts the names; the runtime values are the marked
+    // body's fallbacks and never actually emit.
+    "%makeGeneratorEIR": { runtime: "make_generator_eir" },
+    "%generatorDelegate": { runtime: "generator_yield" },
+
     // DesugarDestructuring (array patterns iterate via a runtime wrapper)
     "%createIteratorWrapper": { runtime: "iterator_wrapper_new" },
 

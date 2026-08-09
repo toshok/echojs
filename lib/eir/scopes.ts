@@ -464,6 +464,18 @@ export class ScopeAnalysis {
     }
 
     leaveFunction(): void {
+        // a -fgen-eir generator body (marked by the desugar): every
+        // binding lives in the env, never in SSA — resumes re-enter the
+        // function mid-CFG, and only env slots (persisted on the
+        // generator object) survive across the suspension's return.
+        // Params included: they restore from the state-0 entry stores,
+        // and the resume protocol's own values arrive as fresh params
+        // that gen-lower.ts reads positionally.
+        const fn = this.curFn!;
+        if ((fn.node as unknown as Record<string, unknown>)["ejs_gen_eir_body"]) {
+            for (const bd of fn.bindings) bd.captured = true;
+            for (const bd of fn.params) bd.captured = true;
+        }
         this.curScope = this.curScope!.parent;
         this.curFn = this.curFn!.parent;
         this.labelStack = this.savedLabelStacks.pop()!;

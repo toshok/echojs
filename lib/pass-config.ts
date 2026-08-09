@@ -56,6 +56,10 @@ export interface PassConfig {
     inlineEnvSlots: boolean;
     // opt-in probes
     lowtier: boolean;
+    // EIR state-machine generators (docs/generator-eir-plan.md):
+    // generator bodies compile to resume-dispatch state machines over a
+    // persistent closure env instead of ucontext machine stacks
+    genEir: boolean;
     // cross-module callable summaries (the export-harness pass;
     // design: echojs-maam/docs/cross-module-summaries.md).
     // OPT-IN until the self-hosted oracle is fast enough: the harness's
@@ -198,6 +202,12 @@ export const PASSES: readonly PassDesc[] = [
         field: "inlineEnvSlots",
         minLevel: 0,
         help: "inline env slot addressing instead of runtime accessor calls",
+    },
+    {
+        name: "gen-eir",
+        field: "genEir",
+        minLevel: OPT_IN,
+        help: "generator bodies lower to EIR state machines over a persistent env (no machine stacks); opt-in while G1 stabilizes",
     },
     {
         name: "fn-summaries",

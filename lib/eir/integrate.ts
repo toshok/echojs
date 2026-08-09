@@ -34,6 +34,7 @@ import { verifyModule } from "./verifier";
 import { injectLowTierProbes } from "./lowtier-probe";
 import { eliminateDeadInFunction, optimizeModule } from "./optimize";
 import { devirtualizeModule } from "./devirt";
+import { lowerGeneratorBodies } from "./gen-lower";
 import { sinkConstructResults } from "./sink-construct";
 import { printModule } from "./printer";
 import type * as e from "../estree";
@@ -622,6 +623,21 @@ export function collectEIRToplevel(
                 }
             }
             if (dumpOptRequested(options)) dumpModule(filename, "optimized", eir_module);
+        }
+
+        // generator state-machine lowering (docs/generator-eir-plan.md):
+        // marked bodies rewrite their gen_yield suspends into resume
+        // dispatch over the persistent env.  Runs after every optimizer
+        // pass (they see gen_yield as an opaque effectful op) and
+        // regardless of -O level — this is correctness lowering, not
+        // optimization.
+        {
+            const n = lowerGeneratorBodies(eir_module);
+            if (n > 0) {
+                verifyModule(eir_module);
+                debug.log(1, `EIR-gen: ${filename}: ${n} generator body(ies) lowered`);
+                if (dumpOptRequested(options)) dumpModule(filename, "gen-lowered", eir_module);
+            }
         }
 
         toplevel.eir_module = eir_module;

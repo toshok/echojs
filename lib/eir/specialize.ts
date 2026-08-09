@@ -531,6 +531,11 @@ function specializeRound(
     for (const [info, flow] of flows) {
         const node = info.node;
 
+        // -fgen-eir generator bodies own a fixed resume-protocol ABI —
+        // body(gen, mode, sent), every param boxed — and rewrite into
+        // state machines after this pass; never clone or wrap them
+        if (info.fn && info.fn.genBody) continue;
+
         // ===== escaping: the boundary-wrapper path =======================
         // (merely TAINTED functions — called from tainted hosts but not
         // escaping themselves — stay on the trusted path below: their

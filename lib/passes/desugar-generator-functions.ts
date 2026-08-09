@@ -30,17 +30,26 @@ import * as b from "../ast-builder";
 import { intrinsic, startGenerator } from "../echo-util";
 import {
     makeGenerator_id,
+    makeGeneratorEIR_id,
     generatorYield_id,
+    generatorDelegate_id,
     generatorIsReturnSentinel_id,
     generatorReturnValue_id,
 } from "../common-ids";
+import { passes } from "../pass-config";
 import type * as e from "../estree";
 
 export class DesugarGeneratorFunctions extends TransformPass {
-    // innermost generator's %gen identifier first; functions nest
+    // innermost generator's %gen identifier first; functions nest.
+    // Under -fgen-eir this is the body arrow's generator PARAM (the
+    // runtime passes the generator object on every resume), so the body
+    // need not capture the wrapper's binding at all.
     private mapping: e.Identifier[] = [];
     // parallel to mapping: the generator's delegation-helper name, and
-    // whether a yield* actually referenced it (inject only then)
+    // whether a yield* actually referenced it (inject only then).
+    // -fgen-eir has no helper: yield* lowers to an inline EIR loop
+    // (%generatorDelegate) — a state machine can only suspend its own
+    // frame, never a nested helper's.
     private delegateIds: e.Identifier[] = [];
     private usedDelegate: boolean[] = [];
     private genGen = startGenerator();
@@ -51,7 +60,9 @@ export class DesugarGeneratorFunctions extends TransformPass {
         // in a generator body pop the generator's own %gen id
         const is_generator = n.generator;
         if (is_generator) {
-            this.mapping.unshift(b.identifier(`%_gen_${this.genGen()}`));
+            this.mapping.unshift(
+                b.identifier(passes().genEir ? `%_genp_${this.genGen()}` : `%_gen_${this.genGen()}`)
+            );
             this.delegateIds.unshift(b.identifier(`__ejs_genDelegate_${this.genGen()}`));
             this.usedDelegate.unshift(false);
         }
@@ -106,14 +117,34 @@ export class DesugarGeneratorFunctions extends TransformPass {
             ) {
                 wrapper_prologue.push(gen_body.body.shift()!);
             }
-            n.body = b.blockStatement([
-                ...wrapper_prologue,
-                b.letDeclaration(
-                    gen_id,
-                    intrinsic(makeGenerator_id, [b.arrowFunctionExpression([], old_body)])
-                ),
-                b.returnStatement(b.identifier(gen_id.name)),
-            ]);
+            if (passes().genEir) {
+                // the body arrow's signature is the resume protocol: the
+                // runtime re-calls it as body(gen, mode, sent) — gen-lower.ts
+                // reads the params positionally, the body reads yields'
+                // generator operand through the first
+                const mode_id = b.identifier(`%_genmode_${this.genGen()}`);
+                const sent_id = b.identifier(`%_gensent_${this.genGen()}`);
+                const arrow = b.arrowFunctionExpression(
+                    [b.identifier(gen_id.name), mode_id, sent_id],
+                    old_body
+                );
+                (arrow as unknown as Record<string, unknown>)["ejs_gen_eir_body"] = true;
+                const wrap_id = b.identifier(`%_genobj_${this.genGen()}`);
+                n.body = b.blockStatement([
+                    ...wrapper_prologue,
+                    b.letDeclaration(wrap_id, intrinsic(makeGeneratorEIR_id, [arrow])),
+                    b.returnStatement(b.identifier(wrap_id.name)),
+                ]);
+            } else {
+                n.body = b.blockStatement([
+                    ...wrapper_prologue,
+                    b.letDeclaration(
+                        gen_id,
+                        intrinsic(makeGenerator_id, [b.arrowFunctionExpression([], old_body)])
+                    ),
+                    b.returnStatement(b.identifier(gen_id.name)),
+                ]);
+            }
             n.generator = false;
         }
         if (is_generator) {
@@ -228,6 +259,8 @@ export class DesugarGeneratorFunctions extends TransformPass {
     override visitYield(n: e.YieldExpression): VisitResult {
         n.argument = this.visitNullable(n.argument);
         if (n.delegate) {
+            if (passes().genEir)
+                return intrinsic(generatorDelegate_id, [this.mapping[0]!, n.argument!]);
             this.usedDelegate[0] = true;
             return b.callExpression(b.identifier(this.delegateIds[0]!.name), [
                 this.mapping[0]!,

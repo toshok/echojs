@@ -141,6 +141,16 @@ export const OPS = {
     // scope-qualified and must not leak
     make_closure: { arity: 1, effects: E.GC, imms: ["fn", "name", "len"] },
 
+    // --- generators (EIR state-machine lowering) ---------------------------
+    // A yield point in a marked generator body (Func.genBody):
+    // operands = (generator object, yielded value), result = the sent
+    // value.  Lowering emits it; gen-lower.ts rewrites every one into
+    // suspend-and-return plus a resume-dispatch state before emission —
+    // emit never sees it.  GENERIC_OP effects keep the optimizer from
+    // moving anything across a suspension point, and give it an unwind
+    // edge inside try regions (the resume-path throw reuses that edge).
+    gen_yield: { arity: 2, effects: GENERIC_OP },
+
     // --- modules -------------------------------------------------------------
     module_slot_load: { arity: 0, effects: E.READ, imms: ["module", "slot"] },
     module_slot_store: { arity: 1, effects: E.WRITE, imms: ["module", "slot"] },

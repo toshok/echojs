@@ -82,7 +82,27 @@ typedef struct _EJSGenerator {
 
     ucontext_t generator_context;
     ucontext_t caller_context;
+
+    // ---- the -fgen-eir state-machine path (docs/generator-eir-plan.md).
+    // The body compiles to a resume-dispatch state machine called as
+    // body(gen, mode, sent); nothing above (stack, contexts, registry,
+    // pin cache) exists for these generators.  eir_state: 0 = not
+    // started, k > 0 = suspended at yield #k.  eir_suspended is set by
+    // the compiled suspend and cleared by the driver before each resume
+    // — it distinguishes a yield's return from a completion return.
+    // eir_env: the body's persistent closure env, precisely scanned.
+    EJSBool eir;
+    int32_t eir_state;
+    EJSBool eir_suspended;
+    ejsval eir_env;
 } EJSGenerator;
+
+extern ejsval _ejs_generator_new_eir (ejsval body);
+extern ejsval _ejs_generator_eir_state (ejsval generator);
+extern ejsval _ejs_generator_eir_get_env (ejsval generator);
+extern void   _ejs_generator_eir_set_env (ejsval generator, ejsval env);
+extern void   _ejs_generator_eir_suspend (ejsval generator, ejsval state);
+extern ejsval _ejs_generator_eir_sentinel (void);
 
 extern ejsval _ejs_generator_return_sentinel;
 ejsval _ejs_generator_is_return_sentinel (ejsval exc);

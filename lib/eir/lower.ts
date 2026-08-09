@@ -249,6 +249,10 @@ class LowerFunction {
     oracle: TypeOracle | null;
     // non-null when lowering a specialized clone
     spec: SpecMode | null;
+    // a -fgen-eir generator body: yields lower to gen_yield ops and
+    // gen-lower.ts rewrites the function into a resume-dispatch state
+    // machine after optimization
+    isGenBody = false;
 
     constructor(
         info: FnInfo,
@@ -270,6 +274,8 @@ class LowerFunction {
             this.spec ? this.spec.cloneName : info.name,
             ["%env", "%this"].concat(paramNames)
         );
+        this.isGenBody = !!(info.node as unknown as Record<string, unknown>)["ejs_gen_eir_body"];
+        this.b.fn.genBody = this.isGenBody;
         this.envParam = this.b.fn.entry!.params[0]!;
         this.thisParam = this.b.fn.entry!.params[1]!;
 
@@ -1678,6 +1684,24 @@ class LowerFunction {
 
     intrinsicCall(n: e.CallExpression): Inst {
         const calleeName = (n.callee as e.Identifier).name;
+        // the -fgen-eir generator body forms lower specially: yields are
+        // gen_yield ops (suspension points gen-lower.ts rewrites), and
+        // yield* is an inline delegation loop — a state machine can only
+        // suspend its own frame, so the legacy nested-helper yield is
+        // structurally unavailable
+        if (calleeName === "%generatorYield" && this.isGenBody) {
+            const g = this.expr(n.arguments[0] as e.Expression);
+            const v = this.expr(n.arguments[1] as e.Expression);
+            return this.b.emit("gen_yield", [g, v], {});
+        }
+        if (calleeName === "%generatorDelegate") {
+            if (!this.isGenBody)
+                throw LowerNotSupported("%generatorDelegate outside a generator body", n.loc);
+            return this.lowerGeneratorDelegate(
+                n.arguments[0] as e.Expression,
+                n.arguments[1] as e.Expression
+            );
+        }
         const intr = eir_intrinsics[calleeName];
         if (!intr) throw LowerNotSupported(`intrinsic ${calleeName}`, n.loc);
         let args = n.arguments.map((a) => this.expr(a));
@@ -2174,6 +2198,79 @@ class LowerFunction {
                 this.b.setInsertPoint(join_bb);
             }
         }
+    }
+
+    // yield* under -fgen-eir: the delegation loop inlines into the body,
+    // because gen_yield can only suspend THIS function's frame (the
+    // legacy path yields from a nested helper — a coroutine-only trick).
+    // Mirrors the __ejs_genDelegate helper exactly: sent values forward
+    // into the inner iterator's next(), an abrupt resume at the
+    // suspended yield (gen.throw()/gen.return(), the return sentinel
+    // included) closes the inner iterator and rethrows, and the loop's
+    // value is the inner return value.  One static next() site means the
+    // first call passes undefined where the helper passed no argument —
+    // indistinguishable to any iterator treating absent as undefined.
+    lowerGeneratorDelegate(genArg: e.Expression, iterableArg: e.Expression): Inst {
+        const gen = this.expr(genArg);
+        const obj = this.expr(iterableArg);
+        const sym = this.b.emit("get_global", [], { atom: "Symbol" });
+        const itkey = this.b.emit("get_prop_atom", [sym], { atom: "iterator" });
+        const itfn = this.b.emit("get_prop", [obj, itkey], {});
+        const iter = this.b.emit("call", [itfn, obj], {});
+
+        const sentVar = `%gendel#${this.b.fn.newValueId()}`;
+        this.b.writeVariable(sentVar, this.b.cur, this.b.constUndefined());
+
+        const header = this.b.newBlock("gendel_header");
+        const body = this.b.newBlock("gendel_body");
+        const close = this.b.newCatchBlock("gendel_close");
+        const exit = this.b.newBlock("gendel_exit");
+
+        this.b.br(header, []);
+        this.b.setInsertPoint(header);
+        const nextfn = this.b.emit("get_prop_atom", [iter], { atom: "next" });
+        const res = this.b.emit(
+            "call",
+            [nextfn, iter, this.b.readVariable(sentVar, this.b.cur)],
+            {}
+        );
+        const done = this.b.emit("get_prop_atom", [res], { atom: "done" });
+        const dbool = this.b.emit("to_boolean", [done], {});
+        this.b.condBr(dbool, exit, [], body, []);
+        this.b.sealBlock(body);
+
+        this.b.setInsertPoint(body);
+        const v = this.b.emit("get_prop_atom", [res], { atom: "value" });
+        this.b.pushHandler(close);
+        const sent = this.b.emit("gen_yield", [gen, v], {});
+        this.b.popHandler();
+        this.b.writeVariable(sentVar, this.b.cur, sent);
+        this.b.br(header, []);
+        this.b.sealBlock(header);
+        this.b.sealBlock(close);
+
+        // IteratorClose: `if (it.return != null) it.return(); throw exc`
+        // (an exception from it.return() replaces the original, like the
+        // helper's catch body)
+        this.b.setInsertPoint(close);
+        const exc = close.params[0]!;
+        const retfn = this.b.emit("get_prop_atom", [iter], { atom: "return" });
+        const neq = this.b.emit("loose_neq", [retfn, this.b.constNull()], {});
+        const nb = this.b.emit("to_boolean", [neq], {});
+        const do_close = this.b.newBlock("gendel_do_close");
+        const rethrow = this.b.newBlock("gendel_rethrow");
+        this.b.condBr(nb, do_close, [], rethrow, []);
+        this.b.sealBlock(do_close);
+        this.b.setInsertPoint(do_close);
+        this.b.emit("call", [retfn, iter], {});
+        if (!this.b.cur.terminated) this.b.br(rethrow, []);
+        this.b.sealBlock(rethrow);
+        this.b.setInsertPoint(rethrow);
+        this.b.throwValue(exc);
+
+        this.b.sealBlock(exit);
+        this.b.setInsertPoint(exit);
+        return this.b.emit("get_prop_atom", [res], { atom: "value" });
     }
 
     // mirrors the legacy DesugarForOf expansion: iterable[Symbol.iterator]()
