@@ -53,7 +53,14 @@ if [ -n "$STAGE1_EXE" ]; then
     STAGE1_EXE="$(cd "$(dirname "$STAGE1_EXE")" && pwd)/$(basename "$STAGE1_EXE")"
 fi
 
-export NODE_PATH="/Users/toshok/src/echojs/echojs/node_modules:/Users/toshok/src/echojs/echojs/node-llvm/build/Release"
+# prefer the buck-built addon (//node-llvm:llvm.node) over the checkout's
+# out-of-band build/Release copy, which goes stale when addon sources change
+LLVM_NODE_DIR="/Users/toshok/src/echojs/echojs/node-llvm/build/Release"
+if BUCK_NODE="$(buck2 targets --show-output //node-llvm:llvm.node 2>/dev/null | awk '{print $2}')" \
+    && [ -n "$BUCK_NODE" ] && [ -f "$BUCK_NODE" ]; then
+    LLVM_NODE_DIR="$(cd "$(dirname "$BUCK_NODE")" && pwd)"
+fi
+export NODE_PATH="/Users/toshok/src/echojs/echojs/node_modules:$LLVM_NODE_DIR"
 export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
 if [ "$(uname -s)" = "Darwin" ]; then
     export SDKROOT="${SDKROOT:-$(/usr/bin/xcrun --show-sdk-path)}"

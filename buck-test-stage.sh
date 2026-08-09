@@ -14,6 +14,8 @@ LLVM_BIN="$6"   # directory holding llc/opt
 EXTRA_FLAGS="${7:-}"  # extra compiler flags, e.g. --ir
 TEST_ENV="${8:-}"     # extra env for the tester run, e.g. EJS_SHAPES=off
                       # (the runtime A/B lanes: shapes-plan P4.1)
+LLVM_NODE="${9:-}"    # //node-llvm:llvm.node artifact; empty = fall back
+                      # to the checkout's out-of-band build/Release copy
 
 # node_modules (glob/colors/temp for the tester, typescript for the
 # tester compile + esm baseline generation) come from the repo, same as
@@ -53,7 +55,12 @@ find "$WORK/test" -name '*.js' -exec touch {} +
 find "$WORK/test/expected" -type f -exec touch {} +
 
 export PATH="$LLVM_BIN:$PATH"
-export NODE_PATH="$REPO/node_modules:$REPO/node-llvm/build/Release"
+if [ -n "$LLVM_NODE" ]; then
+    NODE_LLVM_DIR="$(cd "$(dirname "$LLVM_NODE")" && pwd)"
+else
+    NODE_LLVM_DIR="$REPO/node-llvm/build/Release"
+fi
+export NODE_PATH="$REPO/node_modules:$NODE_LLVM_DIR"
 # the tester regenerates missing expected-outs by RUNNING node: keep that
 # color-free even when the buck daemon inherited a colored dev shell
 # (FORCE_COLOR writes ANSI into the expected files and poisons the diffs)

@@ -14,6 +14,8 @@ TREE="$1"       # //:srcdir-tree
 GENERATED="$2"  # //lib:generated
 TEST_FILES="$3" # //test:files
 LLVM_BIN="$4"   # directory holding llc/opt
+LLVM_NODE="${5:-}"  # //node-llvm:llvm.node artifact; empty = the
+                    # checkout's out-of-band build/Release copy
 
 REPO="${TMP%%/buck-out/*}"
 OUT_ABS="$(cd "$(dirname "$OUT")" && pwd)/$(basename "$OUT")"
@@ -30,7 +32,12 @@ cp -RL "$TEST_FILES"/. "$WORK/test/"
 chmod -R u+w "$WORK/test"
 
 export PATH="$LLVM_BIN:$PATH"
-export NODE_PATH="$REPO/node_modules:$REPO/node-llvm/build/Release"
+if [ -n "$LLVM_NODE" ]; then
+    NODE_LLVM_DIR="$(cd "$(dirname "$LLVM_NODE")" && pwd)"
+else
+    NODE_LLVM_DIR="$REPO/node-llvm/build/Release"
+fi
+export NODE_PATH="$REPO/node_modules:$NODE_LLVM_DIR"
 if [ "$(uname -s)" = "Darwin" ]; then
     export SDKROOT="${SDKROOT:-$(/usr/bin/xcrun --show-sdk-path)}"
 fi

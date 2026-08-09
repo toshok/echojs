@@ -1,10 +1,21 @@
 # The node native addon that gives the node-hosted (stage0) compiler access
-# to LLVM.  Built out-of-band with node-gyp (`./build-addon.sh`); buck just
-# picks up the built addon.
-#
-# TODO(buck2): drive node-gyp from a genrule so this is built hermetically.
-export_file(
+# to LLVM.  Built by driving build-addon.sh (node-gyp) from a genrule, so
+# addon source changes rebuild it like everything else — the export_file
+# era required remembering to run build-addon.sh by hand, and a stale
+# llvm.node fails at runtime ("X is not a function") instead of at build
+# time.  Not fully hermetic: node-gyp resolves node headers from its
+# cache (network on a cold machine) and nan from the repo node_modules.
+load("//:defs.bzl", "llvm_prefix")
+
+genrule(
     name = "llvm.node",
-    src = "build/Release/llvm.node",
+    srcs = glob([
+        "*.cpp",
+        "*.h",
+        "binding.gyp",
+    ]) + ["build-addon.sh"],
+    out = "llvm.node",
+    cmd = 'cd "$SRCDIR" && bash build-addon.sh "' + llvm_prefix() + '" && ' +
+          'cp build/Release/llvm.node "$OUT"',
     visibility = ["PUBLIC"],
 )

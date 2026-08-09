@@ -139,7 +139,8 @@ genrule(
     srcs = ["buck-test-lowtier.sh"],
     out = "test-eir-lowtier.log",
     cmd = 'bash $SRCDIR/buck-test-lowtier.sh "$(location :srcdir-tree)" ' +
-          '"$(location //lib:generated)" "$(location //test:files)" ' + llvm_bindir(),
+          '"$(location //lib:generated)" "$(location //test:files)" ' + llvm_bindir() +
+          ' "$(location //node-llvm:llvm.node)"',
 )
 
 # run the test suite against a stage: buck2 build //:test-stage3
@@ -150,7 +151,8 @@ genrule(
     srcs = ["buck-test-stage.sh"],
     out = "test-stage0.log",
     cmd = 'bash $SRCDIR/buck-test-stage.sh "$(location :srcdir-tree)" ' +
-          '"$(location //lib:generated)" - 0 "$(location //test:files)" ' + llvm_bindir(),
+          '"$(location //lib:generated)" - 0 "$(location //test:files)" ' + llvm_bindir() +
+          ' "" "" "$(location //node-llvm:llvm.node)"',
 )
 
 [
@@ -160,7 +162,8 @@ genrule(
         out = "test-stage" + stage + ".log",
         cmd = 'bash $SRCDIR/buck-test-stage.sh "$(location :srcdir-tree)" ' +
               '"$(location //lib:generated)" "$(location :ejs.exe.stage' + stage + ')" ' +
-              stage + ' "$(location //test:files)" ' + llvm_bindir(),
+              stage + ' "$(location //test:files)" ' + llvm_bindir() +
+              ' "" "" "$(location //node-llvm:llvm.node)"',
     )
     for stage in ["1", "2", "3"]
 ]
@@ -173,5 +176,6 @@ genrule(
     out = "test-stage1-shapes-off.log",
     cmd = 'bash $SRCDIR/buck-test-stage.sh "$(location :srcdir-tree)" ' +
           '"$(location //lib:generated)" "$(location :ejs.exe.stage1)" ' +
-          '1 "$(location //test:files)" ' + llvm_bindir() + ' "" "EJS_SHAPES=off"',
+          '1 "$(location //test:files)" ' + llvm_bindir() + ' "" "EJS_SHAPES=off" ' +
+          '"$(location //node-llvm:llvm.node)"',
 )
