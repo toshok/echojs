@@ -153,6 +153,14 @@ _ejs_gc_ptr_is_gc_managed (void* ptr)
 
 EJSList heap_pages[HEAP_PAGELISTS_COUNT];
 LargeObjectInfo *los_list;
+// live LOS payload bytes, maintained at the single alloc site
+// (alloc_from_los) and the single free site (release_to_los).  The
+// full-collection growth trigger scales off the post-sweep footprint,
+// and LOS bytes must count toward it: generator machine stacks live
+// here, so a heap of suspended generators is invisible to a
+// pages-only metric — the budget stays at the floor while every
+// large alloc re-trips a full collection that frees nothing.
+size_t los_size = 0;
 
 // ---- LOS lookup: sorted range array -----------------------------
 //
@@ -453,6 +461,10 @@ calc_heap_size()
         size += _ejs_list_length(&heap_pages[hp]) * PAGE_SIZE;
     }
     EJS_ASSERT (size == heap_page_count * PAGE_SIZE);
+    size_t los_walked = 0;
+    for (LargeObjectInfo* lobj = los_list; lobj; lobj = lobj->next)
+        los_walked += lobj->alloc_size;
+    EJS_ASSERT (los_walked == los_size);
 #endif
     return heap_page_count * PAGE_SIZE;
 }
@@ -529,6 +541,7 @@ alloc_from_los(size_t size, EJSScanType scan_type)
     conservative_bounds_add (rv, size + sizeof(LargeObjectInfo) + 16);
     los_ranges_add (rv);
     EJS_LIST_PREPEND (rv, los_list);
+    los_size += size;
     //_ejs_log ("alloc_from_los returning %p\n, los_list = %p\n", rv->page_info.page_start, los_list);
     return rv->page_info.page_start;
 }
@@ -536,6 +549,8 @@ alloc_from_los(size_t size, EJSScanType scan_type)
 void
 release_to_los (LargeObjectInfo *lobj)
 {
+    EJS_ASSERT (los_size >= lobj->alloc_size);
+    los_size -= lobj->alloc_size;
     los_ranges_remove (lobj);
     // the mapping covers the header + bitmap slop too, not just the
     // payload (releasing only alloc_size leaked the tail page)

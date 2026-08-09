@@ -323,6 +323,8 @@ extern EJSList heap_pages[];
 // total pages across all heap_pages buckets (see calc_heap_size)
 extern size_t heap_page_count;
 extern LargeObjectInfo *los_list;
+// live LOS payload bytes (alloc_from_los / release_to_los)
+extern size_t los_size;
 extern Arena *heap_arenas[];
 extern int num_arenas;
 extern char *conservative_lo;       // conservative-scan prefilter bounds

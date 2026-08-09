@@ -533,8 +533,11 @@ _ejs_gc_collect(const char *reason)
     _ejs_gc_collect_inner(EJS_FALSE);
 
     // post-sweep footprint drives the proportional collection trigger
-    // (see heap_size_at_last_gc)
-    heap_size_at_last_gc = calc_heap_size();
+    // (see heap_size_at_last_gc).  LOS bytes count: without them a
+    // large-object-heavy live set (suspended generator stacks) leaves
+    // the growth budget at the floor and every large alloc re-trips a
+    // full collection that frees nothing.
+    heap_size_at_last_gc = calc_heap_size() + los_size;
 
 #if gc_timings > 0
     gettimeofday (&tvafter, NULL);
