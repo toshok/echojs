@@ -407,6 +407,34 @@ function normalizeDefaultExports(body: e.Statement[]): void {
     }
 }
 
+// EJS_EXPORT_CENSUS=1: dump every export slot this module DEFINES and
+// every module slot its post-optimization code LOADS, one line each —
+// the difference across a whole program is the tree-shaking headroom
+// (exports nothing ever reads still pay analysis/lower/opt/emit/llc).
+// Read once at init (the pass-config process.env rule).
+const EXPORT_CENSUS =
+    typeof process !== "undefined" && !!(process.env && process.env["EJS_EXPORT_CENSUS"]);
+
+function exportCensus(
+    filename: string,
+    eir_module: Module,
+    this_module_info: ModuleInfo | null
+): void {
+    const key = filename.replace(/\.js$/, "");
+    if (this_module_info)
+        this_module_info.exports.forEach((info, name) =>
+            console.warn(
+                `EXPCENSUS have ${key} ${info.slot_num} ${name}${info.promoted ? " promoted" : ""}`
+            )
+        );
+    for (const fn of eir_module.functions)
+        fn.forEachInst((inst) => {
+            if (inst.op !== "module_slot_load") return;
+            const m = inst.imms["module"] === "%self" ? key : String(inst.imms["module"]);
+            console.warn(`EXPCENSUS use ${m} ${inst.imms["slot"]}`);
+        });
+}
+
 // invariant checking: a full every-instruction pass, run at several
 // points per module.  -fverify-eir gates it — the test lanes and stage
 // builds enable it; plain compiles skip it and keep the wall.
@@ -653,6 +681,8 @@ export function collectEIRToplevel(
                 if (dumpOptRequested(options)) dumpModule(filename, "gen-lowered", eir_module);
             }
         }
+
+        if (EXPORT_CENSUS) exportCensus(filename, eir_module, this_module_info);
 
         toplevel.eir_module = eir_module;
         toplevel.eir_main = info.name;
