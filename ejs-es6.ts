@@ -133,6 +133,7 @@ const options: CompilerOptions = {
     stdout_writer: new Writer(process.stdout),
     script: false,
     ic_profile: null,
+    warnings: new Set<string>(),
 };
 
 function add_native_module_dir(dir: string): void {
@@ -342,9 +343,24 @@ function output_options() {
     for (const a of Object.keys(args)) {
         console.warn(`   ${a}:  ${args[a]!.help}`);
     }
+    console.warn(
+        `   -W<name>:  enable a warning.  Known: -Wunused-exports (exports/bindings no compiled code uses — dead code still costs compile time).`
+    );
 }
 
 let file_args: string[] | undefined;
+
+// the -W warning registry: prefix-matched like -f (below), validated
+// here so a typo fails loudly instead of silently warning nothing
+const KNOWN_WARNINGS = new Set(["unused-exports"]);
+function applyWarningFlag(token: string): void {
+    const name = token.substring(2);
+    if (!KNOWN_WARNINGS.has(name)) {
+        console.warn(`unknown warning '${token}' (known: ${[...KNOWN_WARNINGS].map((w) => `-W${w}`).join(", ")})`);
+        process.exit(-1);
+    }
+    options.warnings.add(name);
+}
 
 if (argv.length > 0) {
     for (let ai = 0, ae = argv.length; ai < ae; ai++) {
@@ -352,6 +368,11 @@ if (argv.length > 0) {
         // table key; none start with -f)
         if (argv[ai]!.indexOf("-f") === 0) {
             pass_flag_tokens.push(argv[ai]!);
+            continue;
+        }
+        // warning flags are prefix-matched the same way
+        if (argv[ai]!.indexOf("-W") === 0) {
+            applyWarningFlag(argv[ai]!);
             continue;
         }
         const o = args[argv[ai]!];
@@ -415,6 +436,10 @@ if (print_passes) {
 if (!file_args || file_args.length === 0) {
     output_usage();
     process.exit(0);
+}
+
+if (options.warnings.has("unused-exports")) {
+    options.export_census = { have: new Map(), used: new Set() };
 }
 
 // --ic-profile: parse the training dump once.  "ICPROF <evals> <slot>
@@ -1165,9 +1190,41 @@ let allModules = getAllModules();
     // compileNextFile pops from the end, so store in reverse
     files = ordered.reverse();
 }
+// -Wunused-exports: report exports no compiled code uses (neither a
+// residual slot load nor a compile-time constant fold).  The entry
+// module's exports are the program's intentional surface and are
+// skipped; promoted (hidden) slots get their own wording — they are
+// module-level bindings nothing reads.
+function reportUnusedExports(): void {
+    const census = options.export_census;
+    if (!census) return;
+    const entry_key = main_file.endsWith(".js")
+        ? main_file.substring(0, main_file.length - 3)
+        : main_file;
+    let n = 0;
+    for (const [key, info] of census.have) {
+        if (census.used.has(key)) continue;
+        if (info.module === entry_key && !info.promoted) continue;
+        if (info.promoted)
+            console.warn(
+                `warning: module-level binding '${info.name}' in ${info.module} is never used`
+            );
+        else
+            console.warn(
+                `warning: export '${info.name}' of ${info.module} is never used by this program`
+            );
+        n++;
+    }
+    if (n > 0)
+        console.warn(
+            `warning: ${n} unused export(s)/binding(s) — dead code still costs analysis, codegen, and llc time`
+        );
+}
+
 let files_count = files.length;
 const compileNextFile = (): void => {
     if (files.length === 0) {
+        reportUnusedExports();
         flushLLVMJobs();
         do_final_link(main_file, allModules);
         return;

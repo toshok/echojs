@@ -80,6 +80,10 @@ export interface ModCtx {
     // "module#N", stores "module#sN".
     ic_site_counter?: number;
     ic_store_counter?: number;
+    // -Wunused-exports: constant-folded import uses leave no
+    // module_slot_load behind, so the fold sites record here directly
+    // (the warning must treat a folded const as used)
+    export_census?: { used: Set<string> } | null;
     typed_stats?: {
         diamonds: number;
         trusted?: number;
@@ -871,6 +875,14 @@ class LowerFunction {
         }
     }
 
+    // -Wunused-exports: a fold-site use ("%self" maps to this module)
+    recordFoldUse(module: string, slot: number): void {
+        const c = this.mod_ctx.export_census;
+        if (!c) return;
+        const m = module === "%self" ? this.module.name.replace(/\.js$/, "") : module;
+        c.used.add(`${m}|${slot}`);
+    }
+
     identifier(n: e.Identifier): Inst {
         if (n.name === "undefined") return this.b.constUndefined();
         let binding = this.analysis.resolve(n);
@@ -879,7 +891,11 @@ class LowerFunction {
             if (ref) {
                 if (ref.exotic !== undefined)
                     return this.b.emit("module_get_exotic", [], { module: ref.exotic });
-                if (ref.constval !== undefined) return this.literal(ref.constval);
+                if (ref.constval !== undefined) {
+                    // module null = fold-only local literal, no slot to record
+                    if (ref.module !== null) this.recordFoldUse(ref.module, ref.slot);
+                    return this.literal(ref.constval);
+                }
                 return this.b.emit("module_slot_load", [], {
                     module: ref.module,
                     slot: ref.slot,
@@ -1945,8 +1961,10 @@ class LowerFunction {
         // value === null: make_regexp builds a FRESH object per
         // evaluation, and folding would mint one per reference site
         // where the export must be a single identity
-        if (cv && cv.type === "Literal" && !cv.regex && (cv.value === null || typeof cv.value !== "object"))
+        if (cv && cv.type === "Literal" && !cv.regex && (cv.value === null || typeof cv.value !== "object")) {
+            this.recordFoldUse(ref.exotic, export_info.slot_num);
             return this.literal(cv);
+        }
         return this.b.emit("module_slot_load", [], {
             module: ref.exotic,
             slot: export_info.slot_num,

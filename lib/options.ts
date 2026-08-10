@@ -45,6 +45,16 @@ export interface CompilerOptions {
     // default is the Module goal: every toplevel is strict and `this`
     // is undefined.  Parsing uses the module grammar either way.
     script: boolean;
+    // -W<name> warnings the driver enables (today: "unused-exports")
+    warnings: Set<string>;
+    // the -Wunused-exports collector, driver-owned: every export slot
+    // defined and every use — residual slot loads AND compile-time
+    // constant folds (a folded const is used even though no load
+    // survives; the warning must not lie about it)
+    export_census?: {
+        have: Map<string, { module: string; name: string; promoted: boolean }>;
+        used: Set<string>;
+    } | null;
     // --ic-profile <file>: a training run's ICPROF/ICPROFP dump (see
     // -fic-profile-dump).  The driver parses it once into
     // ic_profile_map: site-id -> unique {key, slot} (proto-tier records

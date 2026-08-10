@@ -418,20 +418,28 @@ const EXPORT_CENSUS =
 function exportCensus(
     filename: string,
     eir_module: Module,
-    this_module_info: ModuleInfo | null
+    this_module_info: ModuleInfo | null,
+    collector: NonNullable<CompilerOptions["export_census"]> | null
 ): void {
     const key = filename.replace(/\.js$/, "");
     if (this_module_info)
-        this_module_info.exports.forEach((info, name) =>
-            console.warn(
-                `EXPCENSUS have ${key} ${info.slot_num} ${name}${info.promoted ? " promoted" : ""}`
-            )
-        );
+        this_module_info.exports.forEach((info, name) => {
+            if (EXPORT_CENSUS)
+                console.warn(
+                    `EXPCENSUS have ${key} ${info.slot_num} ${name}${info.promoted ? " promoted" : ""}`
+                );
+            collector?.have.set(`${key}|${info.slot_num}`, {
+                module: key,
+                name,
+                promoted: !!info.promoted,
+            });
+        });
     for (const fn of eir_module.functions)
         fn.forEachInst((inst) => {
             if (inst.op !== "module_slot_load") return;
             const m = inst.imms["module"] === "%self" ? key : String(inst.imms["module"]);
-            console.warn(`EXPCENSUS use ${m} ${inst.imms["slot"]}`);
+            if (EXPORT_CENSUS) console.warn(`EXPCENSUS use ${m} ${inst.imms["slot"]}`);
+            collector?.used.add(`${m}|${inst.imms["slot"]}`);
         });
 }
 
@@ -492,6 +500,8 @@ export function collectEIRToplevel(
             typed_stats: typed_stats,
             // --ic-profile: the training run's monomorphic sites
             ic_profile: options.ic_profile_map ?? null,
+            // -Wunused-exports: fold-site use recording
+            export_census: options.export_census ?? null,
             // --types-dump grows the per-site shape census
             shape_dump: !!options.types_dump,
             script: !!options.script,
@@ -500,6 +510,13 @@ export function collectEIRToplevel(
         let eir_module = new Module(filename);
         lowerAnalyzedFunction(info, analysis, eir_module, mod_ctx);
         let accessors = buildModuleAccessors(eir_module, this_module_info);
+        // the census walks BEFORE optimization: devirt rewrites
+        // module-local slot calls to call_typed and sweeps the loads, so
+        // a post-opt walk reports called functions as unused.  Pre-opt,
+        // every source-level reference is still a slot load (constant
+        // folds are recorded at their lowering sites instead).
+        if (EXPORT_CENSUS || options.export_census)
+            exportCensus(filename, eir_module, this_module_info, options.export_census ?? null);
         verify(eir_module);
         // the as-lowered dump must precede optimization (which mutates
         // the module in place)
@@ -681,8 +698,6 @@ export function collectEIRToplevel(
                 if (dumpOptRequested(options)) dumpModule(filename, "gen-lowered", eir_module);
             }
         }
-
-        if (EXPORT_CENSUS) exportCensus(filename, eir_module, this_module_info);
 
         toplevel.eir_module = eir_module;
         toplevel.eir_main = info.name;
