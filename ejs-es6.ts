@@ -431,24 +431,30 @@ if (options.ic_profile) {
         process.exit(-1);
         throw new Error("unreachable");
     }
-    const map = new Map<string, { key: string; slot: number; evals: number }>();
+    const map = new Map<
+        string,
+        { key: string; slot: number; evals: number; protoKey?: string }
+    >();
     const conflicted = new Set<string>();
     for (const line of text.split("\n")) {
-        const m = line.match(/ICPROF (\d+) (\d+) (\S+) (\S+)/);
+        const m = line.match(/ICPROF(P?) (\d+) (\d+) (\S+) (\S+)(?: (\S+))?/);
         if (!m) continue;
-        const evals = parseInt(m[1]!, 10);
-        const slot = parseInt(m[2]!, 10);
-        const site = m[3]!;
-        const key = m[4]!;
+        const proto = m[1] === "P";
+        const evals = parseInt(m[2]!, 10);
+        const slot = parseInt(m[3]!, 10);
+        const site = m[4]!;
+        const key = m[5]!;
+        const protoKey = proto ? m[6] : undefined;
+        if (proto && !protoKey) continue;
         const prev = map.get(site);
         if (prev) {
-            if (prev.key !== key || prev.slot !== slot) {
+            if (prev.key !== key || prev.slot !== slot || prev.protoKey !== protoKey) {
                 conflicted.add(site);
                 map.delete(site);
             } else prev.evals += evals; // specialization clones split traffic
             continue;
         }
-        if (!conflicted.has(site)) map.set(site, { key, slot, evals });
+        if (!conflicted.has(site)) map.set(site, { key, slot, evals, ...(protoKey ? { protoKey } : {}) });
     }
     // inline only genuinely hot sites — each inlined guard is IR the
     // backend pays for (the inline-diamond-everywhere variant lost to

@@ -1388,6 +1388,7 @@ typedef struct {
     const char *site;
     uint32_t *cell;
     uint64_t *evals;
+    uint32_t kind; /* 0 = load cell, 1 = store cell */
 } ICProfileEnt;
 
 static ICProfileEnt *ic_profile;
@@ -1401,13 +1402,35 @@ ic_profile_dump(void)
 {
     for (uint32_t i = 0; i < ic_profile_count; i++) {
         uint32_t *cell = ic_profile[i].cell;
-        if (cell[0] == EJS_SHAPE_NOMATCH || cell[1] == EJS_PROPIC_PROTO)
+        uint32_t slot;
+        if (cell[0] == EJS_SHAPE_NOMATCH)
             continue;
+        if (ic_profile[i].kind == 1) {
+            /* store cell: slot|repr<<30|installed<<31 beside the shape */
+            if (!(cell[1] & EJS_PROPIC_INSTALLED))
+                continue;
+            slot = cell[1] & EJS_PROPIC_SLOT_MASK;
+        } else if (cell[1] == EJS_PROPIC_PROTO) {
+            /* proto tier: the hit lives on the immediate proto — dump
+               both shapes so --ic-profile can inline the two-guard
+               diamond (recv guard + proto guard + proto slot load) */
+            char *rkey = _ejs_shape_key_dup(cell[0]);
+            char *pkey = rkey ? _ejs_shape_key_dup(cell[2]) : NULL;
+            if (pkey)
+                _ejs_log("ICPROFP %llu %u %s %s %s\n",
+                         (unsigned long long)*ic_profile[i].evals, cell[3],
+                         ic_profile[i].site, rkey, pkey);
+            free(rkey);
+            free(pkey);
+            continue;
+        } else {
+            slot = cell[1];
+        }
         char *key = _ejs_shape_key_dup(cell[0]);
         if (!key)
             continue;
         _ejs_log("ICPROF %llu %u %s %s\n",
-                 (unsigned long long)*ic_profile[i].evals, cell[1],
+                 (unsigned long long)*ic_profile[i].evals, slot,
                  ic_profile[i].site, key);
         free(key);
     }
@@ -1415,7 +1438,7 @@ ic_profile_dump(void)
 }
 
 void
-_ejs_prop_ic_profile_register (const char *site, uint32_t *cell, uint64_t *evals)
+_ejs_prop_ic_profile_register (const char *site, uint32_t *cell, uint64_t *evals, uint32_t kind)
 {
     if (!ic_profile_checked) {
         ic_profile_checked = EJS_TRUE;
@@ -1433,6 +1456,7 @@ _ejs_prop_ic_profile_register (const char *site, uint32_t *cell, uint64_t *evals
     ic_profile[ic_profile_count].site = site;
     ic_profile[ic_profile_count].cell = cell;
     ic_profile[ic_profile_count].evals = evals;
+    ic_profile[ic_profile_count].kind = kind;
     ic_profile_count++;
 }
 

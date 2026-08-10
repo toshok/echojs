@@ -45,12 +45,16 @@ export interface CompilerOptions {
     // default is the Module goal: every toplevel is strict and `this`
     // is undefined.  Parsing uses the module grammar either way.
     script: boolean;
-    // --ic-profile <file>: a training run's ICPROF dump (see
+    // --ic-profile <file>: a training run's ICPROF/ICPROFP dump (see
     // -fic-profile-dump).  The driver parses it once into
-    // ic_profile_map: site-id -> unique {key, slot}, sites with
-    // conflicting records dropped; lowering inlines the guarded fast
-    // path at listed sites (checked tier — a stale profile is a guard
-    // miss, never a wrong answer).
+    // ic_profile_map: site-id -> unique {key, slot} (proto-tier records
+    // carry the immediate proto's key too), sites with conflicting
+    // records dropped; lowering inlines the guarded fast path at listed
+    // sites (checked tier — a stale profile is a guard miss, never a
+    // wrong answer).
     ic_profile: string | null;
-    ic_profile_map?: Map<string, { key: string; slot: number; evals: number }> | null;
+    ic_profile_map?: Map<
+        string,
+        { key: string; slot: number; evals: number; protoKey?: string }
+    > | null;
 }

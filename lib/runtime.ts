@@ -643,15 +643,16 @@ const runtime_interface = {
             )
         );
     },
-    // -fic-profile-dump: register one load-IC site's cell + eval
-    // counter under its site id (dumped at exit under EJS_IC_PROFILE)
+    // -fic-profile-dump: register one IC site's cell + eval counter
+    // under its site id (dumped at exit under EJS_IC_PROFILE; kind 0 =
+    // load cell, 1 = store cell — they pack differently)
     prop_ic_profile_register: function (this: RuntimeContext) {
         return does_not_throw(
             this.abi.createExternalFunction(
                 this.module,
                 "_ejs_prop_ic_profile_register",
                 ty.Void,
-                [ty.Int8Pointer, ty.Int32.pointerTo(), ty.Int64.pointerTo()]
+                [ty.Int8Pointer, ty.Int32.pointerTo(), ty.Int64.pointerTo(), ty.Int32]
             )
         );
     },

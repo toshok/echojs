@@ -93,12 +93,13 @@ class LLVMIRVisitor implements VisitorSurface {
     // registration init function by emitShapeCensusRegs (same contract)
     module_census: { global: llvm.GlobalVariable; desc: string }[] = [];
     census_init_function: llvm.EjsFunction | null = null;
-    // -fic-profile-dump: load-IC cells + eval counters, flushed by
+    // -fic-profile-dump: IC cells + eval counters, flushed by
     // emitICProfileRegs (same contract again)
     module_ic_profile: {
         desc: string;
         cell: llvm.GlobalVariable;
         counter: llvm.GlobalVariable;
+        kind: "load" | "store";
     }[] = [];
     ic_profile_init_function: llvm.EjsFunction | null = null;
 
@@ -1140,7 +1141,11 @@ class LLVMIRVisitor implements VisitorSurface {
 
     // -fic-profile-dump: the per-site i64 eval counter; the cell rides
     // along for registration
-    icProfileSite(desc: string, cell: llvm.GlobalVariable): llvm.GlobalVariable {
+    icProfileSite(
+        desc: string,
+        cell: llvm.GlobalVariable,
+        kind: "load" | "store"
+    ): llvm.GlobalVariable {
         const counter = new llvm.GlobalVariable(
             this.module,
             types.Int64,
@@ -1148,7 +1153,7 @@ class LLVMIRVisitor implements VisitorSurface {
             consts.int64(0),
             false
         );
-        this.module_ic_profile.push({ desc, cell, counter });
+        this.module_ic_profile.push({ desc, cell, counter, kind });
         return counter;
     }
 
@@ -1178,7 +1183,7 @@ class LLVMIRVisitor implements VisitorSurface {
             );
             this.createCall(
                 this.ejs_runtime.prop_ic_profile_register,
-                [desc, cell, entry.counter],
+                [desc, cell, entry.counter, consts.int32(entry.kind === "store" ? 1 : 0)],
                 ""
             );
         }

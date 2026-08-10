@@ -67,13 +67,19 @@ export interface ModCtx {
     // (promotion criterion 5 — visible degradation).
     oracle?: TypeOracle | null;
     // --ic-profile: site-id -> the training run's installed monomorphic
-    // {key, slot} (ejs-es6.ts parses the dump); propGet inlines the
-    // guarded fast path at listed sites the oracle declined
-    ic_profile?: Map<string, { key: string; slot: number; evals: number }> | null;
-    // per-module load-site counter — the site-id half.  Both the
-    // training build and the consuming build count EVERY propGet in
-    // lowering order, so the ids agree across builds
+    // {key, slot} (ejs-es6.ts parses the dump; proto-tier records carry
+    // the immediate proto's key); shapeFactFor answers from it at
+    // listed sites the oracle declined
+    ic_profile?: Map<
+        string,
+        { key: string; slot: number; evals: number; protoKey?: string }
+    > | null;
+    // per-module site counters — the site-id half.  Both the training
+    // build and the consuming build count EVERY propGet/propSet in
+    // lowering order, so the ids agree across builds.  Loads are
+    // "module#N", stores "module#sN".
     ic_site_counter?: number;
+    ic_store_counter?: number;
     typed_stats?: {
         diamonds: number;
         trusted?: number;
@@ -1195,7 +1201,28 @@ class LowerFunction {
         return [{ key, slot, repr: fields[slot]!.repr }];
     }
 
+    // the single fact gate for obj.atom sites: oracle facts win when
+    // they exist; the class-this birth shape answers oracle declines on
+    // `this`; an --ic-profile training fact answers whatever is left.
+    // Every consumer (load diamonds, store diamonds, method-call
+    // lowering through propGet) draws from this one stream, so profile
+    // facts participate in the same downstream machinery — region
+    // merging, typed slots, guard folding — as oracle facts.
     shapeFactFor(
+        objNode: e.Expression | null,
+        atom: string,
+        profileSite?: string
+    ): { key: string; slot: number; repr: "boxed" | "f64" }[] | null {
+        const oracle_facts = this.oracleShapeFacts(objNode, atom);
+        if (oracle_facts) return oracle_facts;
+        if (profileSite) {
+            const pf = this.icProfileFacts(profileSite);
+            if (pf) return pf;
+        }
+        return null;
+    }
+
+    oracleShapeFacts(
         objNode: e.Expression | null,
         atom: string
     ): { key: string; slot: number; repr: "boxed" | "f64" }[] | null {
@@ -1255,13 +1282,11 @@ class LowerFunction {
     // Conservative declines: unparseable key, non-identifier field
     // name (the dump prints raw names; a name holding ':' or ',' would
     // have corrupted the format), out-of-range slot.
-    icProfileFacts(site: string): { key: string; slot: number; repr: "boxed" | "f64" }[] | null {
-        const map = this.mod_ctx.ic_profile;
-        if (!map) return null;
-        const rec = map.get(site);
-        if (!rec) return null;
+    // parse a dumped shape key back into fields and re-intern it; the
+    // round-trip must reproduce the key exactly or the record declines
+    icProfileParseKey(dumpKey: string): { key: string; fields: ShapeField[] } | null {
         const fields: ShapeField[] = [];
-        for (const part of rec.key.split(",")) {
+        for (const part of dumpKey.split(",")) {
             const ci = part.lastIndexOf(":");
             if (ci <= 0) return null;
             const name = part.substring(0, ci);
@@ -1270,13 +1295,24 @@ class LowerFunction {
             if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) return null;
             fields.push({ name, repr });
         }
-        if (rec.slot < 0 || rec.slot >= fields.length) return null;
         const key = this.module.internShape(fields);
-        if (key !== rec.key) return null;
+        if (key !== dumpKey) return null;
+        return { key, fields };
+    }
+
+    icProfileFacts(site: string): { key: string; slot: number; repr: "boxed" | "f64" }[] | null {
+        const map = this.mod_ctx.ic_profile;
+        if (!map) return null;
+        const rec = map.get(site);
+        if (!rec || rec.protoKey !== undefined) return null;
+        const parsed = this.icProfileParseKey(rec.key);
+        if (!parsed) return null;
+        if (rec.slot < 0 || rec.slot >= parsed.fields.length) return null;
         const stats = this.mod_ctx.typed_stats;
         if (stats) stats.ic_profile_guards = (stats.ic_profile_guards ?? 0) + 1;
-        return [{ key, slot: rec.slot, repr: fields[rec.slot]!.repr }];
+        return [{ key: parsed.key, slot: rec.slot, repr: parsed.fields[rec.slot]!.repr }];
     }
+
 
     propGet(objNode: e.Expression | null, obj: Inst, atom: string): Inst {
         // the stable site id; ic_site travels on get_prop_atom only in
@@ -1284,8 +1320,7 @@ class LowerFunction {
         const site = `${this.module.name}#${(this.mod_ctx.ic_site_counter =
             (this.mod_ctx.ic_site_counter ?? 0) + 1)}`;
         const site_imm = passes().icProfileDump ? { ic_site: site } : {};
-        let facts = this.shapeFactFor(objNode, atom);
-        if (!facts) facts = this.icProfileFacts(site);
+        const facts = this.shapeFactFor(objNode, atom, site);
         if (!facts) return this.b.emit("get_prop_atom", [obj], { atom: atom, ...site_imm });
 
         const fast_bbs = facts.map(() => this.b.newBlock("shape_fast"));
@@ -1340,9 +1375,16 @@ class LowerFunction {
     // field repr — f64 fields take numbers fast, boxed fields take
     // non-numbers fast, everything else goes generic.
     propSet(objNode: e.Expression | null, obj: Inst, atom: string, v: Inst): void {
+        // the store-site id lives in its own namespace ("#sN"); the
+        // same both-builds-count-every-call discipline as propGet
+        const site = `${this.module.name}#s${(this.mod_ctx.ic_store_counter =
+            (this.mod_ctx.ic_store_counter ?? 0) + 1)}`;
+        const site_imm = passes().icProfileDump ? { ic_site: site } : {};
         // 6.2.4.2 PutValue: strict-mode member stores throw on failure
-        const imms = this.info.strict ? { atom: atom, strict: 1 } : { atom: atom };
-        const facts = this.shapeFactFor(objNode, atom);
+        const imms = this.info.strict
+            ? { atom: atom, strict: 1, ...site_imm }
+            : { atom: atom, ...site_imm };
+        const facts = this.shapeFactFor(objNode, atom, site);
         if (!facts) {
             this.b.emit("set_prop_atom", [obj, v], imms);
             return;
