@@ -834,6 +834,20 @@ export class EIREmitter {
                 this.values.set(inst, phi);
                 return;
             }
+            // the [[Prototype]] field, deref'd directly — the verifier
+            // guarantees a passed has_shape proved the operand an object
+            case "load_proto": {
+                const objptr = this.v.objectPointer(this.val(inst.operands[0]));
+                const proto_ptr = ir.createInBoundsGetElementPointer(
+                    types.EjsObject,
+                    objptr,
+                    [consts.int64(0), consts.int32(3)],
+                    "proto_ptr"
+                );
+                this.values.set(inst, ir.createLoad(types.EjsValue, proto_ptr, "proto"));
+                return;
+            }
+
             // typed slots: an f64-repr slot is accessed as a raw
             // double — same address, same 8 bytes (the NaN-box stores
             // doubles raw), just loaded/stored as the machine type the

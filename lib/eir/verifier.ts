@@ -549,6 +549,19 @@ export function verifyFunction(fn: Func, mod?: Module): boolean {
         b.insts.forEach((inst, i) => {
             const isSlotOp = inst.op === "slot_load" || inst.op === "slot_store";
             const isBornOp = inst.op === "make_object_shaped" || inst.op === "fill_object_shaped";
+            if (inst.op === "load_proto") {
+                // objectness proof: some un-killed has_shape fact on the
+                // operand licenses the direct header deref
+                if (shapeFacts === undefined) shapeFacts = computeShapeFacts(fn);
+                const facts = shapeFacts ? shapeFacts.factsAt(b, i) : new Set<string>();
+                const prefix = `${inst.operands[0]!.id}|`;
+                if (![...facts].some((f) => f.startsWith(prefix)))
+                    fail(
+                        `'load_proto' is not covered by an un-killed has_shape fact on its receiver`,
+                        inst
+                    );
+                return;
+            }
             if (!isSlotOp && !isBornOp && inst.op !== "has_shape") return;
             const shapeImm = String(inst.imms["shape"]);
             const fields = mod ? mod.shapes.get(shapeImm) : undefined;

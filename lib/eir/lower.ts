@@ -1313,6 +1313,32 @@ class LowerFunction {
         return [{ key: parsed.key, slot: rec.slot, repr: parsed.fields[rec.slot]!.repr }];
     }
 
+    // proto-tier record: the training run resolved this load on an own
+    // data slot of the receiver's immediate prototype (methods).  The
+    // receiver key's role is pure identity — the field lives on the
+    // proto — so its slot is unconstrained.
+    icProfileProtoFact(
+        site: string
+    ): { recvKey: string; protoKey: string; slot: number; repr: "boxed" | "f64" } | null {
+        const map = this.mod_ctx.ic_profile;
+        if (!map) return null;
+        const rec = map.get(site);
+        if (!rec || rec.protoKey === undefined) return null;
+        const recv = this.icProfileParseKey(rec.key);
+        if (!recv) return null;
+        const proto = this.icProfileParseKey(rec.protoKey);
+        if (!proto) return null;
+        if (rec.slot < 0 || rec.slot >= proto.fields.length) return null;
+        const stats = this.mod_ctx.typed_stats;
+        if (stats) stats.ic_profile_guards = (stats.ic_profile_guards ?? 0) + 1;
+        return {
+            recvKey: recv.key,
+            protoKey: proto.key,
+            slot: rec.slot,
+            repr: proto.fields[rec.slot]!.repr,
+        };
+    }
+
 
     propGet(objNode: e.Expression | null, obj: Inst, atom: string): Inst {
         // the stable site id; ic_site travels on get_prop_atom only in
@@ -1321,7 +1347,57 @@ class LowerFunction {
             (this.mod_ctx.ic_site_counter ?? 0) + 1)}`;
         const site_imm = passes().icProfileDump ? { ic_site: site } : {};
         const facts = this.shapeFactFor(objNode, atom, site);
-        if (!facts) return this.b.emit("get_prop_atom", [obj], { atom: atom, ...site_imm });
+        if (!facts) {
+            // no own-slot fact: a proto-tier training record can still
+            // inline the method-load fast path — receiver-shape guard
+            // (which also vouches the key is NOT own), proto load,
+            // proto-shape guard, proto slot load.  Slot-not-value
+            // caching semantics carry over: the load goes through the
+            // CURRENT proto, so in-place method writes and same-shaped
+            // proto swaps stay correct, and shadowing transitions the
+            // receiver into the slow arm.
+            const pf = this.icProfileProtoFact(site);
+            if (!pf) return this.b.emit("get_prop_atom", [obj], { atom: atom, ...site_imm });
+
+            const proto_bb = this.b.newBlock("proto_chk");
+            const fast_bb = this.b.newBlock("proto_fast");
+            const slow_bb = this.b.newBlock("proto_slow");
+            const join_bb = this.b.newBlock("proto_join");
+            const result = join_bb.addParam("prop");
+
+            const t = this.b.emit("has_shape", [obj], { shape: pf.recvKey });
+            this.b.condBr(t, proto_bb, [], slow_bb, []);
+            this.b.sealBlock(proto_bb);
+
+            this.b.setInsertPoint(proto_bb);
+            const proto = this.b.emit("load_proto", [obj], {});
+            const t2 = this.b.emit("has_shape", [proto], { shape: pf.protoKey });
+            this.b.condBr(t2, fast_bb, [], slow_bb, []);
+            this.b.sealBlock(fast_bb);
+            this.b.sealBlock(slow_bb);
+
+            this.b.setInsertPoint(fast_bb);
+            const v = this.b.emit("slot_load", [proto], {
+                shape: pf.protoKey,
+                slot: pf.slot,
+                repr: pf.repr,
+            });
+            if (pf.repr === "f64") {
+                v.type = "f64";
+                const boxed = this.b.emit("box_f64", [v], {});
+                this.b.br(join_bb, [boxed]);
+            } else {
+                this.b.br(join_bb, [v]);
+            }
+
+            this.b.setInsertPoint(slow_bb);
+            const g = this.b.emit("get_prop_atom", [obj], { atom: atom, ...site_imm });
+            this.b.br(join_bb, [g]);
+            this.b.sealBlock(join_bb);
+
+            this.b.setInsertPoint(join_bb);
+            return result;
+        }
 
         const fast_bbs = facts.map(() => this.b.newBlock("shape_fast"));
         const chk_bbs = facts.slice(1).map(() => this.b.newBlock("shape_chk"));

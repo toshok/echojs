@@ -122,6 +122,11 @@ export const OPS = {
     get_prop: { arity: 2, effects: GENERIC_OP },
     set_prop: { arity: 3, effects: GENERIC_OP, imms: ["strict"] },
     get_prop_atom: { arity: 1, effects: GENERIC_OP, imms: ["atom"] },
+    // the receiver's [[Prototype]] slot.  Only valid downstream of a
+    // passed has_shape on the operand (the verifier enforces it): the
+    // guard proves objectness, so the emitter derefs without a tag
+    // check.  READ, not NONE — setPrototypeOf can retarget it.
+    load_proto: { arity: 1, effects: E.READ },
     set_prop_atom: { arity: 2, effects: GENERIC_OP, imms: ["atom", "strict"] },
     delete_prop: { arity: 2, effects: GENERIC_OP, imms: ["strict"] },
 
