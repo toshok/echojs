@@ -54,6 +54,15 @@ genrule(
           ' "$(location //external-deps:maam-esm)"',
 )
 
+# the checked-in IC training profile (ci/regen-icprofile.sh rebuilds
+# it): every stage compiles with --ic-profile, so the produced binaries
+# carry the trained inline fast paths.  Staleness decays to guard
+# misses (checked tier), never wrong answers.
+export_file(
+    name = "selfcompile-icprofile",
+    src = "ci/selfcompile.icprofile",
+)
+
 # stage1: the generated (CommonJS) compiler running under node (with the
 # node-llvm addon) compiles ejs-es6.js to a native executable.
 genrule(
@@ -62,7 +71,7 @@ genrule(
     out = "ejs.exe.stage1",
     cmd = 'bash $SRCDIR/buck-stage.sh "$(location :srcdir-tree)" node ' +
           '"$(location //lib:generated)" "$(location //node-llvm:llvm.node)" ' +
-          llvm_bindir(),
+          llvm_bindir() + ' "" "$(location :selfcompile-icprofile)"',
 )
 
 # stage2: stage1 compiles the compiler.
@@ -71,7 +80,8 @@ genrule(
     srcs = ["buck-stage.sh"],
     out = "ejs.exe.stage2",
     cmd = 'bash $SRCDIR/buck-stage.sh "$(location :srcdir-tree)" exe ' +
-          '"$(location :ejs.exe.stage1)" - ' + llvm_bindir(),
+          '"$(location :ejs.exe.stage1)" - ' + llvm_bindir() +
+          ' "" "$(location :selfcompile-icprofile)"',
 )
 
 # stage3: stage2 compiles the compiler; stage2 and stage3 should be
@@ -81,7 +91,8 @@ genrule(
     srcs = ["buck-stage.sh"],
     out = "ejs.exe.stage3",
     cmd = 'bash $SRCDIR/buck-stage.sh "$(location :srcdir-tree)" exe ' +
-          '"$(location :ejs.exe.stage2)" - ' + llvm_bindir(),
+          '"$(location :ejs.exe.stage2)" - ' + llvm_bindir() +
+          ' "" "$(location :selfcompile-icprofile)"',
 )
 
 # `make` (all) builds stage1 and installs it as ejs.exe; mirror that.

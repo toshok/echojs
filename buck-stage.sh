@@ -10,6 +10,9 @@ COMPILER="$3"   # node: //lib:generated dir; exe: previous ejs.exe.stageN
 LLVM_NODE="$4"  # node: //node-llvm:llvm.node; exe: "-"
 LLVM_BIN="$5"   # directory holding llc/opt (and llvm-config)
 EXTRA_FLAGS="${6:-}"  # extra compiler flags for the self-compile, e.g. --ir
+ICPROFILE="${7:-}"    # ci/selfcompile.icprofile artifact ("-"/empty = none):
+                      # the stage compiles with --ic-profile, so the produced
+                      # binary carries the trained inline fast paths
 
 abspath() {
     if [ -d "$1" ]; then
@@ -23,6 +26,9 @@ OUT_ABS="$(cd "$(dirname "$OUT")" && pwd)/$(basename "$OUT")"
 COMPILER_ABS="$(abspath "$COMPILER")"
 if [ "$LLVM_NODE" != "-" ]; then
     LLVM_NODE_ABS="$(abspath "$LLVM_NODE")"
+fi
+if [ -n "$ICPROFILE" ] && [ "$ICPROFILE" != "-" ]; then
+    ICPROFILE_ABS="$(abspath "$ICPROFILE")"
 fi
 
 WORK="$TMP/work"
@@ -49,6 +55,9 @@ EJS_ARGS=(--srcdir --leave-temp --moduledir node-compat --moduledir ejs-llvm
 # the EIR verifier is opt-in for plain compiles; stage self-compiles keep
 # it on for invariant coverage over the whole compiler
 EJS_ARGS+=(-fverify-eir)
+if [ -n "${ICPROFILE_ABS:-}" ]; then
+    EJS_ARGS+=(--ic-profile "$ICPROFILE_ABS")
+fi
 if [ -n "$EXTRA_FLAGS" ]; then
     EJS_ARGS+=($EXTRA_FLAGS)
 fi
