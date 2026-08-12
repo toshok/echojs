@@ -67,4 +67,10 @@ export interface CompilerOptions {
         string,
         { key: string; slot: number; evals: number; protoKey?: string }
     > | null;
+    // the same dump's CALLPROF records: dynamic-call site id
+    // ("module#cN") -> the one observed target ("module#fnname").
+    // devirt's guarded tier rewrites listed sites into a
+    // callee_eq-guarded direct call (checked tier again: a stale record
+    // is a guard miss into the generic call, never a wrong answer).
+    call_profile_map?: Map<string, { label: string; evals: number }> | null;
 }

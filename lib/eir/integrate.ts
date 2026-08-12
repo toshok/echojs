@@ -63,6 +63,9 @@ export type CollectResult =
           shape_poly_guards: number;
           // sites inlined from an --ic-profile training dump
           ic_profile_guards: number;
+          // dynamic call sites rewritten into callee_eq-guarded direct
+          // calls from the dump's CALLPROF records
+          call_profile_guards: number;
           shape_declined: Record<string, number>;
           // born-with-shape telemetry
           born_shaped: number;
@@ -86,6 +89,7 @@ export type CollectResult =
           shape_guards?: undefined;
           shape_poly_guards?: undefined;
           ic_profile_guards?: undefined;
+          call_profile_guards?: undefined;
           shape_declined?: undefined;
           born_shaped?: undefined;
           ctor_fills?: undefined;
@@ -668,16 +672,22 @@ export function collectEIRToplevel(
             // call_typed rewrite.  -fno-devirt bisects (checked inside
             // the pass).
             {
-                const dstats = devirtualizeModule(eir_module, info.name);
-                if (dstats.ssa_sites || dstats.slot_sites) {
+                const dstats = devirtualizeModule(
+                    eir_module,
+                    info.name,
+                    options.call_profile_map ?? null
+                );
+                if (dstats.ssa_sites || dstats.slot_sites || dstats.profile_sites) {
                     // sweep the closures/loads the rewrites just orphaned
                     for (const fn of eir_module.functions) eliminateDeadInFunction(fn);
                     verify(eir_module);
+                    typed_stats.call_profile_guards = dstats.profile_sites;
                     debug.log(
                         1,
                         `EIR-devirt: ${filename}: ` +
-                            `${dstats.ssa_sites + dstats.slot_sites} call site(s) devirtualized ` +
-                            `(${dstats.ssa_sites} ssa, ${dstats.slot_sites} slot)`
+                            `${dstats.ssa_sites + dstats.slot_sites + dstats.profile_sites} call site(s) devirtualized ` +
+                            `(${dstats.ssa_sites} ssa, ${dstats.slot_sites} slot, ` +
+                            `${dstats.profile_sites} profile-guarded)`
                     );
                 }
             }
@@ -715,6 +725,7 @@ export function collectEIRToplevel(
             shape_guards: typed_stats.shape_guards ?? 0,
             shape_poly_guards: typed_stats.shape_poly_guards ?? 0,
             ic_profile_guards: typed_stats.ic_profile_guards ?? 0,
+            call_profile_guards: typed_stats.call_profile_guards ?? 0,
             shape_declined: typed_stats.shape_declined ?? {},
             born_shaped: typed_stats.born_shaped ?? 0,
             ctor_fills: typed_stats.ctor_fills ?? 0,

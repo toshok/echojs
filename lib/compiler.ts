@@ -101,6 +101,11 @@ class LLVMIRVisitor implements VisitorSurface {
         counter: llvm.GlobalVariable;
         kind: "load" | "store";
     }[] = [];
+    // the call-target profile's halves: per-site [seen, evals] cells and
+    // the module's code-pointer -> "module#fnname" table (both flushed by
+    // emitICProfileRegs; both only under -fic-profile-dump)
+    module_call_profile: { desc: string; cell: llvm.GlobalVariable }[] = [];
+    module_call_fns: { label: string; fn: llvm.EjsFunction }[] = [];
     ic_profile_init_function: llvm.EjsFunction | null = null;
 
     constructor(
@@ -1157,11 +1162,37 @@ class LLVMIRVisitor implements VisitorSurface {
         return counter;
     }
 
+    // -fic-profile-dump: the per-call-site [seen, evals] cell for the
+    // call-target profile ("module#cN" sites)
+    callProfileSite(desc: string): llvm.GlobalVariable {
+        const cell_ty = llvm.ArrayType.get(types.Int64, 2);
+        const cell = new llvm.GlobalVariable(
+            this.module,
+            cell_ty,
+            `ejs_call_prof-${this.idgen()}`,
+            llvm.Constant.getAggregateZero(cell_ty),
+            false
+        );
+        this.module_call_profile.push({ desc, cell });
+        return cell;
+    }
+
+    // -fic-profile-dump: one compiled function's dump label; the runtime
+    // resolves recorded code pointers through these at exit
+    callProfileFn(label: string, fn: llvm.EjsFunction): void {
+        this.module_call_fns.push({ label, fn });
+    }
+
     // flush the pending IC-profile registrations (one
     // _ejs_prop_ic_profile_register call per load-IC site); the census
     // flush contract
     emitICProfileRegs(): llvm.EjsFunction | null {
-        if (this.module_ic_profile.length === 0) return null;
+        if (
+            this.module_ic_profile.length === 0 &&
+            this.module_call_profile.length === 0 &&
+            this.module_call_fns.length === 0
+        )
+            return null;
         const saved_insert = ir.getInsertBlock();
         const saved_function = this.currentFunction;
 
@@ -1186,6 +1217,22 @@ class LLVMIRVisitor implements VisitorSurface {
                 [desc, cell, entry.counter, consts.int32(entry.kind === "store" ? 1 : 0)],
                 ""
             );
+        }
+        const call_cell_ty = llvm.ArrayType.get(types.Int64, 2);
+        for (const entry of this.module_call_profile) {
+            const desc = ir.createGlobalStringPtr(entry.desc, "callprof_site");
+            const cell = ir.createGetElementPointer(
+                call_cell_ty,
+                entry.cell,
+                [consts.int32(0), consts.int64(0)],
+                "callprof_cell"
+            );
+            this.createCall(this.ejs_runtime.call_ic_profile_register, [desc, cell], "");
+        }
+        for (const entry of this.module_call_fns) {
+            const label = ir.createGlobalStringPtr(entry.label, "callprof_fn");
+            const fnptr = ir.createPointerCast(entry.fn, types.Int8Pointer, "callprof_fnptr");
+            this.createCall(this.ejs_runtime.call_ic_profile_register_fn, [label, fnptr], "");
         }
         ir.createRetVoid();
 
@@ -1431,6 +1478,10 @@ export function compile(
                 // --ic-profile telemetry (additive)
                 ((lowered.ic_profile_guards ?? 0) > 0
                     ? ` icProfileGuards=${lowered.ic_profile_guards}`
+                    : "") +
+                // call-target profile telemetry (additive)
+                ((lowered.call_profile_guards ?? 0) > 0
+                    ? ` callProfileGuards=${lowered.call_profile_guards}`
                     : "")
         );
     }

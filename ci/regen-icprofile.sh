@@ -19,6 +19,11 @@ ART_NODE="$(buck2 targets --show-output //node-llvm:llvm.node 2>/dev/null | awk 
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
+# resolve symlinks (macOS mktemp answers /var/folders/..., a symlink of
+# /private/var/...): module paths relativize against the RESOLVED cwd,
+# and an unresolved $WORK prefix leaves every dependency module keyed by
+# absolute path — training-run-specific site ids no later build matches
+WORK="$(cd "$WORK" && pwd -P)"
 cp -RL "$ART_TREE"/. "$WORK/"
 chmod -R u+w "$WORK"
 mkdir -p "$WORK/lib/generated"
@@ -52,5 +57,6 @@ OUT=ci/selfcompile.icprofile
 # decays to guard misses (checked tier), never wrong answers.
 HDR
     grep -E "ICPROFP? " "$TRAIN_LOG" | sed 's/^.*ICPROF/ICPROF/' | LC_ALL=C sort
+    grep -E "CALLPROF " "$TRAIN_LOG" | sed 's/^.*CALLPROF/CALLPROF/' | LC_ALL=C sort
 } > "$OUT"
-echo "wrote $OUT: $(grep -c ICPROF "$OUT") records"
+echo "wrote $OUT: $(grep -c ICPROF "$OUT") prop records, $(grep -c CALLPROF "$OUT") call records"

@@ -656,6 +656,42 @@ const runtime_interface = {
             )
         );
     },
+    // -fic-profile-dump: the call-target profile.  register one dynamic
+    // call site's [seen, evals] cell under its site id ("module#cN");
+    // register one compiled function's code pointer under its
+    // "module#fnname" label so the dump can spell targets; record one
+    // call's observed callee code pointer (the always-live half — a
+    // no-profile run just bumps a cold cell)
+    call_ic_profile_register: function (this: RuntimeContext) {
+        return does_not_throw(
+            this.abi.createExternalFunction(
+                this.module,
+                "_ejs_call_ic_profile_register",
+                ty.Void,
+                [ty.Int8Pointer, ty.Int64.pointerTo()]
+            )
+        );
+    },
+    call_ic_profile_register_fn: function (this: RuntimeContext) {
+        return does_not_throw(
+            this.abi.createExternalFunction(
+                this.module,
+                "_ejs_call_ic_profile_register_fn",
+                ty.Void,
+                [ty.Int8Pointer, ty.Int8Pointer]
+            )
+        );
+    },
+    call_profile_record: function (this: RuntimeContext) {
+        return does_not_throw(
+            this.abi.createExternalFunction(
+                this.module,
+                "_ejs_call_profile_record",
+                ty.Void,
+                [ty.Int64.pointerTo(), ty.EjsValue]
+            )
+        );
+    },
     // the property-store IC entries (see _ejs_object_setprop_ic)
     object_setprop_ic: function (this: RuntimeContext) {
         return this.abi.createExternalFunction(this.module, "_ejs_object_setprop_ic", ty.EjsValue, [

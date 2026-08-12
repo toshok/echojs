@@ -3902,6 +3902,128 @@ test("devirt: -fno-devirt leaves every site generic", () => {
     });
 });
 
+// --- call-target profile (the guarded devirt tier) -------------------------------
+
+function buildProfiledModule(opts: { ctorMark?: boolean; invoke?: boolean } = {}): {
+    mod: Module;
+    call: Inst;
+    user: Func;
+} {
+    const mod = new Module("pgo_mod");
+
+    const hb = new FunctionBuilder("helper", ["%env", "%this"]);
+    hb.ret(hb.constNumber(1));
+    mod.addFunction(hb.finish());
+
+    // toplevel: optionally marks helper's closure as a class ctor (the
+    // decline case)
+    const fb = new FunctionBuilder("toplevel", ["%env", "%this"]);
+    if (opts.ctorMark) {
+        const env = fb.constUndefined();
+        const clo = fb.emit("make_closure", [env], { fn: "helper", name: "helper" });
+        fb.emit("call_runtime", [clo], { name: "set_constructor_kind_base" });
+    }
+    fb.ret(fb.constUndefined());
+    mod.addFunction(fb.finish());
+
+    // user: an OPAQUE callee (property load) — nothing statically
+    // provable about its identity, only the profile knows the target
+    const ub = new FunctionBuilder("user", ["%env", "%this"]);
+    const recv = ub.fn.entry!.params[1]!;
+    const callee = ub.emit("get_prop_atom", [recv], { atom: "m" });
+    let call: Inst;
+    if (opts.invoke) {
+        const catch_bb = ub.newCatchBlock("catch");
+        ub.pushHandler(catch_bb);
+        call = ub.emit("call", [callee, recv], { call_site: "pgo_mod#c1" });
+        ub.popHandler();
+        ub.ret(call);
+        ub.sealBlock(catch_bb);
+        ub.setInsertPoint(catch_bb);
+        ub.ret(ub.constNumber(0));
+    } else {
+        call = ub.emit("call", [callee, recv], { call_site: "pgo_mod#c1" });
+        ub.ret(call);
+    }
+    const user = ub.finish();
+    mod.addFunction(user);
+
+    verifyModule(mod);
+    return { mod, call, user };
+}
+
+const PGO_PROFILE = new Map([["pgo_mod#c1", { label: "pgo_mod#helper", evals: 100000 }]]);
+
+test("devirt-profile: a profiled opaque call becomes a guarded diamond", () => {
+    const { mod, user } = buildProfiledModule();
+    const stats = devirtualizeModule(mod, "toplevel", PGO_PROFILE);
+    verifyModule(mod);
+    assert(stats.profile_sites === 1, `profile_sites=${stats.profile_sites}`);
+    assert(countOps(user, "callee_eq") === 1, "one guard");
+    assert(countOps(user, "closure_env") === 1, "one env load");
+    assert(countOps(user, "call") === 2, "direct + generic arms");
+    let direct = 0,
+        generic = 0;
+    user.forEachInst((i) => {
+        if (i.op !== "call") return;
+        if (i.imms["direct"] === "helper") {
+            direct++;
+            assert(i.operands[0]!.op === "closure_env", "direct arm env from the closure");
+        } else generic++;
+    });
+    assert(direct === 1 && generic === 1, `direct=${direct} generic=${generic}`);
+});
+
+test("devirt-profile: invoke-form calls keep their unwind edge on both arms", () => {
+    const { mod, user } = buildProfiledModule({ invoke: true });
+    const stats = devirtualizeModule(mod, "toplevel", PGO_PROFILE);
+    verifyModule(mod);
+    assert(stats.profile_sites === 1, `profile_sites=${stats.profile_sites}`);
+    let unwound = 0;
+    user.forEachInst((i) => {
+        if (i.op !== "call") return;
+        assert(!!i.targets && i.targets.length === 2, "both arms stay invoke-form");
+        assert(
+            i.targets!.some((t) => t.kind === "unwind"),
+            "each arm carries the unwind edge"
+        );
+        unwound++;
+    });
+    assert(unwound === 2, `arms=${unwound}`);
+});
+
+test("devirt-profile: a ctor-marked target declines", () => {
+    const { mod, call } = buildProfiledModule({ ctorMark: true });
+    const stats = devirtualizeModule(mod, "toplevel", PGO_PROFILE);
+    verifyModule(mod);
+    assert(stats.profile_sites === 0, "ctor suspect declined");
+    assert(!call.imms["direct"], "call stays generic");
+});
+
+test("devirt-profile: a cross-module record declines", () => {
+    const { mod, call } = buildProfiledModule();
+    const foreign = new Map([["pgo_mod#c1", { label: "other_mod#helper", evals: 100000 }]]);
+    const stats = devirtualizeModule(mod, "toplevel", foreign);
+    verifyModule(mod);
+    assert(stats.profile_sites === 0, "foreign target declined");
+    assert(!call.imms["direct"], "call stays generic");
+});
+
+test("verifier: closure_env without a dominating callee_eq fact is rejected", () => {
+    const fb = new FunctionBuilder("bad_env", ["%env", "%this"]);
+    const recv = fb.fn.entry!.params[1]!;
+    fb.emit("closure_env", [recv], {});
+    fb.ret(fb.constUndefined());
+    const fn = fb.finish();
+    let threw = false;
+    try {
+        verifyFunction(fn);
+    } catch (e) {
+        threw = /closure_env.*lacks a dominating/.test((e as Error).message);
+    }
+    assert(threw, "expected a closure_env fact violation");
+});
+
 // --------------------------------------------------------------------------------
 
 if (failures > 0) {

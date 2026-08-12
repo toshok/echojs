@@ -292,6 +292,13 @@ ejsval _ejs_object_getprop_ic (ejsval obj, ejsval key, uint32_t* site);
 // EJS_IC_PROFILE; no-op without the env var).  kind 0 = load cell,
 // 1 = store cell (slot|repr|installed packing).
 void _ejs_prop_ic_profile_register (const char *site, uint32_t *cell, uint64_t *evals, uint32_t kind);
+// the call-target profile's halves (same EJS_IC_PROFILE gate):
+// per-site [seen, evals] cell registration, the module's code-pointer
+// -> "module#fnname" label table, and the per-call recording hook the
+// instrumented code calls (always live; only training builds emit it)
+void _ejs_call_ic_profile_register (const char *site, uint64_t *cell);
+void _ejs_call_ic_profile_register_fn (const char *label, void *fn);
+void _ejs_call_profile_record (uint64_t *cell, ejsval callee);
 ejsval _ejs_object_setprop_ic (ejsval obj, ejsval key, ejsval value, uint32_t* site);
 ejsval _ejs_object_setprop_ic_strict (ejsval obj, ejsval key, ejsval value, uint32_t* site);
 

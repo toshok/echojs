@@ -290,6 +290,22 @@ export const OPS = {
     // must take the sequential slow arm, where mid-construction
     // observables behave identically).
     fill_object_shaped: { arity: -1, effects: E.GC | E.WRITE, imms: ["shape"] },
+    // --- profile-guided direct calls -----------------------
+    // i1: is the operand a function object whose code pointer is this
+    // module's `fn`?  The emitter folds in the NaN-box object check and
+    // the Function-specops compare, so a passed guard proves the operand
+    // is an EJSFunction closing over exactly imms.fn — bound functions
+    // and native builtins carry different code pointers and fail the
+    // compare.  Effect NONE: an object's specops and code pointer are
+    // immutable after creation, so the fact is a property of the SSA
+    // value and dominance alone carries it (no kill rule).
+    callee_eq: { arity: 1, effects: E.NONE, imms: ["fn"], sig: { params: ["ejsval"], result: "i1" } },
+    // the closure's env field (an ejsval), deref'd directly — only valid
+    // dominated by the TRUE edge of a cond_br on a callee_eq of the same
+    // value (the verifier enforces it): the guard is what proves the
+    // EJSFunction layout under the pointer.  READ, not NONE: the load is
+    // from the heap even though the field never changes.
+    closure_env: { arity: 1, effects: E.READ, sig: { params: ["ejsval"], result: "any" } },
     // i1: is the runtime's accessor epoch still zero — i.e. has NO user
     // code installed anything that could intercept a [[Set]] through a
     // fresh object's prototype chain (accessor property, non-writable

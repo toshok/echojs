@@ -1437,16 +1437,26 @@ ic_profile_dump(void)
     _ejs_log("ic-profile: %u sites registered\n", ic_profile_count);
 }
 
-void
-_ejs_prop_ic_profile_register (const char *site, uint32_t *cell, uint64_t *evals, uint32_t kind)
+static void call_profile_dump(void);
+
+static EJSBool
+ic_profile_ensure (void)
 {
     if (!ic_profile_checked) {
         ic_profile_checked = EJS_TRUE;
         ic_profile_on = getenv("EJS_IC_PROFILE") != NULL;
-        if (ic_profile_on)
+        if (ic_profile_on) {
             atexit(ic_profile_dump);
+            atexit(call_profile_dump);
+        }
     }
-    if (!ic_profile_on)
+    return ic_profile_on;
+}
+
+void
+_ejs_prop_ic_profile_register (const char *site, uint32_t *cell, uint64_t *evals, uint32_t kind)
+{
+    if (!ic_profile_ensure())
         return;
     if (ic_profile_count == ic_profile_alloc) {
         ic_profile_alloc = ic_profile_alloc ? ic_profile_alloc * 2 : 1024;
@@ -1458,6 +1468,114 @@ _ejs_prop_ic_profile_register (const char *site, uint32_t *cell, uint64_t *evals
     ic_profile[ic_profile_count].evals = evals;
     ic_profile[ic_profile_count].kind = kind;
     ic_profile_count++;
+}
+
+// ---- the call-target profile (-fic-profile-dump builds) --------------
+// Dynamic call sites record the observed callee's code pointer in a
+// per-site [seen, evals] cell; each module registers its compiled
+// functions' code pointers under "module#fnname" labels.  At exit —
+// under EJS_IC_PROFILE — every monomorphic site whose recorded target
+// resolves through the label table dumps one line:
+//   CALLPROF <evals> <site> <label>
+// cell[0] (seen): 0 = no function callee observed, 1 = poisoned
+// (polymorphic, or a non-function callee), else the code pointer.
+// Bound functions and native builtins record C code pointers no label
+// covers, so they drop out at resolution — a later --ic-profile build
+// only ever direct-calls module-local compiled functions.
+
+typedef struct {
+    const char *site;
+    uint64_t *cell;
+} CallProfileSite;
+
+typedef struct {
+    const char *label;
+    void *fn;
+} CallProfileFn;
+
+static CallProfileSite *call_profile_sites;
+static uint32_t call_profile_site_count;
+static uint32_t call_profile_site_alloc;
+static CallProfileFn *call_profile_fns;
+static uint32_t call_profile_fn_count;
+static uint32_t call_profile_fn_alloc;
+
+static int
+call_profile_fn_cmp (const void *a, const void *b)
+{
+    void *fa = ((const CallProfileFn *)a)->fn;
+    void *fb = ((const CallProfileFn *)b)->fn;
+    if (fa < fb) return -1;
+    if (fa > fb) return 1;
+    return 0;
+}
+
+static void
+call_profile_dump (void)
+{
+    qsort(call_profile_fns, call_profile_fn_count, sizeof(CallProfileFn),
+          call_profile_fn_cmp);
+    uint32_t dumped = 0;
+    for (uint32_t i = 0; i < call_profile_site_count; i++) {
+        uint64_t seen = call_profile_sites[i].cell[0];
+        if (seen <= 1)
+            continue;
+        CallProfileFn key = { NULL, (void *)(uintptr_t)seen };
+        CallProfileFn *ent = (CallProfileFn *)bsearch(
+            &key, call_profile_fns, call_profile_fn_count,
+            sizeof(CallProfileFn), call_profile_fn_cmp);
+        if (!ent)
+            continue;
+        _ejs_log("CALLPROF %llu %s %s\n",
+                 (unsigned long long)call_profile_sites[i].cell[1],
+                 call_profile_sites[i].site, ent->label);
+        dumped++;
+    }
+    _ejs_log("call-profile: %u sites registered, %u resolved monomorphic\n",
+             call_profile_site_count, dumped);
+}
+
+void
+_ejs_call_ic_profile_register (const char *site, uint64_t *cell)
+{
+    if (!ic_profile_ensure())
+        return;
+    if (call_profile_site_count == call_profile_site_alloc) {
+        call_profile_site_alloc = call_profile_site_alloc ? call_profile_site_alloc * 2 : 1024;
+        call_profile_sites = (CallProfileSite *)realloc(
+            call_profile_sites, call_profile_site_alloc * sizeof(CallProfileSite));
+    }
+    call_profile_sites[call_profile_site_count].site = site;
+    call_profile_sites[call_profile_site_count].cell = cell;
+    call_profile_site_count++;
+}
+
+void
+_ejs_call_ic_profile_register_fn (const char *label, void *fn)
+{
+    if (!ic_profile_ensure())
+        return;
+    if (call_profile_fn_count == call_profile_fn_alloc) {
+        call_profile_fn_alloc = call_profile_fn_alloc ? call_profile_fn_alloc * 2 : 1024;
+        call_profile_fns = (CallProfileFn *)realloc(
+            call_profile_fns, call_profile_fn_alloc * sizeof(CallProfileFn));
+    }
+    call_profile_fns[call_profile_fn_count].label = label;
+    call_profile_fns[call_profile_fn_count].fn = fn;
+    call_profile_fn_count++;
+}
+
+void
+_ejs_call_profile_record (uint64_t *cell, ejsval callee)
+{
+    cell[1]++;
+    uint64_t code = 1; // non-function callee: poison
+    if (EJSVAL_IS_FUNCTION(callee))
+        code = (uint64_t)(uintptr_t)((EJSFunction *)EJSVAL_TO_OBJECT(callee))->func;
+    if (cell[0] == 0)
+        cell[0] = code;
+    else if (cell[0] != code)
+        cell[0] = 1;
 }
 
 ejsval

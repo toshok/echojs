@@ -492,11 +492,49 @@ if (options.ic_profile) {
             cold++;
         }
     options.ic_profile_map = map;
+
+    // CALLPROF records: "CALLPROF <evals> <site> <label>".  Same
+    // policies as the property records: specialization clones split one
+    // site's traffic (same target -> sum), different targets at one
+    // site mean the numbering drifted or the site is genuinely
+    // polymorphic across clones -> drop, and cold sites aren't worth
+    // the guard IR.
+    const call_map = new Map<string, { label: string; evals: number }>();
+    const call_conflicted = new Set<string>();
+    for (const line of text.split("\n")) {
+        const m = line.match(/^CALLPROF (\d+) (\S+) (\S+)$/);
+        if (!m) continue;
+        const evals = parseInt(m[1]!, 10);
+        const site = m[2]!;
+        const label = m[3]!;
+        const prev = call_map.get(site);
+        if (prev) {
+            if (prev.label !== label) {
+                call_conflicted.add(site);
+                call_map.delete(site);
+            } else prev.evals += evals;
+            continue;
+        }
+        if (!call_conflicted.has(site)) call_map.set(site, { label, evals });
+    }
+    let call_cold = 0;
+    for (const [site, rec] of call_map)
+        if (rec.evals < min_evals) {
+            call_map.delete(site);
+            call_cold++;
+        }
+    options.call_profile_map = call_map;
+
     if (!options.quiet)
         options.stdout_writer.write(
             `${bold()}IC-PROFILE${reset()} ${map.size} hot monomorphic site(s)` +
                 (cold > 0 ? `, ${cold} cold skipped` : "") +
-                (conflicted.size > 0 ? `, ${conflicted.size} conflicted dropped` : "")
+                (conflicted.size > 0 ? `, ${conflicted.size} conflicted dropped` : "") +
+                `; ${call_map.size} call target(s)` +
+                (call_cold > 0 ? `, ${call_cold} cold skipped` : "") +
+                (call_conflicted.size > 0
+                    ? `, ${call_conflicted.size} conflicted dropped`
+                    : "")
         );
 }
 

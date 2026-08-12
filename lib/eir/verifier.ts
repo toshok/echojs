@@ -185,6 +185,31 @@ export function tagFactDominates(
     }
 }
 
+// is there a dominating true-edge fact of `callee_eq(v, *)` at `block`?
+// Dominance-only, like tagFactDominates: a function object's specops and
+// code pointer are immutable after creation, so the guard's proof is a
+// property of the SSA value, not of mutable heap state.  ANY passed
+// callee_eq licenses closure_env — the layout proof (this is an
+// EJSFunction) is the same whichever fn it named.
+export function calleeFactDominates(v: Inst, block: Block, idom: Map<Block, Block>): boolean {
+    let b: Block = block;
+    for (;;) {
+        if (b.predEdges.length === 1) {
+            const e = b.predEdges[0]!;
+            if (
+                e.inst.op === "cond_br" &&
+                e.targetIndex === 0 &&
+                e.inst.operands[0]!.op === "callee_eq" &&
+                e.inst.operands[0]!.operands[0] === v
+            )
+                return true;
+        }
+        const n = idom.get(b);
+        if (!n || n === b) return false;
+        b = n;
+    }
+}
+
 export function computeRPO(fn: Func): { rpo: Block[]; reachable: Set<Block> } {
     const entry = fn.entry!;
     const visited = new Set<Block>();
@@ -488,6 +513,24 @@ export function verifyFunction(fn: Func, mod?: Module): boolean {
                     }
                 });
                 continue;
+            }
+            // callee_eq must name a function in this module — the emitter
+            // compares against the module-local symbol, so a foreign name
+            // has no address to compare with
+            if (inst.op === "callee_eq" && mod) {
+                const calleeName = inst.imms["fn"] as string;
+                if (!mod.functions.some((f) => f.name === calleeName))
+                    fail(`callee_eq names unknown function '${calleeName}'`, inst);
+            }
+            // closure_env's direct EJSFunction deref is licensed by a
+            // dominating passed callee_eq on the same value (which proved
+            // the layout under the pointer)
+            if (inst.op === "closure_env") {
+                if (!calleeFactDominates(inst.operands[0]!, b, idom))
+                    fail(
+                        `'closure_env' lacks a dominating passed callee_eq fact on its operand`,
+                        inst
+                    );
             }
             // typed slots: slot ops are typed by their repr immediate,
             // which a per-op table can't express (the call_typed precedent).

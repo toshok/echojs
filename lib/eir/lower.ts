@@ -80,6 +80,9 @@ export interface ModCtx {
     // "module#N", stores "module#sN".
     ic_site_counter?: number;
     ic_store_counter?: number;
+    // dynamic CALL sites are "module#cN" — the call-target profile's
+    // namespace (-fic-profile-dump training / devirt's guarded tier)
+    ic_call_counter?: number;
     // -Wunused-exports: constant-folded import uses leave no
     // module_slot_load behind, so the fold sites record here directly
     // (the warning must treat a folded const as used)
@@ -94,6 +97,8 @@ export interface ModCtx {
         shape_poly_guards?: number;
         // sites inlined from an --ic-profile training dump
         ic_profile_guards?: number;
+        // dynamic call sites devirt rewrote from CALLPROF records
+        call_profile_guards?: number;
         shape_declined?: Record<string, number>;
         // born-with-shape telemetry — literal sites
         // batched into make_object_shaped, constructor prefixes batched
@@ -1934,7 +1939,7 @@ class LowerFunction {
             callee = this.expr(n.tag);
             thisArg = this.b.constUndefined();
         }
-        return this.b.emit("call", [callee, thisArg, callsite].concat(subs), {});
+        return this.dynCall([callee, thisArg, callsite].concat(subs));
     }
 
     // `ns.member` where ns is a namespace import of a JS module resolves
@@ -1981,6 +1986,18 @@ class LowerFunction {
         return this.b.emit("get_prop", [obj, key], {});
     }
 
+    // every dynamic (closure-dispatched) call gets a stable site id,
+    // counted in lowering order the way propGet/propSet sites are: the
+    // training build and the consuming build agree on the numbering, so
+    // a -fic-profile-dump run's CALLPROF records name sites a later
+    // --ic-profile compile can find.  The imm is not in the op's printed
+    // spec; it rides silently and clones spread it.
+    dynCall(operands: Inst[], imms: Record<string, unknown> = {}): Inst {
+        const site = `${this.module.name}#c${(this.mod_ctx.ic_call_counter =
+            (this.mod_ctx.ic_call_counter ?? 0) + 1)}`;
+        return this.b.emit("call", operands, { ...imms, call_site: site });
+    }
+
     call(n: e.CallExpression): Inst {
         // %-intrinsic calls from the pre-EIR desugar passes lower through
         // the table in intrinsics.js (scopes.js already rejected unknowns)
@@ -1995,11 +2012,7 @@ class LowerFunction {
             let slotCallee = this.exoticMemberLoad(n.callee);
             if (slotCallee) {
                 let args = n.arguments.map((a) => this.expr(a));
-                return this.b.emit(
-                    "call",
-                    [slotCallee, this.b.constUndefined()].concat(args),
-                    {}
-                );
+                return this.dynCall([slotCallee, this.b.constUndefined()].concat(args));
             }
             thisArg = this.expr(n.callee.object);
             if (!n.callee.computed && n.callee.property.type === "Identifier")
@@ -2029,7 +2042,7 @@ class LowerFunction {
             thisArg = this.b.constUndefined();
         }
         let args = n.arguments.map((a) => this.expr(a));
-        return this.b.emit("call", [callee, thisArg].concat(args), {});
+        return this.dynCall([callee, thisArg].concat(args));
     }
 
     intrinsicCall(n: e.CallExpression): Inst {
@@ -2566,7 +2579,7 @@ class LowerFunction {
         const sym = this.b.emit("get_global", [], { atom: "Symbol" });
         const itkey = this.b.emit("get_prop_atom", [sym], { atom: "iterator" });
         const itfn = this.b.emit("get_prop", [obj, itkey], {});
-        const iter = this.b.emit("call", [itfn, obj], {});
+        const iter = this.dynCall([itfn, obj]);
 
         const sentVar = `%gendel#${this.b.fn.newValueId()}`;
         this.b.writeVariable(sentVar, this.b.cur, this.b.constUndefined());
@@ -2579,11 +2592,7 @@ class LowerFunction {
         this.b.br(header, []);
         this.b.setInsertPoint(header);
         const nextfn = this.b.emit("get_prop_atom", [iter], { atom: "next" });
-        const res = this.b.emit(
-            "call",
-            [nextfn, iter, this.b.readVariable(sentVar, this.b.cur)],
-            {}
-        );
+        const res = this.dynCall([nextfn, iter, this.b.readVariable(sentVar, this.b.cur)]);
         const done = this.b.emit("get_prop_atom", [res], { atom: "done" });
         const dbool = this.b.emit("to_boolean", [done], {});
         this.b.condBr(dbool, exit, [], body, []);
@@ -2612,7 +2621,7 @@ class LowerFunction {
         this.b.condBr(nb, do_close, [], rethrow, []);
         this.b.sealBlock(do_close);
         this.b.setInsertPoint(do_close);
-        this.b.emit("call", [retfn, iter], {});
+        this.dynCall([retfn, iter]);
         if (!this.b.cur.terminated) this.b.br(rethrow, []);
         this.b.sealBlock(rethrow);
         this.b.setInsertPoint(rethrow);
@@ -2647,7 +2656,7 @@ class LowerFunction {
         let sym = this.b.emit("get_global", [], { atom: "Symbol" });
         let itkey = this.b.emit("get_prop_atom", [sym], { atom: "iterator" });
         let itfn = this.b.emit("get_prop", [obj, itkey], {});
-        let iter = this.b.emit("call", [itfn, obj], {});
+        let iter = this.dynCall([itfn, obj]);
 
         let header = this.b.newBlock("forof_header");
         let body = this.b.newBlock("forof_body");
@@ -2657,7 +2666,7 @@ class LowerFunction {
 
         this.b.setInsertPoint(header);
         let nextfn = this.b.emit("get_prop_atom", [iter], { atom: "next" });
-        let res = this.b.emit("call", [nextfn, iter], {});
+        let res = this.dynCall([nextfn, iter]);
         let done = this.b.emit("get_prop_atom", [res], { atom: "done" });
         let dbool = this.b.emit("to_boolean", [done], {});
         this.b.condBr(dbool, exit, [], body, []);

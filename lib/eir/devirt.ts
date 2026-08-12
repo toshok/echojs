@@ -39,7 +39,7 @@
 // would otherwise make specialize.ts's closed-world enumeration
 // decline the strictly-better call_typed rewrite.
 
-import { Module, Func, Inst, Block } from "./ir";
+import { Module, Func, Inst, Block, replaceAllUses } from "./ir";
 import { Effect, opInfo } from "./ops";
 import { computeRPO, computeDominators, dominates } from "./verifier";
 import { passes } from "../pass-config";
@@ -49,6 +49,112 @@ export interface DevirtStats {
     ssa_sites: number;
     // call sites rewritten through a stable %self slot
     slot_sites: number;
+    // call sites rewritten into a callee_eq-guarded diamond from a
+    // --ic-profile training run's CALLPROF records (the guarded tier:
+    // a stale record is a guard miss into the generic arm, never a
+    // wrong answer)
+    profile_sites: number;
+}
+
+// the guarded tier's per-site rewrite.  The call's callee operand is a
+// live value here (unlike the proof tiers, nothing about its identity
+// is known statically), so the diamond tests it at runtime:
+//   ... guard = callee_eq(callee, fn); cond_br guard, direct, generic
+//   direct:  env = closure_env(callee); r1 = call direct=fn (env, this, args...)
+//   generic: r2 = call (callee, this, args...)
+//   merge(r):  ...original tail / original normal successor
+// Both arms keep the boxed calling convention (argc/argv), so callee-
+// side defaults/rest/arguments behave identically; the env is the
+// closure's own, loaded under the guard's layout proof.  Invoke-form
+// calls (explicit [normal, unwind] targets) give both arms the original
+// unwind edge and converge the results through a fresh merge block that
+// forwards to the original normal target.
+function rewriteProfiledCall(fn: Func, call: Inst, name: string): void {
+    const B = call.block!;
+    const idx = B.insts.indexOf(call);
+    const callee = call.operands[0]!;
+
+    const direct_bb = new Block(fn, "pgo_direct");
+    const generic_bb = new Block(fn, "pgo_generic");
+    const merge_bb = new Block(fn, "pgo_merge");
+    for (const b of [direct_bb, generic_bb, merge_bb]) {
+        fn.blocks.push(b);
+        b.sealed = true;
+    }
+    const result = merge_bb.addParam("pgo_result");
+
+    const env = new Inst(fn, "closure_env", [callee], {});
+    const dcall = new Inst(fn, "call", [env, call.operands[1]!, ...call.operands.slice(2)], {
+        direct: name,
+    });
+    const gcall = new Inst(fn, "call", [...call.operands], { ...call.imms });
+    env.block = direct_bb;
+    dcall.block = direct_bb;
+    direct_bb.insts.push(env, dcall);
+    gcall.block = generic_bb;
+    generic_bb.insts.push(gcall);
+
+    const guard = new Inst(fn, "callee_eq", [callee], { fn: name });
+    const cbr = new Inst(fn, "cond_br", [guard]);
+    cbr.addTarget(direct_bb, []);
+    cbr.addTarget(generic_bb, []);
+    guard.block = B;
+    cbr.block = B;
+
+    if (call.targets && call.targets.length > 0) {
+        // invoke form: the call terminated its block.  Both arms carry
+        // the original unwind edge; their normal edges converge on
+        // merge_bb, which forwards to the original normal target with
+        // the original edge args (call-result references replaced by
+        // the merge param).
+        const normal = call.targets.find((t) => t.kind !== "unwind")!;
+        const unwind = call.targets.find((t) => t.kind === "unwind");
+        for (const t of call.targets)
+            t.block.predEdges = t.block.predEdges.filter((e) => e.inst !== call);
+        // an invoke's result may not ride its own edge args (it isn't
+        // defined until the normal edge is taken), so each arm lands in
+        // a continuation block that forwards the result to the merge
+        for (const [arm, tag] of [
+            [dcall, "pgo_direct_cont"],
+            [gcall, "pgo_generic_cont"],
+        ] as [Inst, string][]) {
+            const cont = new Block(fn, tag);
+            fn.blocks.push(cont);
+            cont.sealed = true;
+            arm.addTarget(cont, [], "normal");
+            if (unwind) arm.addTarget(unwind.block, unwind.args.slice(), "unwind");
+            const cbr2 = new Inst(fn, "br", []);
+            cbr2.addTarget(merge_bb, [arm]);
+            cbr2.block = cont;
+            cont.insts.push(cbr2);
+        }
+        const fwd = new Inst(fn, "br", []);
+        fwd.addTarget(
+            normal.block,
+            normal.args.map((a) => (a === call ? result : a))
+        );
+        fwd.block = merge_bb;
+        merge_bb.insts.push(fwd);
+        B.insts.splice(idx, 1, guard, cbr);
+    } else {
+        // mid-block: the tail (terminator included) moves to the merge
+        // block; edges stay valid because they key on the terminator
+        // instruction, whose .block moves with it
+        const tail = B.insts.splice(idx + 1);
+        for (const i of tail) i.block = merge_bb;
+        merge_bb.insts = tail;
+        for (const [arm, arm_bb] of [
+            [dcall, direct_bb],
+            [gcall, generic_bb],
+        ] as [Inst, Block][]) {
+            const b = new Inst(fn, "br", []);
+            b.addTarget(merge_bb, [arm]);
+            b.block = arm_bb;
+            arm_bb.insts.push(b);
+        }
+        B.insts.splice(idx, 1, guard, cbr);
+    }
+    replaceAllUses(fn, call, result);
 }
 
 function comesBefore(idom: Map<Block, Block>, a: Inst, b: Inst): boolean {
@@ -58,8 +164,12 @@ function comesBefore(idom: Map<Block, Block>, a: Inst, b: Inst): boolean {
     return dominates(idom, ba, bb);
 }
 
-export function devirtualizeModule(m: Module, toplevelName: string): DevirtStats {
-    const stats: DevirtStats = { ssa_sites: 0, slot_sites: 0 };
+export function devirtualizeModule(
+    m: Module,
+    toplevelName: string,
+    callProfile?: Map<string, { label: string; evals: number }> | null
+): DevirtStats {
+    const stats: DevirtStats = { ssa_sites: 0, slot_sites: 0, profile_sites: 0 };
     if (!passes().devirt) return stats;
 
     const fnByName = new Map<string, Func>();
@@ -218,6 +328,37 @@ export function devirtualizeModule(m: Module, toplevelName: string): DevirtStats
             c.call.imms["direct"] = c.name;
             c.call.operands[0] = env;
             stats.slot_sites++;
+        }
+    }
+
+    // --- the guarded tier (call-target profile) -----------------------------
+    // Runs after the proof tiers: a site they already rewrote carries
+    // imms.direct and is skipped.  Only module-local targets qualify —
+    // emitted function symbols are internal-linkage, so a cross-module
+    // record has no symbol to compare against (rung 2's externalization
+    // problem, not this pass's).  Class-constructor suspects are
+    // declined the same way the proof tiers decline them: the guard
+    // proves the code pointer, but invoke_closure's ctor TypeError must
+    // stay observable.
+    if (callProfile && callProfile.size > 0 && passes().callPgo) {
+        const prefix = `${m.name}#`;
+        for (const fn of m.functions) {
+            const prof: { call: Inst; name: string }[] = [];
+            fn.forEachInst((inst) => {
+                if (inst.op !== "call" || inst.imms["direct"]) return;
+                const site = inst.imms["call_site"] as string | undefined;
+                if (site === undefined) return;
+                const rec = callProfile.get(site);
+                if (!rec || !rec.label.startsWith(prefix)) return;
+                const name = rec.label.slice(prefix.length);
+                const target = fnByName.get(name);
+                if (!target || target.sig || ctorSuspect.has(name)) return;
+                prof.push({ call: inst, name });
+            });
+            for (const c of prof) {
+                rewriteProfiledCall(fn, c.call, c.name);
+                stats.profile_sites++;
+            }
         }
     }
     return stats;

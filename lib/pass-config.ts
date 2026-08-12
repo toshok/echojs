@@ -35,6 +35,9 @@ export interface PassConfig {
     flowSink: boolean;
     // the module-level tier
     devirt: boolean;
+    // the call-target-profile guarded tier inside devirt (needs
+    // --ic-profile CALLPROF records to do anything)
+    callPgo: boolean;
     eirSpec: boolean;
     exportWrapper: boolean;
     ctorSink: boolean;
@@ -144,6 +147,12 @@ export const PASSES: readonly PassDesc[] = [
         field: "devirt",
         minLevel: 2,
         help: "direct-call devirtualization of module-local closures",
+    },
+    {
+        name: "call-pgo",
+        field: "callPgo",
+        minLevel: 2,
+        help: "callee_eq-guarded direct calls from --ic-profile CALLPROF records (devirt's guarded tier)",
     },
     {
         name: "eir-spec",

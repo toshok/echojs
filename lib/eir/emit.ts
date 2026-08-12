@@ -83,6 +83,10 @@ export interface VisitorSurface {
     // mint the i64 eval counter the emitted code bumps (kind: how the
     // dump reads the cell — load and store cells pack differently)
     icProfileSite(desc: string, cell: llvm.GlobalVariable, kind: "load" | "store"): llvm.GlobalVariable;
+    // -fic-profile-dump call-target halves: the per-site [seen, evals]
+    // cell, and the module's code-pointer -> label registration
+    callProfileSite(desc: string): llvm.GlobalVariable;
+    callProfileFn(label: string, fn: llvm.EjsFunction): void;
     loadBoolEjsValue(n: boolean): llvm.Value;
     loadDoubleEjsValue(n: number): llvm.Value;
     loadNullEjsValue(): llvm.Value;
@@ -235,6 +239,20 @@ export class EIREmitter {
             fns.set(fn.name, llvm_fn);
         }
         this.llvm_fns = fns;
+
+        // -fic-profile-dump: register every boxed-ABI function's code
+        // pointer under its "module#fnname" dump label so training runs
+        // can spell call targets.  The dump's line format is
+        // whitespace-split; a name that would break it is simply not
+        // recorded (its sites never dump — sound by omission).
+        if (passes().icProfileDump) {
+            for (const fn of eirModule.functions) {
+                if (fn.sig) continue; // unboxed clones are call_typed-only
+                const label = `${eirModule.name}#${fn.name}`;
+                if (/\s/.test(label)) continue;
+                this.v.callProfileFn(label, fns.get(fn.name)!);
+            }
+        }
 
         for (let fn of eirModule.functions) this.emitFunction(fn, fns.get(fn.name)!);
 
@@ -848,6 +866,89 @@ export class EIREmitter {
                 return;
             }
 
+            // function-identity guard for profile-guided direct calls:
+            // NaN-box object check, specops compare (proves EJSFunction
+            // layout — the `func` field below is only meaningful on one),
+            // then the code-pointer compare against the module-local
+            // symbol.  Bound functions and native builtins hold different
+            // code pointers, so they fall through to the generic arm.
+            case "callee_eq": {
+                const target = this.llvm_fns.get(inst.imms["fn"] as string);
+                if (!target)
+                    throw new Error(
+                        `EIR emit: callee_eq names unknown function '${String(inst.imms["fn"])}'`
+                    );
+                const val = this.val(inst.operands[0]);
+
+                const fn_bb = new llvm.BasicBlock("callee_fn", this.llvmFn);
+                const code_bb = new llvm.BasicBlock("callee_code", this.llvmFn);
+                const merge_bb = new llvm.BasicBlock("callee_merge", this.llvmFn);
+                const from_bb = ir.getInsertBlock()!;
+                ir.createCondBr(this.v.isObject(val), fn_bb, merge_bb);
+
+                ir.setInsertPoint(fn_bb);
+                const objptr = this.v.objectPointer(val);
+                const ops_ptr = ir.createInBoundsGetElementPointer(
+                    types.EjsObject,
+                    objptr,
+                    [consts.int64(0), consts.int32(2)],
+                    "ops_ptr"
+                );
+                const ops = ir.createLoad(types.EjsSpecops.pointerTo(), ops_ptr, "ops");
+                const is_fn = ir.createICmpEq(
+                    ops,
+                    this.v.ejs_runtime.function_specops,
+                    "is_fn"
+                );
+                ir.createCondBr(is_fn, code_bb, merge_bb);
+
+                ir.setInsertPoint(code_bb);
+                const fnptr = ir.createPointerCast(
+                    objptr,
+                    types.EjsFunction.pointerTo(),
+                    "fnptr"
+                );
+                const code_ptr = ir.createInBoundsGetElementPointer(
+                    types.EjsFunction,
+                    fnptr,
+                    [consts.int64(0), consts.int32(1)],
+                    "code_ptr"
+                );
+                const code = ir.createLoad(types.EjsClosureFunc, code_ptr, "code");
+                const code_eq = ir.createICmpEq(
+                    ir.createPointerCast(code, types.Int8Pointer, "code_i8"),
+                    ir.createPointerCast(target, types.Int8Pointer, "target_i8"),
+                    "code_eq"
+                );
+                ir.createBr(merge_bb);
+
+                ir.setInsertPoint(merge_bb);
+                const phi = ir.createPhi(types.Int1, 3, "callee_eq");
+                phi.addIncoming(consts.int1(0), from_bb);
+                phi.addIncoming(consts.int1(0), fn_bb);
+                phi.addIncoming(code_eq, code_bb);
+                this.values.set(inst, phi);
+                return;
+            }
+            // the closure's env field, deref'd directly — the verifier
+            // guarantees a dominating passed callee_eq proved the
+            // EJSFunction layout
+            case "closure_env": {
+                const fnptr = ir.createPointerCast(
+                    this.v.objectPointer(this.val(inst.operands[0])),
+                    types.EjsFunction.pointerTo(),
+                    "fnptr"
+                );
+                const env_ptr = ir.createInBoundsGetElementPointer(
+                    types.EjsFunction,
+                    fnptr,
+                    [consts.int64(0), consts.int32(2)],
+                    "env_ptr"
+                );
+                this.values.set(inst, ir.createLoad(types.EjsValue, env_ptr, "closure_env"));
+                return;
+            }
+
             // typed slots: an f64-repr slot is accessed as a raw
             // double — same address, same 8 bytes (the NaN-box stores
             // doubles raw), just loaded/stored as the machine type the
@@ -1195,6 +1296,17 @@ export class EIREmitter {
                 let callee = this.val(inst.operands[0]);
                 let this_val = this.val(inst.operands[1]);
                 let args = inst.operands.slice(2).map((o) => this.val(o));
+                // -fic-profile-dump: record the observed callee's code
+                // pointer in the per-site cell (the CALLPROF training half)
+                if (passes().icProfileDump && inst.imms["call_site"] !== undefined) {
+                    const cell = this.v.callProfileSite(String(inst.imms["call_site"]));
+                    const cell_base = ir.createBitCast(
+                        cell,
+                        types.Int64.pointerTo(),
+                        "callprof_cell"
+                    );
+                    this.call(rt.call_profile_record, [cell_base, callee], "");
+                }
                 ir.createStore(this_val, this.this_slot);
                 let argv;
                 if (args.length > 0) argv = this.spillArgs(args);
